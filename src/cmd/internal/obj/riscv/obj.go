@@ -1273,6 +1273,15 @@ func wantEvenOffset(ctxt *obj.Link, ins *instruction, offset int64) {
 	}
 }
 
+func validateCI(ctxt *obj.Link, ins *instruction) {
+	if ins.as == ACNOP && (ins.rd != REG_X0 || ins.rs1 != REG_X0 || ins.imm != 0) {
+		ctxt.Diag("%v: must use X0 register and have a zero immediate", ins.as)
+	}
+	wantIntReg(ctxt, ins, "rd", ins.rd)
+	wantIntReg(ctxt, ins, "rs1", ins.rs1)
+	wantNoneReg(ctxt, ins, "rs2", ins.rs2)
+}
+
 func validateRII(ctxt *obj.Link, ins *instruction) {
 	wantIntReg(ctxt, ins, "rd", ins.rd)
 	wantIntReg(ctxt, ins, "rs1", ins.rs1)
@@ -1540,6 +1549,16 @@ func validateRaw(ctxt *obj.Link, ins *instruction) {
 // before shifting it to the requested position and returning it.
 func extractBitAndShift(imm uint32, bit, pos int) uint32 {
 	return ((imm >> bit) & 1) << pos
+}
+
+// encodeCI encodes a compressed immediate (CI-type) instruction.
+func encodeCI(ins *instruction) uint32 {
+	enc := encode(ins.as)
+	if enc == nil {
+		panic("encodeCI: could not encode instruction")
+	}
+	imm := uint32(ins.imm)
+	return enc.funct3<<12 | ((imm&0x20)>>5)<<12 | regI(ins.rd)<<7 | (imm&0x1f)<<2 | enc.opcode
 }
 
 // encodeR encodes an R-type RISC-V instruction.
@@ -1909,7 +1928,7 @@ func EncodeVectorType(vsew, vlmul, vtail, vmask int64) (int64, error) {
 type encoding struct {
 	encode   func(*instruction) uint32     // encode returns the machine code for an instruction
 	validate func(*obj.Link, *instruction) // validate validates an instruction
-	length   int                           // length of encoded instruction; 0 for pseudo-ops, 4 otherwise
+	length   int                           // length of encoded instruction; 0 for pseudo-ops, 2 for compressed instructions, 4 otherwise
 }
 
 var (
@@ -1958,6 +1977,9 @@ var (
 	bEncoding = encoding{encode: encodeB, validate: validateB, length: 4}
 	uEncoding = encoding{encode: encodeU, validate: validateU, length: 4}
 	jEncoding = encoding{encode: encodeJ, validate: validateJ, length: 4}
+
+	// Compressed encodings.
+	ciEncoding = encoding{encode: encodeCI, validate: validateCI, length: 2}
 
 	// Encodings for vector configuration setting instruction.
 	vsetvliEncoding  = encoding{encode: encodeVsetvli, validate: validateVsetvli, length: 4}
@@ -2186,6 +2208,13 @@ var instructions = [ALAST & obj.AMask]instructionData{
 
 	// 21.7: Double-Precision Floating-Point Classify Instruction
 	AFCLASSD & obj.AMask: {enc: rFIEncoding},
+
+	//
+	// "C" Extension for Compressed Instructions, Version 2.0
+	//
+
+	// 26.5.5: Compressed - NOP Instruction
+	ACNOP & obj.AMask: {enc: ciEncoding},
 
 	//
 	// "B" Extension for Bit Manipulation, Version 1.0.0
@@ -3942,6 +3971,9 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		if ins.imm < 0 || ins.imm > 31 {
 			p.Ctxt.Diag("%v: immediate out of range 0 to 31", p)
 		}
+
+	case ACNOP:
+		ins.rd, ins.rs1 = REG_ZERO, REG_ZERO
 
 	case ACLZ, ACLZW, ACTZ, ACTZW, ACPOP, ACPOPW, ASEXTB, ASEXTH, AZEXTH:
 		ins.rs1, ins.rs2 = uint32(p.From.Reg), obj.REG_NONE
