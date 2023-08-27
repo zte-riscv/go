@@ -383,6 +383,9 @@ start:
 	// 21.7: Double-Precision Floating-Point Classify Instruction
 	FCLASSD	F0, X5					// d31200e2
 
+	// 26.5.5: Compressed - NOP Instruction
+	CNOP						// 0100
+
 	// 28.4.1: Address Generation Instructions (Zba)
 	ADDUW		X10, X11, X12			// 3b86a508
 	ADDUW		X10, X11			// bb85a508
