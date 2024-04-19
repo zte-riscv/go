@@ -835,3 +835,13 @@
 (OR (CZEROEQZ x:(ANDI <t> [c] z) cond) y:(CZERONEZ z cond)) => (OR x y)
 (OR (CZERONEZ <t> ((ADDI|ORI|XORI) [c] x) cond) (CZEROEQZ <t> x cond)) => ((ADD|OR|XOR) x (CZERONEZ <t> (MOVDconst [c]) cond))
 (OR (CZEROEQZ <t> ((ADDI|ORI|XORI) [c] x) cond) (CZERONEZ <t> x cond)) => ((ADD|OR|XOR) x (CZEROEQZ <t> (MOVDconst [c]) cond))
+
+// Fold bitwise ops in specific situations into bit clear/extract/invert/set
+(AND x (NOT (SLL (MOVDconst [1]) y))) && buildcfg.GORISCV64 >= 22 => (BCLR x y)
+(AND x (MOVDconst [y])) && isUint64PowerOfTwo(^y) && buildcfg.GORISCV64 >= 22 => (BCLRI [log64(^y)] x)
+(AND x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 22 => (BEXT x y)
+(AND x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 22 => (BEXTI [log64(y)] x)
+(XOR x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 22 => (BINV x y)
+(XOR x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 22 => (BINVI [log64(y)] x)
+(OR x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 22 => (BSET x y)
+(OR x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 22 => (BSETI [log64(y)] x)

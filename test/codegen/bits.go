@@ -62,6 +62,7 @@ func bitcheck64_constright(a [8]uint64) (n int) {
 
 func bitcheck64_var(a, b uint64) (n int) {
 	// amd64:"BTQ"
+	// riscv64/rva22u64:"BEXT"
 	if a&(1<<(b&63)) != 0 {
 		return 1
 	}
@@ -74,10 +75,12 @@ func bitcheck64_var(a, b uint64) (n int) {
 
 func bitcheck64_mask(a uint64) (n int) {
 	// amd64:"BTQ\t[$]63"
+	// riscv64/rva22u64:"BEXTI\t[$]63"
 	if a&0x8000000000000000 != 0 {
 		return 1
 	}
 	// amd64:"BTQ\t[$]59"
+	// riscv64/rva22u64:"BEXTI\t[$]59"
 	if a&0x800000000000000 != 0 {
 		return 1
 	}
@@ -90,12 +93,15 @@ func bitcheck64_mask(a uint64) (n int) {
 
 func biton64(a, b uint64) (n uint64) {
 	// amd64:"BTSQ"
+	// riscv64/rva22u64:"BSET"
 	n += b | (1 << (a & 63))
 
 	// amd64:"BTSQ\t[$]63"
+	// riscv64/rva22u64:"BSETI\t[$]63"
 	n += a | (1 << 63)
 
 	// amd64:"BTSQ\t[$]60"
+	// riscv64/rva22u64:"BSETI\t[$]60"
 	n += a | (1 << 60)
 
 	// amd64:"ORQ\t[$]1"
@@ -106,12 +112,15 @@ func biton64(a, b uint64) (n uint64) {
 
 func bitoff64(a, b uint64) (n uint64) {
 	// amd64:"BTRQ"
+	// riscv64/rva22u64:"BCLR"
 	n += b &^ (1 << (a & 63))
 
 	// amd64:"BTRQ\t[$]63"
+	// riscv64/rva22u64:"BCLRI\t[$]63"
 	n += a &^ (1 << 63)
 
 	// amd64:"BTRQ\t[$]60"
+	// riscv64/rva22u64:"BCLRI\t[$]60"
 	n += a &^ (1 << 60)
 
 	// amd64:"ANDQ\t[$]-2"
@@ -132,12 +141,15 @@ func clearLastBit(x int64, y int32) (int64, int32) {
 
 func bitcompl64(a, b uint64) (n uint64) {
 	// amd64:"BTCQ"
+	// riscv64/rva22u64:"BINV"
 	n += b ^ (1 << (a & 63))
 
 	// amd64:"BTCQ\t[$]63"
+	// riscv64/rva22u64:"BINVI\t[$]63"
 	n += a ^ (1 << 63)
 
 	// amd64:"BTCQ\t[$]60"
+	// riscv64/rva22u64:"BINVI\t[$]60"
 	n += a ^ (1 << 60)
 
 	// amd64:"XORQ\t[$]1"
