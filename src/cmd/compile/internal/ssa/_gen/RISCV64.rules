@@ -854,3 +854,13 @@
 (Min64u x y) && buildcfg.GORISCV64 >= 22 => (MINU x y)
 (Max64u x y) && buildcfg.GORISCV64 >= 22 => (MAXU x y)
 
+
+// Fold bitwise ops in specific situations into bit clear/extract/invert/set
+(AND x (NOT (SLL (MOVDconst [1]) y))) && buildcfg.GORISCV64 >= 22 => (BCLR x y)
+(AND x (MOVDconst [y])) && isUint64PowerOfTwo(^y) && buildcfg.GORISCV64 >= 22 => (BCLRI [log64(^y)] x)
+(AND x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 22 => (BEXT x y)
+(AND x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 22 => (BEXTI [log64(y)] x)
+(XOR x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 22 => (BINV x y)
+(XOR x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 22 => (BINVI [log64(y)] x)
+(OR x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 22 => (BSET x y)
+(OR x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 22 => (BSETI [log64(y)] x)

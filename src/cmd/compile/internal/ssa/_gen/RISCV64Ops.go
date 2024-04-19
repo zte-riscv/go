@@ -495,6 +495,15 @@ func init() {
 		{name: "FLED", argLength: 2, reg: fp2gp, asm: "FLED"},                                                                               // arg0 <= arg1
 		{name: "LoweredFMIND", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMIND", commutative: true, typ: "Float64"},             // min(arg0, arg1)
 		{name: "LoweredFMAXD", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMAXD", commutative: true, typ: "Float64"},             // max(arg0, arg1)
+
+		{name: "BCLR", argLength: 2, reg: gp21, asm: "BCLR"},                 // clear the arg1-th bit of arg0
+		{name: "BCLRI", argLength: 1, reg: gp11, asm: "BCLRI", aux: "Int64"}, // clear the auxint-th bit of arg0
+		{name: "BEXT", argLength: 2, reg: gp21, asm: "BEXT"},                 // extract the arg1-th bit of arg0
+		{name: "BEXTI", argLength: 1, reg: gp11, asm: "BEXTI", aux: "Int64"}, // extract the auxint-th bit of arg0
+		{name: "BINV", argLength: 2, reg: gp21, asm: "BINV"},                 // invert the arg1-th bit of arg0
+		{name: "BINVI", argLength: 1, reg: gp11, asm: "BINVI", aux: "Int64"}, // invert the auxint-th bit of arg0
+		{name: "BSET", argLength: 2, reg: gp21, asm: "BSET"},                 // set the arg1-th bit of arg0
+		{name: "BSETI", argLength: 1, reg: gp11, asm: "BSETI", aux: "Int64"}, // set the auxint-th bit of arg0
 		
 		// RISC-V Integer Conditional (Zicond) operations extension
 		{name: "CZEROEQZ", argLength: 2, reg: gp21, asm: "CZEROEQZ"},
