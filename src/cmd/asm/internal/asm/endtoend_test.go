@@ -489,6 +489,10 @@ func TestRISCVEndToEnd(t *testing.T) {
 	testEndToEnd(t, "riscv64", "riscv64")
 }
 
+func TestRISCVSZfaEndToEnd(t *testing.T) {
+	testEndToEnd(t, "riscv64", "riscv64zfa")
+}
+
 func TestRISCVErrors(t *testing.T) {
 	testErrors(t, "riscv64", "riscv64error")
 }

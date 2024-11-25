@@ -29,6 +29,7 @@ import (
 	"internal/abi"
 	"internal/buildcfg"
 	"log"
+	"math"
 	"math/bits"
 	"strings"
 )
@@ -2261,6 +2262,38 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	// 21.7: Double-Precision Floating-Point Classify Instruction
 	AFCLASSD & obj.AMask: {enc: rFIEncoding},
 
+	// 26. "Zfa" Extension for Additional Floating-Point Instructions
+	/// 26.1. Load-Immediate Instructions
+	AFLIS & obj.AMask: {enc: rIFEncoding},
+	AFLID & obj.AMask: {enc: rIFEncoding},
+
+	/// 26.2. Minimum and Maximum Instructions
+	AFMAXMS & obj.AMask: {enc: rFFFEncoding},
+	AFMINMS & obj.AMask: {enc: rFFFEncoding},
+	AFMAXMD & obj.AMask: {enc: rFFFEncoding},
+	AFMINMD & obj.AMask: {enc: rFFFEncoding},
+
+	/// 26.3. Round-to-Integer Instructions
+	AFROUNDS & obj.AMask:   {enc: rFFEncoding},
+	AFROUNDNXS & obj.AMask: {enc: rFFEncoding},
+	AFROUNDD & obj.AMask:   {enc: rFFEncoding},
+	AFROUNDNXD & obj.AMask: {enc: rFFEncoding},
+
+	/// 26.4. Modular Convert-to-Integer Instruction
+	AFCVTMODWD & obj.AMask: {enc: rFIEncoding},
+
+	/// 26.6. Comparison Instructions
+	AFLEQS & obj.AMask: {enc: rFFIEncoding},
+	AFLTQS & obj.AMask: {enc: rFFIEncoding},
+	AFLEQD & obj.AMask: {enc: rFFIEncoding},
+	AFLTQD & obj.AMask: {enc: rFFIEncoding},
+
+	// Privileged ISA
+
+	// 3.2.1: Environment Call and Breakpoint
+	AECALL & obj.AMask:  {enc: iIIEncoding},
+	AEBREAK & obj.AMask: {enc: iIIEncoding},
+
 	//
 	// "B" Extension for Bit Manipulation, Version 1.0.0
 	//
@@ -3738,6 +3771,40 @@ func instructionsForRotate(p *obj.Prog, ins *instruction) []*instruction {
 	}
 }
 
+var fimmMapping = map[float64]uint32{
+	-1.0:               0,
+	math.Inf(-1):       1,
+	1.52587890625e-05:  2,
+	3.0517578125e-05:   3,
+	0.00390625:         4,
+	0.0078125:          5,
+	0.0625:             6,
+	0.125:              7,
+	0.25:               8,
+	0.3125:             9,
+	0.375:              10,
+	0.4375:             11,
+	0.5:                12,
+	0.625:              13,
+	0.75:               14,
+	0.875:              15,
+	1.0:                16,
+	1.25:               17,
+	1.5:                18,
+	1.75:               19,
+	2.0:                20,
+	2.5:                21,
+	3.0:                22,
+	4.0:                23,
+	8.0:                24,
+	1.6000000000000001: 25,
+	1.28:               26,
+	2.5600000000000001: 27,
+	3.27:               28,
+	6.5499999999999998: 29,
+	math.Inf(1):        30,
+}
+
 // instructionsForMinMax returns the machine instructions for an integer minimum or maximum.
 func instructionsForMinMax(p *obj.Prog, ins *instruction) []*instruction {
 	if buildcfg.GORISCV64 >= 22 {
@@ -3981,6 +4048,15 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 			ins.imm -= 4096
 		}
 		ins.rs2 = obj.REG_NONE
+
+	case AFLIS, AFLID:
+		fimm := p.From.Val.(float64)
+		var index = fimmMapping[fimm]
+		// NaN is specical as it can't be used in comparison.
+		if math.IsNaN(fimm) {
+			index = 31
+		}
+		ins.rs2 = REG_ZERO + index
 
 	case AFENCE:
 		ins.rd, ins.rs1, ins.rs2 = REG_ZERO, REG_ZERO, obj.REG_NONE
