@@ -42,7 +42,8 @@ jobs:
             # ./all.bash
 
             cd "$GITHUB_WORKSPACE/rv23test/zicond"
-            file ./zicond.rv64
+            # file ./zicond.rv64
+            ./zicond.rv64
 
             cd "$GITHUB_WORKSPACE/src"
             ./make.bash
@@ -51,11 +52,11 @@ jobs:
             cd "$GITHUB_WORKSPACE/rv23test/zicond"
             "$GOROOT/bin/go" build -o zicond2.rv64 zicond.go
 
-            file ./zicond2.rv64
+            # file ./zicond2.rv64
             ./zicond2.rv64
             
             export GORISCV64=rva23u64
             "$GOROOT/bin/go" build -o zicond3.rv64 zicond.go
-            file ./zicond3.rv64
+            # file ./zicond3.rv64
             ./zicond3.rv64
 
