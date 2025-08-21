@@ -60,4 +60,5 @@ jobs:
           export GORISCV64=rva23u64
           GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond3.rv64 zicond.go
           qemu-riscv64 ./zicond3.rv64
+          go tool objdump zicond3.rv64 | grep "ZERO"
 
