@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-toolchain-and-test:
+  go-vet-compile:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -27,6 +27,6 @@ jobs:
             ./make.bash
 
             # run go vet
-            GOROOT="$GITHUB_WORKSPACE" go vet ./src/cmd/compile/...
+            GOROOT="$GITHUB_WORKSPACE" go vet ./cmd/compile/...
 
 
