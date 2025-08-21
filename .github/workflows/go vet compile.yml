@@ -1,8 +1,6 @@
-name: go vet
+name: go vet compile
 
 on:
-  push:
-    branches: ["**"]
   pull_request:
   workflow_dispatch:
 
@@ -21,7 +19,7 @@ jobs:
           go-version: '1.25.0'
 
       - name: Run go vet (just for compile)
-        working-directory: go/src/cmd
+        working-directory: src/cmd
         run: |
           go vet ./compile/...
 

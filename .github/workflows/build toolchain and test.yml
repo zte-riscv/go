@@ -12,14 +12,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go (host bootstrap)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25.0'
-
       - name: Build toolchain and test (host amd64)
         run: |
-          set -euxo pipefail
-          export GOROOT_BOOTSTRAP="$GOROOT"
-          cd "$GITHUB_WORKSPACE/src"
-          ./all.bash
+            # install bootstrap Go
+            set -euxo pipefail
+            BOOT=/usr/local/go-bootstrap
+            curl -fsSL https://go.dev/dl/go1.25.0.linux-amd64.tar.gz -o /tmp/go.tar.gz
+            tar -C /usr/local -xzf /tmp/go.tar.gz
+            mv /usr/local/go "$BOOT"
+            export GOROOT_BOOTSTRAP="$BOOT"
+
+            # build toolchain and test
+            cd "$GITHUB_WORKSPACE/src"
+            ./all.bash
