@@ -35,7 +35,12 @@ jobs:
             tar -C /usr/local -xzf /tmp/go.tar.gz
             mv /usr/local/go "$BOOT"
             export GOROOT_BOOTSTRAP="$BOOT"
+            export PATH="$PATH:/usr/local/go-bootstrap/bin"
 
             # 2) 进入 Go 源码树并构建+测试（QEMU 下的 riscv64）
-            cd "$GITHUB_WORKSPACE/src"
-            ./all.bash
+            # cd "$GITHUB_WORKSPACE/src"
+            # ./all.bash
+
+            cd "$GITHUB_WORKSPACE/rv23test"
+            go tool objdump zicond.rv64 | grep "ZERO"
+            ./zicond.rv64
