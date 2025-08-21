@@ -14,49 +14,44 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Enable QEMU (riscv64)
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: riscv64
+      - name: Install QEMU (apt) and deps
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y qemu-user qemu-user-static binfmt-support curl xz-utils build-essential ca-certificates git file
+          qemu-riscv64 -version
+          # 显示已注册的 riscv64 解释器（可选）
+          update-binfmts --display | sed -n '1,200p' || true
 
-      - name: Run tests in riscv64 container (QEMU)
-        uses: uraimo/run-on-arch-action@v2
-        with:
-          arch: riscv64
-          distro: ubuntu22.04
-          install: |
-            apt-get update
-            apt-get install -y curl xz-utils build-essential ca-certificates git
-          run: |
-            set -eux
-            # 1) 在 riscv64 环境中安装 bootstrap Go
-            BOOT=/usr/local/go-bootstrap
-            curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tar.gz
-            tar -C /usr/local -xzf /tmp/go.tar.gz
-            mv /usr/local/go "$BOOT"
-            export GOROOT_BOOTSTRAP="$BOOT"
-            export PATH="$PATH:/usr/local/go-bootstrap/bin"
+      - name: Build toolchain (host amd64) and run rv64 tests via qemu-user
+        run: |
+          set -euxo pipefail
 
-            # 2) 进入 Go 源码树并构建+测试（QEMU 下的 riscv64）
-            # cd "$GITHUB_WORKSPACE/src"
-            # ./all.bash
+          # 1) 安装 amd64 的 bootstrap Go（用于在 amd64 上构建源码树）
+          BOOT=/tmp/go-bootstrap
+          curl -fsSL https://go.dev/dl/go1.25.0.linux-amd64.tar.gz -o /tmp/go.tar.gz
+          tar -C /tmp -xzf /tmp/go.tar.gz
+          mv /tmp/go "$BOOT"
+          export GOROOT_BOOTSTRAP="$BOOT"
 
-            cd "$GITHUB_WORKSPACE/rv23test/zicond"
-            # file ./zicond.rv64
-            ./zicond.rv64
+          cd "$GITHUB_WORKSPACE/rv23test/zicond"
+          qemu-riscv64 ./zicond.rv64
 
-            cd "$GITHUB_WORKSPACE/src"
-            ./make.bash
 
-            export GOROOT="$GITHUB_WORKSPACE"
-            cd "$GITHUB_WORKSPACE/rv23test/zicond"
-            "$GOROOT/bin/go" build -o zicond2.rv64 zicond.go
+          # 2) 构建当前源码树（生成 $GITHUB_WORKSPACE/bin/go for amd64）
+          cd "$GITHUB_WORKSPACE/src"
+          ./make.bash
 
-            # file ./zicond2.rv64
-            ./zicond2.rv64
-            
-            export GORISCV64=rva23u64
-            "$GOROOT/bin/go" build -o zicond3.rv64 zicond.go
-            # file ./zicond3.rv64
-            ./zicond3.rv64
+          # 3) 用仓库工具链交叉编译 riscv64 测试程序，并用 qemu-riscv64 运行
+          export GOROOT="$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE/rv23test/zicond"
+
+          # 基线 rv64 构建
+          GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond2.rv64 zicond.go
+          qemu-riscv64 ./zicond2.rv64
+
+          # 开启 RVA23 相关代码生成（按你的实现变量名）
+          export GORISCV64=rva23u64
+          GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond3.rv64 zicond.go
+          qemu-riscv64 ./zicond3.rv64
 
