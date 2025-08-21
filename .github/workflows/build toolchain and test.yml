@@ -16,10 +16,10 @@ jobs:
         run: |
             # install bootstrap Go
             set -euxo pipefail
-            BOOT=/usr/local/go-bootstrap
+            BOOT=/tmp/go-bootstrap
             curl -fsSL https://go.dev/dl/go1.25.0.linux-amd64.tar.gz -o /tmp/go.tar.gz
-            tar -C /usr/local -xzf /tmp/go.tar.gz
-            mv /usr/local/go "$BOOT"
+            tar -C /tmp -xzf /tmp/go.tar.gz
+            mv /tmp/go "$BOOT"
             export GOROOT_BOOTSTRAP="$BOOT"
 
             # build toolchain and test

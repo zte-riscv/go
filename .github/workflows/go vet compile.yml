@@ -19,6 +19,8 @@ jobs:
           go-version: '1.25.0'
 
       - name: Run go vet (just for compile)
+        env:
+          GOROOT: ${{ github.workspace }}
         working-directory: src/cmd
         run: |
           go vet ./compile/...
