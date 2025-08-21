@@ -14,14 +14,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install QEMU (apt) and deps
+      - name: Install deps for building QEMU 10.0
         run: |
           set -euxo pipefail
           sudo apt-get update
-          sudo apt-get install -y qemu-user qemu-user-static binfmt-support curl xz-utils build-essential ca-certificates git file
+          sudo apt-get install -y curl xz-utils build-essential ca-certificates git file \
+            ninja-build meson pkg-config libglib2.0-dev libpixman-1-dev libfdt-dev zlib1g-dev
+
+      - name: Build and install QEMU 10.0 (linux-user)
+        run: |
+          set -euxo pipefail
+          cd /tmp
+          curl -fsSL https://download.qemu.org/qemu-10.0.0.tar.xz -o qemu-10.0.0.tar.xz
+          tar -xf qemu-10.0.0.tar.xz
+          cd qemu-10.0.0
+          ./configure --target-list=riscv64-linux-user
+          make -j"$(nproc)"
+          sudo make install
           qemu-riscv64 -version
-          # 显示已注册的 riscv64 解释器（可选）
-          update-binfmts --display | sed -n '1,200p' || true
 
       - name: Build toolchain (host amd64) and run rv64 tests via qemu-user
         run: |
