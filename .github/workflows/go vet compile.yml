@@ -1,40 +1,33 @@
 name: go vet compile
-
 on:
   pull_request:
   workflow_dispatch:
 
 jobs:
-  vet:
+  build-toolchain-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 120
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
         with:
-          go-version: '1.25.0'
+          fetch-depth: 0
 
-      - name: Run go vet (just for compile)
-        env:
-          GO111MODULE: 'on'
-          GOWORK: 'off'
-          GOPATH: ${{ runner.temp }}/gopath
+      - name: Build toolchain and test (host amd64)
         run: |
-          set -euxo pipefail
-          mkdir -p "$GOPATH"
+            # install bootstrap Go
+            set -euxo pipefail
+            BOOT=/tmp/go-bootstrap
+            curl -fsSL https://go.dev/dl/go1.25.0.linux-amd64.tar.gz -o /tmp/go.tar.gz
+            tar -C /tmp -xzf /tmp/go.tar.gz
+            mv /tmp/go "$BOOT"
+            export GOROOT_BOOTSTRAP="$BOOT"
 
-          # 1) 获取已安装的 go 的路径（称为 go1）
-          GO1="$(command -v go)"
-          echo "go1 executable: $GO1"
-          GO1_ROOT="$($GO1 env GOROOT)"
-          echo "go1 GOROOT: $GO1_ROOT"
+            # build toolchain
+            cd "$GITHUB_WORKSPACE/src"
+            ./make.bash
 
-          # 2) 将 GOROOT 指向本仓库，并用 go1 的二进制来执行 go vet
-          export GOROOT="$GITHUB_WORKSPACE"
-          "$GO1" -C "$GITHUB_WORKSPACE/src/cmd" vet ./compile/...
+            # run go vet
+            export GOROOT="$GITHUB_WORKSPACE"
+            go -C "$GITHUB_WORKSPACE/src/cmd" vet ./compile/...
 
 
