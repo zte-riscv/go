@@ -29,13 +29,13 @@ jobs:
             apt-get install -y curl xz-utils build-essential ca-certificates git
           run: |
             set -eux
-            # 1) 在 riscv64 环境中安装 bootstrap Go（版本按需调整）
+            # 1) 在 riscv64 环境中安装 bootstrap Go
             BOOT=/usr/local/go-bootstrap
             curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tar.gz
             tar -C /usr/local -xzf /tmp/go.tar.gz
             mv /usr/local/go "$BOOT"
             export GOROOT_BOOTSTRAP="$BOOT"
 
-            # 2) 进入你的 Go 源码树并原生构建+测试（QEMU 下的 riscv64）
+            # 2) 进入 Go 源码树并构建+测试（QEMU 下的 riscv64）
             cd "$GITHUB_WORKSPACE/src"
-            ./make.bash
+            ./all.bash
