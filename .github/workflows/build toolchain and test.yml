@@ -1,0 +1,25 @@
+name: build toolchain and test
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-toolchain-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go (host bootstrap)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.0'
+
+      - name: Build toolchain and test (host amd64)
+        run: |
+          set -euxo pipefail
+          export GOROOT_BOOTSTRAP="$GOROOT"
+          cd "$GITHUB_WORKSPACE/src"
+          ./all.bash
