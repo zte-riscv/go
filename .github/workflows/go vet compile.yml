@@ -27,7 +27,6 @@ jobs:
             ./make.bash
 
             # run go vet
-            export GOROOT="$GITHUB_WORKSPACE"
-            go -C "$GITHUB_WORKSPACE/src/cmd" vet ./compile/...
+            GOROOT="$GITHUB_WORKSPACE" go vet ./src/cmd/compile/...
 
 
