@@ -27,6 +27,7 @@ jobs:
             ./make.bash
 
             # run go vet using the newly built repository toolchain
-            GOROOT="$GITHUB_WORKSPACE" "$GOROOT/bin/go" vet cmd/compile/...
+            export GOROOT="$GITHUB_WORKSPACE"
+            "$GOROOT/bin/go" vet cmd/compile/...
 
 
