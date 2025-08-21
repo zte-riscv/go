@@ -26,7 +26,7 @@ jobs:
             cd "$GITHUB_WORKSPACE/src"
             ./make.bash
 
-            # run go vet
-            GOROOT="$GITHUB_WORKSPACE" go vet ./cmd/compile/...
+            # run go vet using the newly built repository toolchain
+            GOROOT="$GITHUB_WORKSPACE" "$GOROOT/bin/go" vet cmd/compile/...
 
 
