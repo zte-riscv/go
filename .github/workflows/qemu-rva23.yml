@@ -23,8 +23,7 @@ jobs:
         uses: uraimo/run-on-arch-action@v2
         with:
           arch: riscv64
-          distro: ubuntu24.04
-          # 也可用 ubuntu22.04 / debian:bookworm
+          distro: ubuntu22.04
           install: |
             apt-get update
             apt-get install -y curl xz-utils build-essential ca-certificates git
