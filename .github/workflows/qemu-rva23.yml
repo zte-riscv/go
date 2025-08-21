@@ -38,7 +38,4 @@ jobs:
 
             # 2) 进入你的 Go 源码树并原生构建+测试（QEMU 下的 riscv64）
             cd "$GITHUB_WORKSPACE/src"
-            # 如果你的实现使用的标识不同，请把 rva23u64 替换为你实现的值
-            export GORISCV64=rva23u64
-            export GO_TEST_SHORT=1   # PR 上建议先跑短测，必要时去掉
             ./make.bash
