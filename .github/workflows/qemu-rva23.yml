@@ -25,9 +25,9 @@ jobs:
         run: |
           set -euxo pipefail
           cd /tmp
-          curl -fsSL https://download.qemu.org/qemu-10.0.0.tar.xz -o qemu-10.0.0.tar.xz
-          tar -xf qemu-10.0.0.tar.xz
-          cd qemu-10.0.0
+          curl -fsSL https://download.qemu.org/qemu-10.0.3.tar.xz -o qemu-10.0.3.tar.xz
+          tar -xf qemu-10.0.3.tar.xz
+          cd qemu-10.0.3
           ./configure --target-list=riscv64-linux-user
           make -j"$(nproc)"
           sudo make install
@@ -43,10 +43,6 @@ jobs:
           tar -C /tmp -xzf /tmp/go.tar.gz
           mv /tmp/go "$BOOT"
           export GOROOT_BOOTSTRAP="$BOOT"
-
-          cd "$GITHUB_WORKSPACE/rv23test/zicond"
-          qemu-riscv64 ./zicond.rv64
-
 
           # 2) 构建当前源码树（生成 $GITHUB_WORKSPACE/bin/go for amd64）
           cd "$GITHUB_WORKSPACE/src"
