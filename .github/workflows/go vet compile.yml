@@ -20,9 +20,11 @@ jobs:
 
       - name: Run go vet (just for compile)
         env:
-          GOROOT: ${{ github.workspace }}
-        working-directory: src/cmd
+          GO111MODULE: 'on'
+          GOWORK: 'off'
+          GOPATH: ${{ runner.temp }}/gopath
         run: |
-          go vet ./compile/...
+          set -euxo pipefail
+          go -C src/cmd vet ./compile/...
 
 
