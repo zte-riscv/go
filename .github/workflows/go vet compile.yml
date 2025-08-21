@@ -25,6 +25,16 @@ jobs:
           GOPATH: ${{ runner.temp }}/gopath
         run: |
           set -euxo pipefail
-          go -C src/cmd vet ./compile/...
+          mkdir -p "$GOPATH"
+
+          # 1) 获取已安装的 go 的路径（称为 go1）
+          GO1="$(command -v go)"
+          echo "go1 executable: $GO1"
+          GO1_ROOT="$($GO1 env GOROOT)"
+          echo "go1 GOROOT: $GO1_ROOT"
+
+          # 2) 将 GOROOT 指向本仓库，并用 go1 的二进制来执行 go vet
+          export GOROOT="$GITHUB_WORKSPACE"
+          "$GO1" -C "$GITHUB_WORKSPACE/src/cmd" vet ./compile/...
 
 
