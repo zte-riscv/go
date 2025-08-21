@@ -41,6 +41,21 @@ jobs:
             # cd "$GITHUB_WORKSPACE/src"
             # ./all.bash
 
-            cd "$GITHUB_WORKSPACE/rv23test"
-            go tool objdump zicond.rv64 | grep "ZERO"
-            ./zicond.rv64
+            cd "$GITHUB_WORKSPACE/rv23test/zicond"
+            file ./zicond.rv64
+
+            cd "$GITHUB_WORKSPACE/src"
+            ./make.bash
+
+            export GOROOT="$GITHUB_WORKSPACE"
+            cd "$GITHUB_WORKSPACE/rv23test/zicond"
+            "$GOROOT/bin/go" build -o zicond2.rv64 zicond.go
+
+            file ./zicond2.rv64
+            ./zicond2.rv64
+            
+            export GORISCV64=rva23u64
+            "$GOROOT/bin/go" build -o zicond3.rv64 zicond.go
+            file ./zicond3.rv64
+            ./zicond3.rv64
+
