@@ -2,8 +2,12 @@
 
 package ssa
 
+import "internal/buildcfg"
+
 func rewriteValueRISCV64latelower(v *Value) bool {
 	switch v.Op {
+	case OpCondSelect:
+		return rewriteValueRISCV64latelower_OpCondSelect(v)
 	case OpRISCV64AND:
 		return rewriteValueRISCV64latelower_OpRISCV64AND(v)
 	case OpRISCV64NOT:
@@ -18,6 +22,32 @@ func rewriteValueRISCV64latelower(v *Value) bool {
 		return rewriteValueRISCV64latelower_OpRISCV64SRLI(v)
 	case OpRISCV64XOR:
 		return rewriteValueRISCV64latelower_OpRISCV64XOR(v)
+	}
+	return false
+}
+func rewriteValueRISCV64latelower_OpCondSelect(v *Value) bool {
+	v_2 := v.Args[2]
+	v_1 := v.Args[1]
+	v_0 := v.Args[0]
+	b := v.Block
+	// match: (CondSelect <t> x y cond)
+	// cond: buildcfg.GORISCV64 >= 23
+	// result: (OR (CZEROEQZ <t> x cond) (CZERONEZ <t> y cond))
+	for {
+		t := v.Type
+		x := v_0
+		y := v_1
+		cond := v_2
+		if !(buildcfg.GORISCV64 >= 23) {
+			break
+		}
+		v.reset(OpRISCV64OR)
+		v0 := b.NewValue0(v.Pos, OpRISCV64CZEROEQZ, t)
+		v0.AddArg2(x, cond)
+		v1 := b.NewValue0(v.Pos, OpRISCV64CZERONEZ, t)
+		v1.AddArg2(y, cond)
+		v.AddArg2(v0, v1)
+		return true
 	}
 	return false
 }

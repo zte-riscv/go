@@ -1204,6 +1204,9 @@ const (
 	AVWCVTUXXV
 	AVWCVTXXV
 
+	ACZERONEZ
+	ACZEROEQZ
+
 	// End marker
 	ALAST
 )

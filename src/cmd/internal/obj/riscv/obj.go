@@ -2734,6 +2734,10 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	obj.ADUFFZERO: {enc: pseudoOpEncoding},
 	obj.ADUFFCOPY: {enc: pseudoOpEncoding},
 	obj.APCALIGN:  {enc: pseudoOpEncoding},
+
+	//Zicond
+	ACZERONEZ & obj.AMask: {enc: rIIIEncoding, ternary: true},
+	ACZEROEQZ & obj.AMask: {enc: rIIIEncoding, ternary: true},
 }
 
 // instructionDataForAs returns the instruction data for an obj.As.
@@ -3614,6 +3618,10 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		// XNOR -> (NOT (XOR x y))
 		ins.as = AXOR
 		inss = append(inss, &instruction{as: AXORI, rs1: ins.rd, rs2: obj.REG_NONE, rd: ins.rd, imm: -1})
+
+	case ACZERONEZ, ACZEROEQZ:
+		// Zicond instructions: rd, rs1, rs2
+		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), uint32(p.Reg), uint32(p.From.Reg)
 
 	case AMIN, AMAX, AMINU, AMAXU:
 		inss = instructionsForMinMax(p, ins)

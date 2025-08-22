@@ -23,3 +23,5 @@
 (SRAI [0] x) => x
 (SRLI [0] x) => x
 (SLLI [0] x) => x
+
+(CondSelect <t> x y cond) && buildcfg.GORISCV64 >= 23 => (OR (CZEROEQZ <t> x cond) (CZERONEZ <t> y cond))
