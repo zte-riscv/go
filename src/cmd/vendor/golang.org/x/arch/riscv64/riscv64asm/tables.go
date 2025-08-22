@@ -87,6 +87,8 @@ const (
 	AMOXOR_W_AQRL
 	AMOXOR_W_RL
 	AND
+	CZERONEZ
+	CZEROEQZ
 	ANDI
 	ANDN
 	AUIPC
@@ -454,6 +456,8 @@ var opstr = [...]string{
 	AMOXOR_W_AQRL:  "AMOXOR.W.AQRL",
 	AMOXOR_W_RL:    "AMOXOR.W.RL",
 	AND:            "AND",
+	CZERONEZ:       "CZERONEZ",
+	CZEROEQZ:       "CZEROEQZ",
 	ANDI:           "ANDI",
 	ANDN:           "ANDN",
 	AUIPC:          "AUIPC",
@@ -899,6 +903,10 @@ var instFormats = [...]instFormat{
 	{mask: 0xfe00707f, value: 0x2200202f, op: AMOXOR_W_RL, args: argTypeList{arg_rd, arg_rs2, arg_rs1_amo}},
 	// AND rd, rs1, rs2
 	{mask: 0xfe00707f, value: 0x00007033, op: AND, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
+	// CZERONEZ rd, rs1, rs2 (funct7=0x07, funct3=0x7, opcode=0x33)
+	{mask: 0xfe00707f, value: 0x0e007033, op: CZERONEZ, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
+	// CZEROEQZ rd, rs1, rs2 (funct7=0x07, funct3=0x5, opcode=0x33)
+	{mask: 0xfe00707f, value: 0x0e005033, op: CZEROEQZ, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
 	// ANDI rd, rs1, imm12
 	{mask: 0x0000707f, value: 0x00007013, op: ANDI, args: argTypeList{arg_rd, arg_rs1, arg_imm12}},
 	// ANDN rd, rs1, rs2

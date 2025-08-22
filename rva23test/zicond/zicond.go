@@ -1,8 +1,10 @@
 package main
 
 func main() {
-	r := condSelect(123, 456)
-	println("result is %d", r)
+	for i := 0; i < 10; i++ {
+		r := condSelect(i%5, i%3)
+		println("result is %d", r)
+	}
 }
 
 func condSelect(a, b int) int {

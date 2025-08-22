@@ -50,7 +50,7 @@ jobs:
 
           # 3) 用仓库工具链交叉编译 riscv64 测试程序，并用 qemu-riscv64 运行
           export GOROOT="$GITHUB_WORKSPACE"
-          cd "$GITHUB_WORKSPACE/rv23test/zicond"
+          cd "$GITHUB_WORKSPACE/rva23test/zicond"
 
           # 基线 rv64 构建
           GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond2.rv64 zicond.go
@@ -62,7 +62,6 @@ jobs:
           GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond3.rv64 zicond.go
           qemu-riscv64 ./zicond3.rv64
 
-          $GITHUB_WORKSPACE/bin/go tool objdump zicond.rv64 | grep -i "ZERO" || true
-          $GITHUB_WORKSPACE/bin/go tool objdump zicond2.rv64 | grep -i "ZERO" || true
-          $GITHUB_WORKSPACE/bin/go tool objdump zicond3.rv64 | grep -i "ZERO" || true
+          $GITHUB_WORKSPACE/bin/go tool objdump zicond2.rv64 | grep -i "CZERO" || true
+          $GITHUB_WORKSPACE/bin/go tool objdump zicond3.rv64 | grep -i "CZERO" || true
 
