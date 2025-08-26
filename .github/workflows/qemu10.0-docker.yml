@@ -72,6 +72,8 @@ jobs:
             cd src &&
             export GORISCV64=rva23u64 &&
             ./make.bash &&
-            /w/bin/go version
-            file /w/bin/go
+            /w/bin/go version &&
+            file /w/bin/go &&
+            cd /w/test/codegen &&
+            /w/bin/go test -count=1 -a -v cmd/internal/testdir -run '^Test/codegen/zte-rva23\.go$'
           '
