@@ -44,30 +44,38 @@ jobs:
           mv /tmp/go "$BOOT"
           export GOROOT_BOOTSTRAP="$BOOT"
 
-          # 2) 构建当前源码树（生成 $GITHUB_WORKSPACE/bin/go for amd64）
-          cd "$GITHUB_WORKSPACE/src"
-          ./make.bash
+          # # 2) 构建当前源码树（生成 $GITHUB_WORKSPACE/bin/go for amd64）
+          # cd "$GITHUB_WORKSPACE/src"
+          # ./make.bash
 
-          # 3) 用仓库工具链交叉编译 riscv64 测试程序，并用 qemu-riscv64 运行
-          export GOROOT="$GITHUB_WORKSPACE"
-          cd "$GITHUB_WORKSPACE/rva23test/zicond"
+          # # 3) 用仓库工具链交叉编译 riscv64 测试程序，并用 qemu-riscv64 运行
+          # export GOROOT="$GITHUB_WORKSPACE"
+          # cd "$GITHUB_WORKSPACE/rva23test/zicond"
 
-          # 基线 rv64 构建
-          GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond2.rv64 zicond.go
-          qemu-riscv64 ./zicond2.rv64
+          # # 基线 rv64 构建
+          # GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond2.rv64 zicond.go
+          # qemu-riscv64 ./zicond2.rv64
 
 
-          # 开启 RVA23 相关代码生成（按你的实现变量名）
-          export GORISCV64=rva23u64
-          GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond3.rv64 zicond.go
-          qemu-riscv64 ./zicond3.rv64
+          # # 开启 RVA23 相关代码生成（按你的实现变量名）
+          # export GORISCV64=rva23u64
+          # GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond3.rv64 zicond.go
+          # qemu-riscv64 ./zicond3.rv64
 
-          # $GITHUB_WORKSPACE/bin/go tool objdump zicond2.rv64 | grep -i "CZERO" || true
-          # $GITHUB_WORKSPACE/bin/go tool objdump zicond3.rv64 | grep -i "CZERO" || true
+          # # $GITHUB_WORKSPACE/bin/go tool objdump zicond2.rv64 | grep -i "CZERO" || true
+          # # $GITHUB_WORKSPACE/bin/go tool objdump zicond3.rv64 | grep -i "CZERO" || true
+
+
 
           # 运行codegen下的测试，确保在rva23u64下生成了正确的代码
           export GOOS=linux
           export GOARCH=riscv64
           export GORISCV64=rva23u64 
+
+          cd "$GITHUB_WORKSPACE/src"
+          ./make.bash
+
+          export GOROOT="$GITHUB_WORKSPACE"
+
           qemu-riscv64 "$GOROOT/bin/go" tool dist test --no-rebuild -run '^go_test:codegen/zte-rva23\.go$'
 
