@@ -26,8 +26,8 @@ jobs:
           export GOROOT_BOOTSTRAP="$BOOT"
 
           # 2) build toolchain
-          # cd "$GITHUB_WORKSPACE/src"
-          # ./make.bash
+          cd "$GITHUB_WORKSPACE/src"
+          ./make.bash
 
           # 3) 用仓库工具链交叉编译 riscv64 测试程序，并用 qemu-riscv64 运行
           "$GITHUB_WORKSPACE/bin/go" test cmd/internal/testdir -run='Test/codegen' -all_codegen -v
