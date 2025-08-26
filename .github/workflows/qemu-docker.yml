@@ -26,7 +26,7 @@ jobs:
           distro: ubuntu22.04
           install: |
             apt-get update
-            apt-get install -y curl xz-utils build-essential ca-certificates git
+            apt-get install -y curl xz-utils build-essential ca-certificates git file
           run: |
             set -eux
             # 1) 在 riscv64 环境中安装 bootstrap Go（版本按需调整）
