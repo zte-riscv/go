@@ -55,5 +55,6 @@ jobs:
           # 2) 构建当前源码树（生成 $GITHUB_WORKSPACE/bin/go for amd64）
           cd "$GITHUB_WORKSPACE/src"
           ./make.bash
+          export GOROOT="$GITHUB_WORKSPACE"
 
           GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" test -count=1 -a -v cmd/internal/testdir -run '^Test/codegen/zte-rva23\.go$'

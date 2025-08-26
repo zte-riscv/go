@@ -63,7 +63,7 @@ jobs:
           set -euxo pipefail
           docker run --rm --platform=riscv64 -v "$GITHUB_WORKSPACE":/w -w /w ubuntu:22.04 bash -lc '
             apt-get update &&
-            apt-get install -y build-essential curl xz-utils ca-certificates git &&
+            apt-get install -y build-essential curl xz-utils ca-certificates git file &&
             BOOT=/usr/local/go-bootstrap &&
             curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tgz &&
             tar -C /usr/local -xzf /tmp/go.tgz &&

@@ -9,6 +9,6 @@ func Zicond(a, b int) int {
 	} else {
 		c = b
 	}
-	// riscv64:'CZERONEQ','CZEROE2Z'
+	// riscv64:'CZEROE2Z'
 	return c
 }
