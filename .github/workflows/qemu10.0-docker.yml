@@ -35,18 +35,12 @@ jobs:
           sudo make install
           qemu-riscv64 -version
 
-      # 3) 用 binfmt 注册 riscv64 → 指向我们刚安装的 qemu-riscv64
-      - name: Register binfmt for riscv64 to QEMU 10
+      # 3) 启用 binfmt（使用静态解释器），保证 --platform=riscv64 容器可在 x86 上运行
+      - name: Enable binfmt for riscv64 (static interpreter)
         run: |
           set -euxo pipefail
-          # 清理可能存在的旧注册
-          sudo update-binfmts --disable qemu-riscv64 || true
-          sudo update-binfmts --package qemu-user --remove qemu-riscv64 /usr/bin/qemu-riscv64 || true
-          # 使用 /usr/local/bin/qemu-riscv64 注册（QEMU 10）
-          sudo update-binfmts --install qemu-riscv64 /usr/local/bin/qemu-riscv64 \
-            --magic '\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xF3\x00' \
-            --mask  '\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'
-          update-binfmts --display qemu-riscv64 | cat
+          docker run --privileged --rm tonistiigi/binfmt --install riscv64
+          update-binfmts --display | sed -n '1,200p' || true
 
     #   # 4A) 直接在宿主上（经 binfmt+QEMU10）原生构建 riscv64 工具链
     #   - name: Build RV64 Go toolchain (native via binfmt)
