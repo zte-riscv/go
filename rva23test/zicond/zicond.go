@@ -10,9 +10,9 @@ func main() {
 func condSelect(a, b int) int {
 	var c int
 	if a > b {
-		c = a + 2
+		c = a
 	} else {
-		c = b + 3
+		c = b
 	}
 	return c
 }

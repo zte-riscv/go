@@ -62,6 +62,13 @@ jobs:
           GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond3.rv64 zicond.go
           qemu-riscv64 ./zicond3.rv64
 
-          $GITHUB_WORKSPACE/bin/go tool objdump zicond2.rv64 | grep -i "CZERO" || true
-          $GITHUB_WORKSPACE/bin/go tool objdump zicond3.rv64 | grep -i "CZERO" || true
+          # $GITHUB_WORKSPACE/bin/go tool objdump zicond2.rv64 | grep -i "CZERO" || true
+          # $GITHUB_WORKSPACE/bin/go tool objdump zicond3.rv64 | grep -i "CZERO" || true
+
+          # 运行codegen下的测试，确保在rva23u64下生成了正确的代码
+          export GOOS=linux
+          export GOARCH=riscv64
+          export GORISCV64=rva23u64 
+          "$GOROOT/bin/go" test codegen
+          qemu-riscv64 "$GOROOT/bin/go" tool dist test --no-rebuild -run '^go_test:codegen/zte-rva23\.go$'
 
