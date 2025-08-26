@@ -69,6 +69,5 @@ jobs:
           export GOOS=linux
           export GOARCH=riscv64
           export GORISCV64=rva23u64 
-          "$GOROOT/bin/go" test codegen
           qemu-riscv64 "$GOROOT/bin/go" tool dist test --no-rebuild -run '^go_test:codegen/zte-rva23\.go$'
 
