@@ -1,4 +1,4 @@
-name: riscv64-rva23
+name: qemu-docker
 
 on:
   pull_request:
@@ -37,11 +37,11 @@ jobs:
             export GOROOT_BOOTSTRAP="$BOOT"
             # 2) 进入你的 Go 源码树并原生构建+测试（QEMU 下的 riscv64）
             cd "$GITHUB_WORKSPACE/src"
-            export GORISCV64=rva23u64
             ./make.bash
 
             file "$GITHUB_WORKSPACE/bin/go"
             cd "$GITHUB_WORKSPACE/test/codegen"
             "$GITHUB_WORKSPACE/bin/go" test -v -run '^go_test:codegen/zte-rva23\.go$'
 
+            export GORISCV64=rva23u64
             "$GITHUB_WORKSPACE/bin/go" test -count=1 -a -v cmd/internal/testdir -run '^Test/codegen/zte-rva23\.go$

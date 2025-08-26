@@ -1,4 +1,4 @@
-name: riscv64-rva23
+name: qemu-riscv64-user
 
 on:
   pull_request:

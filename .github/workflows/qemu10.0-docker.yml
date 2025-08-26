@@ -1,4 +1,4 @@
-name: riscv64-rva23
+name: qemu10.0-docker
 
 on:
   pull_request:
@@ -48,35 +48,36 @@ jobs:
             --mask  '\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'
           update-binfmts --display qemu-riscv64 | cat
 
-      # 4A) 直接在宿主上（经 binfmt+QEMU10）原生构建 riscv64 工具链
-      - name: Build RV64 Go toolchain (native via binfmt)
-        run: |
-          set -euxo pipefail
-          BOOT=/usr/local/go-bootstrap
-          curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tar.gz
-          sudo tar -C /usr/local -xzf /tmp/go.tar.gz
-          sudo mv /usr/local/go "$BOOT"
-          export GOROOT_BOOTSTRAP="$BOOT"
-          cd "$GITHUB_WORKSPACE/src"
-          export GORISCV64=rva23u64
-          ./make.bash
-          "$GITHUB_WORKSPACE/bin/go" version
-          file "$GITHUB_WORKSPACE/bin/go"
+    #   # 4A) 直接在宿主上（经 binfmt+QEMU10）原生构建 riscv64 工具链
+    #   - name: Build RV64 Go toolchain (native via binfmt)
+    #     run: |
+    #       set -euxo pipefail
+    #       BOOT=/usr/local/go-bootstrap
+    #       curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tar.gz
+    #       sudo tar -C /usr/local -xzf /tmp/go.tar.gz
+    #       sudo mv /usr/local/go "$BOOT"
+    #       export GOROOT_BOOTSTRAP="$BOOT"
+    #       cd "$GITHUB_WORKSPACE/src"
+    #       export GORISCV64=rva23u64
+    #       ./make.bash
+    #       "$GITHUB_WORKSPACE/bin/go" version
+    #       file "$GITHUB_WORKSPACE/bin/go"
 
       # 4B) 如果你坚持在容器里构建（同样走我们注册的 QEMU10）
-      # - name: Build RV64 Go toolchain inside riscv64 container
-      #   run: |
-      #     set -euxo pipefail
-      #     docker run --rm --platform=riscv64 -v "$GITHUB_WORKSPACE":/w -w /w ubuntu:22.04 bash -lc '
-      #       apt-get update &&
-      #       apt-get install -y build-essential curl xz-utils ca-certificates git &&
-      #       BOOT=/usr/local/go-bootstrap &&
-      #       curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tgz &&
-      #       tar -C /usr/local -xzf /tmp/go.tgz &&
-      #       mv /usr/local/go "$BOOT" &&
-      #       export GOROOT_BOOTSTRAP="$BOOT" &&
-      #       cd src &&
-      #       export GORISCV64=rva23u64 &&
-      #       ./make.bash &&
-      #       /w/bin/go version
-      #     '
+      - name: Build RV64 Go toolchain inside riscv64 container
+        run: |
+          set -euxo pipefail
+          docker run --rm --platform=riscv64 -v "$GITHUB_WORKSPACE":/w -w /w ubuntu:22.04 bash -lc '
+            apt-get update &&
+            apt-get install -y build-essential curl xz-utils ca-certificates git &&
+            BOOT=/usr/local/go-bootstrap &&
+            curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tgz &&
+            tar -C /usr/local -xzf /tmp/go.tgz &&
+            mv /usr/local/go "$BOOT" &&
+            export GOROOT_BOOTSTRAP="$BOOT" &&
+            cd src &&
+            export GORISCV64=rva23u64 &&
+            ./make.bash &&
+            /w/bin/go version
+            file /w/bin/go
+          '
