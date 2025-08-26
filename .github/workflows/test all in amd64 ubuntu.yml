@@ -1,4 +1,4 @@
-name: build toolchain and test
+name: test all in amd64 ubuntu
 on:
   pull_request:
   workflow_dispatch:

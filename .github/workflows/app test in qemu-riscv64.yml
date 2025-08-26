@@ -1,4 +1,4 @@
-name: qemu-riscv64-user
+name: app test in qemu-riscv64
 
 on:
   pull_request:
@@ -20,7 +20,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl xz-utils build-essential ca-certificates git file \
             ninja-build meson pkg-config libglib2.0-dev libpixman-1-dev libfdt-dev zlib1g-dev
-
       - name: Build and install QEMU 10.0 (linux-user)
         run: |
           set -euxo pipefail
@@ -32,52 +31,22 @@ jobs:
           make -j"$(nproc)"
           sudo make install
           qemu-riscv64 -version
-
       - name: Build toolchain (host amd64) and run rv64 tests via qemu-user
         run: |
           set -euxo pipefail
-
-          # 1) 安装 amd64 的 bootstrap Go（用于在 amd64 上构建源码树）
+          # 1) install bootstrap Go
           BOOT=/tmp/go-bootstrap
           curl -fsSL https://go.dev/dl/go1.25.0.linux-amd64.tar.gz -o /tmp/go.tar.gz
           tar -C /tmp -xzf /tmp/go.tar.gz
           mv /tmp/go "$BOOT"
           export GOROOT_BOOTSTRAP="$BOOT"
 
-          # # 2) 构建当前源码树（生成 $GITHUB_WORKSPACE/bin/go for amd64）
-          # cd "$GITHUB_WORKSPACE/src"
-          # ./make.bash
-
-          # # 3) 用仓库工具链交叉编译 riscv64 测试程序，并用 qemu-riscv64 运行
-          # export GOROOT="$GITHUB_WORKSPACE"
-          # cd "$GITHUB_WORKSPACE/rva23test/zicond"
-
-          # # 基线 rv64 构建
-          # GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond2.rv64 zicond.go
-          # qemu-riscv64 ./zicond2.rv64
-
-
-          # # 开启 RVA23 相关代码生成（按你的实现变量名）
-          # export GORISCV64=rva23u64
-          # GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" build -o zicond3.rv64 zicond.go
-          # qemu-riscv64 ./zicond3.rv64
-
-          # # $GITHUB_WORKSPACE/bin/go tool objdump zicond2.rv64 | grep -i "CZERO" || true
-          # # $GITHUB_WORKSPACE/bin/go tool objdump zicond3.rv64 | grep -i "CZERO" || true
-
-
-
-          # 运行codegen下的测试，确保在rva23u64下生成了正确的代码
-          export GOOS=linux
-          export GOARCH=riscv64
-          export GORISCV64=rva23u64 
-
+          # 2) build toolchain
           cd "$GITHUB_WORKSPACE/src"
           ./make.bash
 
+          # 3) build and test
           export GOROOT="$GITHUB_WORKSPACE"
-
-          file "$GOROOT/bin/go"
-
-          qemu-riscv64 "$GOROOT/bin/go" tool dist test --no-rebuild -run '^go_test:codegen/zte-rva23\.go$'
-
+          cd "$GITHUB_WORKSPACE/test/zte"
+          "$GOROOT/bin/go" test -c -o test.rv64 ./*_test.go
+          qemu-riscv64 ./test.rv64

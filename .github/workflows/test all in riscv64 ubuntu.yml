@@ -1,4 +1,4 @@
-name: qemu-docker
+name: test all in riscv64 ubuntu
 
 on:
   pull_request:
@@ -29,19 +29,13 @@ jobs:
             apt-get install -y curl xz-utils build-essential ca-certificates git file
           run: |
             set -eux
-            # 1) 在 riscv64 环境中安装 bootstrap Go（版本按需调整）
+            # 1) install bootstrap Go
             BOOT=/usr/local/go-bootstrap
             curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tar.gz
             tar -C /usr/local -xzf /tmp/go.tar.gz
             mv /usr/local/go "$BOOT"
             export GOROOT_BOOTSTRAP="$BOOT"
-            # 2) 进入你的 Go 源码树并原生构建+测试（QEMU 下的 riscv64）
+            
+            # 2) build and test
             cd "$GITHUB_WORKSPACE/src"
-            ./make.bash
-
-            file "$GITHUB_WORKSPACE/bin/go"
-            cd "$GITHUB_WORKSPACE/test/codegen"
-            "$GITHUB_WORKSPACE/bin/go" test -v -run '^go_test:codegen/zte-rva23\.go$'
-
-            export GORISCV64=rva23u64
-            "$GITHUB_WORKSPACE/bin/go" test -count=1 -a -v cmd/internal/testdir -run '^Test/codegen/zte-rva23\.go$
+            ./all.bash
