@@ -48,5 +48,5 @@ jobs:
           # 3) build and test
           export GOROOT="$GITHUB_WORKSPACE"
           cd "$GITHUB_WORKSPACE/test/zte"
-          "$GOROOT/bin/go" test -c -o test.rv64 ./*_test.go
+          GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" test -c -o test.rv64 ./*_test.go
           qemu-riscv64 ./test.rv64
