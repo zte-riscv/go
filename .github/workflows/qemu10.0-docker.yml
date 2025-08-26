@@ -1,0 +1,82 @@
+name: riscv64-rva23
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  riscv64-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 1) 安装构建 QEMU 10 所需依赖
+      - name: Install deps for building QEMU 10
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl xz-utils git ca-certificates file \
+            ninja-build meson pkg-config libglib2.0-dev libpixman-1-dev libfdt-dev zlib1g-dev \
+            binfmt-support
+
+      # 2) 从源码构建并安装 QEMU 10 (linux-user)
+      - name: Build and install QEMU 10 (linux-user)
+        run: |
+          set -euxo pipefail
+          cd /tmp
+          curl -fsSL https://download.qemu.org/qemu-10.0.3.tar.xz -o qemu-10.0.3.tar.xz
+          tar -xf qemu-10.0.3.tar.xz
+          cd qemu-10.0.3
+          ./configure --target-list=riscv64-linux-user
+          make -j"$(nproc)"
+          sudo make install
+          qemu-riscv64 -version
+
+      # 3) 用 binfmt 注册 riscv64 → 指向我们刚安装的 qemu-riscv64
+      - name: Register binfmt for riscv64 to QEMU 10
+        run: |
+          set -euxo pipefail
+          # 清理可能存在的旧注册
+          sudo update-binfmts --disable qemu-riscv64 || true
+          sudo update-binfmts --package qemu-user --remove qemu-riscv64 /usr/bin/qemu-riscv64 || true
+          # 使用 /usr/local/bin/qemu-riscv64 注册（QEMU 10）
+          sudo update-binfmts --install qemu-riscv64 /usr/local/bin/qemu-riscv64 \
+            --magic '\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xF3\x00' \
+            --mask  '\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'
+          update-binfmts --display qemu-riscv64 | cat
+
+      # 4A) 直接在宿主上（经 binfmt+QEMU10）原生构建 riscv64 工具链
+      - name: Build RV64 Go toolchain (native via binfmt)
+        run: |
+          set -euxo pipefail
+          BOOT=/usr/local/go-bootstrap
+          curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tar.gz
+          sudo tar -C /usr/local -xzf /tmp/go.tar.gz
+          sudo mv /usr/local/go "$BOOT"
+          export GOROOT_BOOTSTRAP="$BOOT"
+          cd "$GITHUB_WORKSPACE/src"
+          export GORISCV64=rva23u64
+          ./make.bash
+          "$GITHUB_WORKSPACE/bin/go" version
+          file "$GITHUB_WORKSPACE/bin/go"
+
+      # 4B) 如果你坚持在容器里构建（同样走我们注册的 QEMU10）
+      # - name: Build RV64 Go toolchain inside riscv64 container
+      #   run: |
+      #     set -euxo pipefail
+      #     docker run --rm --platform=riscv64 -v "$GITHUB_WORKSPACE":/w -w /w ubuntu:22.04 bash -lc '
+      #       apt-get update &&
+      #       apt-get install -y build-essential curl xz-utils ca-certificates git &&
+      #       BOOT=/usr/local/go-bootstrap &&
+      #       curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tgz &&
+      #       tar -C /usr/local -xzf /tmp/go.tgz &&
+      #       mv /usr/local/go "$BOOT" &&
+      #       export GOROOT_BOOTSTRAP="$BOOT" &&
+      #       cd src &&
+      #       export GORISCV64=rva23u64 &&
+      #       ./make.bash &&
+      #       /w/bin/go version
+      #     '
