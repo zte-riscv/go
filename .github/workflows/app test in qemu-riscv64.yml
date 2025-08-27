@@ -5,7 +5,7 @@ on:
   workflow_dispatch: 
 
 jobs:
-  riscv64-tests:
+  app-tests-in-qemu-riscv64:
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
