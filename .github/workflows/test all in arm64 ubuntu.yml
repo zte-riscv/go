@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-toolchain-and-test-in-amd64-ubuntu:
-    runs-on: ubuntu-latest-arm
+    runs-on: ubuntu-22.04-arm
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
