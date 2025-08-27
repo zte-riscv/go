@@ -20,9 +20,9 @@ jobs:
           platforms: arm64
 
       - name: Run tests in riscv64 container (QEMU)
-        uses: uraimo/run-on-arch-action@v2
+        uses: uraimo/run-on-arch-action@v3
         with:
-          arch: arm64
+          arch: armv7
           distro: ubuntu22.04
           install: |
             apt-get update
