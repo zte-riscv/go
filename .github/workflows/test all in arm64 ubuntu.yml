@@ -1,0 +1,42 @@
+
+name: test all in arm64 ubuntu
+
+on:
+  pull_request:
+  workflow_dispatch: 
+
+jobs:
+  build-toolchain-and-test-in-arm64-ubuntu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 600
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enable QEMU (riscv64)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Run tests in riscv64 container (QEMU)
+        uses: uraimo/run-on-arch-action@v3
+        with:
+          arch: armv7
+          distro: ubuntu22.04
+          install: |
+            apt-get update
+            apt-get install -y curl xz-utils build-essential ca-certificates git file
+          run: |
+            set -eux
+            # 1) install bootstrap Go
+            BOOT=/usr/local/go-bootstrap
+            curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tar.gz
+            tar -C /usr/local -xzf /tmp/go.tar.gz
+            mv /usr/local/go "$BOOT"
+            export GOROOT_BOOTSTRAP="$BOOT"
+            
+            # 2) build and test
+            cd "$GITHUB_WORKSPACE/src"
+            ./all.bash
