@@ -1,4 +1,4 @@
-name: test all in riscv64 ubuntu
+name: test all in arm64 ubuntu
 
 on:
   pull_request:
@@ -17,12 +17,12 @@ jobs:
       - name: Enable QEMU (riscv64)
         uses: docker/setup-qemu-action@v3
         with:
-          platforms: riscv64
+          platforms: arm64
 
       - name: Run tests in riscv64 container (QEMU)
         uses: uraimo/run-on-arch-action@v2
         with:
-          arch: riscv64
+          arch: arm64
           distro: ubuntu22.04
           install: |
             apt-get update
