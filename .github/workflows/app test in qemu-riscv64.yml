@@ -46,21 +46,13 @@ jobs:
           # 3) build and test
           export GOROOT="$GITHUB_WORKSPACE"
           TEST_DIR="$GITHUB_WORKSPACE/test/zte"
-          if [ ! -d "$TEST_DIR" ]; then
-            echo "Test directory not found: $TEST_DIR. Skipping tests."
-            exit 0
-          fi
-
-          cd "$TEST_DIR"
-          # Check for _test.go files
-          shopt -s nullglob
-          tests=( *_test.go )
-          shopt -u nullglob
-          if [ ${#tests[@]} -eq 0 ]; then
-            echo "No *_test.go files under $TEST_DIR. Skipping tests."
+          # If the test directory is missing OR has no *_test.go files, exit successfully
+          if [ ! -d "$TEST_DIR" ] || ! find "$TEST_DIR" -maxdepth 1 -type f -name '*_test.go' -print -quit | grep -q .; then
+            echo "No tests to run under $TEST_DIR. Exiting."
             exit 0
           fi
 
           # Compile package tests into a riscv64 test binary and run with QEMU
-          GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" test -c -o test.rv64 .
+          cd "$TEST_DIR"
+          GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" test -c -o test.rv64 ./*_test.go
           qemu-riscv64 ./test.rv64
