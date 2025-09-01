@@ -179,7 +179,9 @@ start:
     
 	// 11.: Zicond Instructions 
 	CZEROEQZ	X1, X13, X5  	// b3d2160e
+	CZEROEQZ	X1, X13			// b3d6160e
 	CZERONEZ	X31, X3, X11 	// b3f5f10f
+	CZERONEZ	X31, X3			// b3f1f10f
 
 	// 13.1: Multiplication Operations
 	MUL	X5, X6, X7				// b3035302
