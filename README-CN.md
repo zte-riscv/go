@@ -96,7 +96,7 @@ git commit -m "包名: 简洁的变更摘要
 
 测试环境：
 ```markdown
-- 硬件：[如SiFive Unmatched, VisionFive 2]
+- 硬件：[如SiFive Unmatched, VisionFive2]
 - Go版本：
 - 测试日期：
 - CPU（可选）：[核心数、频率、RISC-V扩展指令]
@@ -106,9 +106,11 @@ git commit -m "包名: 简洁的变更摘要
 基准测试结果，`benchstat`对比：
 ```bash
 benchstat old.txt new.txt
-名称旧耗时/操作新耗时/操作变化率
-Fibonacci125ms ± 2%98ms ± 3%-21.60%
-Sort456ms ± 1%401ms ± 2%-12.06%
+
+name        old time/op     new time/op    delta    
+Fibonacci   125ms ± 2%      98ms ± 3%      -21.60% (p=0.000 n=10+10) 
+Sort        456ms ± 1%      401ms± 2%      -12.06% (p=0.000 n=9+10)
+
 ```
 
 ## 7. 附录

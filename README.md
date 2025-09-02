@@ -105,10 +105,11 @@ Test Environment:
 Benchmark Results, `benchstat` comparison:
 ```bash
 benchstat old.txt new.txt
-nameold time/opnew time/opdelta
-Fibonacci125ms ± 2%98ms ± 3%-21.60%
-Sort456ms ± 1%401ms ± 2%-12.06%
-```
 
+name        old time/op     new time/op    delta    
+Fibonacci   125ms ± 2%      98ms ± 3%      -21.60% (p=0.000 n=10+10) 
+Sort        456ms ± 1%      401ms± 2%      -12.06% (p=0.000 n=9+10)
+
+```
 ## 7. Appendix
 Official Go Contribution Guide: https://golang.org/doc/contribute
