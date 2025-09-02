@@ -44,18 +44,11 @@ git checkout -b your_dev_branch origin/go1.25.0-zte-dev
 ```bash
 git commit -m "包名: 简洁的变更摘要
 
-完整的变更描述，包括：
-- 变更原因
-- 技术实现细节
-- 性能影响（如适用）
-- 相关issue引用
-
 修复 #12345
 更新 #67890"
 ```
 - **标题**：包名前缀 + 简要说明（<50字符）
-- **正文**：完整的变更说明
-- **页脚**：必须包含相关issue引用
+- **页脚**：包含相关issue引用
 
 ## 4. 评审流程
 ### 4.1 强制要求
@@ -91,11 +84,11 @@ git commit -m "包名: 简洁的变更摘要
 
 ## 5. CI流水线要求
 ### 5.1 测试要求
-- **静态分析**：对`/src`执行`go vet`
-- **代码生成验证**：通过`asmcheck`验证指令生成（`/test/codegen/`）
-- **汇编测试**：机器码验证（`/testdata/riscv64.s`）
-- **回归测试**：在x86/ARM架构执行`all.bash`
-- **应用测试**：QEMU-RISCV环境验证（`/test/zte/*_test.go`）
+- **静态分析**：对涉及修改的代码包执行`go vet`
+- **代码生成验证**：通过`asmcheck`验证RISCV64架构下是否生成了正确的指令（`go/test/codegen/`）
+- **汇编测试**：验证汇编指令是否生成正确的机器码（`go/src/cmd/asm/internal/asm/testdata/riscv64.s`）
+- **回归测试**：在x86/ARM架构执行`go/src/all.bash`
+- **应用测试**：QEMU-RISCV环境下验证测试文件是否正确执行（`go/test/zte/*_test.go`）
 
 ## 6. 性能报告（可选）
 ### 6.1 基准测试要求
@@ -103,11 +96,11 @@ git commit -m "包名: 简洁的变更摘要
 
 测试环境：
 ```markdown
-- 硬件：[如SiFive Unmatched]
-- CPU：[核心数、频率、RISC-V扩展指令]
-- 内存：
+- 硬件：[如SiFive Unmatched, VisionFive 2]
 - Go版本：
 - 测试日期：
+- CPU（可选）：[核心数、频率、RISC-V扩展指令]
+- 内存（可选）：
 ```
 
 基准测试结果，`benchstat`对比：

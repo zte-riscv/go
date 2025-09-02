@@ -44,18 +44,11 @@ For squashed commits, follow this format:
 ```bash
 git commit -m "package: concise change summary
 
-Comprehensive change description covering:
-- Change rationale
-- Technical implementation
-- Performance impacts (if applicable)
-- Related issue references
-
 Fixes #12345
 Updates #67890"
 ```
 - **Header**: Package prefix + brief description (<50 chars)
-- **Body**: Complete explanation of changes
-- **Footer**: Mandatory issue references
+- **Footer**: Issue references
 
 ## 4. Review Process
 ### 4.1 Mandatory Requirements
@@ -91,11 +84,11 @@ when approving the merge, please respond with either +1 or +2.**
 
 ## 5. CI Pipeline Requirements
 ### 5.1 Test
-- **Static analysis**: `go vet` for `/src`
-- **Codegen validation**: Instruction verification via `asmcheck` (`/test/codegen/`)
-- **Assembly tests**: Machine code validation (`/testdata/riscv64.s`)
-- **Regression testing**: `all.bash` execution on x86/ARM
-- **Application tests**: QEMU-RISCV validation (`/test/zte/*_test.go`)
+- **Static Analysis**: Run `go vet` on all modified code packages
+- **Codegen Validation**: Verify RISCV64 instruction generation via `asmcheck` (`go/test/codegen/`)
+- **Assembly Tests**: Validate machine code output from assembly instructions (`go/src/cmd/asm/internal/asm/testdata/riscv64.s`)
+- **Regression Testing**: Execute `go/src/all.bash` on x86/ARM architectures
+- **Application Testing**: Validate test file execution in QEMU-RISCV environment (`go/test/zte/*_test.go`)
 
 ## 6. Performance Reporting (Optional)
 ### 6.1 Benchmark Requirements
@@ -103,11 +96,11 @@ For performance-sensitive changes:
 
 Test Environment:
 ```markdown
-- Hardware: [e.g., SiFive Unmatched]
-- CPU: [Cores, frequency, RISC-V extensions]
-- Memory:
+- Hardware: [e.g., SiFive Unmatched, VisionFive2]
 - Go Version:
 - Test Date:
+- CPU (Optional): [Cores, frequency, RISC-V extensions]
+- Memory (Optional):
 ```
 Benchmark Results, `benchstat` comparison:
 ```bash
