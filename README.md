@@ -34,7 +34,7 @@ git checkout -b your_dev_branch origin/go1.25.0-zte-dev
 
 **CI and Review**:
 - Automated test suites will execute upon PR submission (failed tests block merging)
-- Require approvals from designated reviewers before merging
+- Require approvals from designated reviewers before merging, reviewers comment +1 or +2.
 
 **Merge Policy**:
 - All commits must be squashed into a single commit
@@ -100,16 +100,16 @@ when approving the merge, please respond with either +1 or +2.**
 ## 6. Performance Reporting (Optional)
 ### 6.1 Benchmark Requirements
 For performance-sensitive changes:
-```markdown
-### Test Environment
-- **Hardware**: [e.g., SiFive Unmatched]
-- **CPU**: [Cores, frequency, RISC-V extensions]
-- **Memory**:
-- **Go Version**:
-- **Test Date**:
 
-### Benchmark Results
-`benchstat` comparison:
+Test Environment:
+```markdown
+- Hardware: [e.g., SiFive Unmatched]
+- CPU: [Cores, frequency, RISC-V extensions]
+- Memory:
+- Go Version:
+- Test Date:
+```
+Benchmark Results, `benchstat` comparison:
 ```bash
 benchstat old.txt new.txt
 nameold time/opnew time/opdelta

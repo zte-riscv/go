@@ -34,7 +34,7 @@ git checkout -b your_dev_branch origin/go1.25.0-zte-dev
 
 **CI与评审**：
 - PR提交后将自动执行测试套件（测试失败将阻止合并）
-- 需获得指定评审人的批准方可合并
+- 需获得指定评审人的批准方可合并，评审人回复+1或+2。
 
 **合并策略**：
 - 所有提交以sqash merge的方式压缩为单个commit后合入目标分支
@@ -99,17 +99,18 @@ git commit -m "包名: 简洁的变更摘要
 
 ## 6. 性能报告（可选）
 ### 6.1 基准测试要求
-对性能敏感变更需提供：
-```markdown
-### 测试环境
-- **硬件**：[如SiFive Unmatched]
-- **CPU**：[核心数、频率、RISC-V扩展指令]
-- **内存**：
-- **Go版本**：
-- **测试日期**：
+对性能敏感变更需提供如下信息：
 
-### 基准测试结果
-`benchstat`对比：
+测试环境：
+```markdown
+- 硬件：[如SiFive Unmatched]
+- CPU：[核心数、频率、RISC-V扩展指令]
+- 内存：
+- Go版本：
+- 测试日期：
+```
+
+基准测试结果，`benchstat`对比：
 ```bash
 benchstat old.txt new.txt
 名称旧耗时/操作新耗时/操作变化率
