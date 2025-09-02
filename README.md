@@ -1,42 +1,121 @@
-# The Go Programming Language
+# Contribution Guidelines for ZTE & ByteDance Go RISC-V Repository
+**English Version** | [中文版本](README-CN.md)
 
-Go is an open source programming language that makes it easy to build simple,
-reliable, and efficient software.
+Repository: https://github.com/zte-riscv/go
 
-![Gopher image](https://golang.org/doc/gopher/fiveyears.jpg)
-*Gopher image by [Renee French][rf], licensed under [Creative Commons 4.0 Attribution license][cc4-by].*
+## 1. Introduction
+This specification applies to the Go RISC-V repository jointly maintained by ZTE and ByteDance. To ensure code quality and collaboration efficiency, all merge requests must comply with these guidelines.
 
-Our canonical Git repository is located at https://go.googlesource.com/go.
-There is a mirror of the repository at https://github.com/golang/go.
+## 2. Pre-Submission Preparation
+### 2.1 Issue Tracking and Discussion
+**Mandatory**:
+- Create or claim a related Issue before commencing substantive work
+- Clearly describe the change motivation, design approach, and expected impact in the Issue
 
-Unless otherwise noted, the Go source files are distributed under the
-BSD-style license found in the LICENSE file.
+**Recommended**:
+- For significant changes (e.g., new instruction set support, architectural modifications), submit a design document for prior review
 
-### Download and Install
+### 2.2 Branch Management
+```bash
+# Create a feature branch from the current development branch (e.g., go1.25.0-zte-dev):
+git fetch origin
+git checkout -b your_dev_branch origin/go1.25.0-zte-dev
+```
 
-#### Binary Distributions
+## 3. Code Contribution Process
+### 3.1 Development Workflow
+**Issue Submission**:
+- For bug reports: Document the problem, environment, and reproduction steps
+- For features/optimizations: Describe the technical background and implementation strategy
 
-Official binary distributions are available at https://go.dev/dl/.
+**Pull Request Submission**:
+- Provide task context in the PR description and reference related Issues
+- Resolve all merge conflicts locally before submission
 
-After downloading a binary release, visit https://go.dev/doc/install
-for installation instructions.
+**CI and Review**:
+- Automated test suites will execute upon PR submission (failed tests block merging)
+- Require approvals from designated reviewers before merging
 
-#### Install From Source
+**Merge Policy**:
+- All commits must be squashed into a single commit
 
-If a binary distribution is not available for your combination of
-operating system and architecture, visit
-https://go.dev/doc/install/source
-for source installation instructions.
+### 3.2 Commit Message Standards
+For squashed commits, follow this format:
+```bash
+git commit -m "package: concise change summary
 
-### Contributing
+Comprehensive change description covering:
+- Change rationale
+- Technical implementation
+- Performance impacts (if applicable)
+- Related issue references
 
-Go is the work of thousands of contributors. We appreciate your help!
+Fixes #12345
+Updates #67890"
+```
+- **Header**: Package prefix + brief description (<50 chars)
+- **Body**: Complete explanation of changes
+- **Footer**: Mandatory issue references
 
-To contribute, please read the contribution guidelines at https://go.dev/doc/contribute.
+## 4. Review Process
+### 4.1 Mandatory Requirements
+- CI pipeline must pass
+- Minimum approvals:
+- One +2 from ZTE core maintainers
+- One +2 from ByteDance core maintainers
 
-Note that the Go project uses the issue tracker for bug reports and
-proposals only. See https://go.dev/wiki/Questions for a list of
-places to ask questions about the Go language.
+### 4.2 Review Tiers
+- `+1`: Preliminary approval (requires additional reviewer)
+- `+2`: Final approval for merging
 
-[rf]: https://reneefrench.blogspot.com/
-[cc4-by]: https://creativecommons.org/licenses/by/4.0/
+**For maintainers and reviewers: 
+when approving the merge, please respond with either +1 or +2.**
+
+### 4.3 Core Maintainers
+| GitHub | Role | Org | Auth Level |
+|--------|------|-----|-----------|
+| @agiledragon | Maintainer | ZTE | +2 |
+| @ctk-1998 | Reviewer | ZTE | +1 |
+| @lxq015 | Reviewer | ZTE | +1 |
+| @hehongjun20110618 | Maintainer | ZTE | +2 |
+| @newborn22 | Maintainer | ZTE | +2 |
+| @wenchangping | Reviewer | ZTE | +1 |
+| @wangpc-pp | Maintainer | ByteDance | +2 |
+| @BoyaoWang430 | Reviewer | ByteDance | +1 |
+
+### 4.4 Review Checklist
+- ✅ Go coding standards compliance
+- ✅ Passing CI pipelines
+- ✅ Corresponding test coverage
+- ✅ Performance benchmarks (where applicable)
+
+## 5. CI Pipeline Requirements
+### 5.1 Test
+- **Static analysis**: `go vet` for `/src`
+- **Codegen validation**: Instruction verification via `asmcheck` (`/test/codegen/`)
+- **Assembly tests**: Machine code validation (`/testdata/riscv64.s`)
+- **Regression testing**: `all.bash` execution on x86/ARM
+- **Application tests**: QEMU-RISCV validation (`/test/zte/*_test.go`)
+
+## 6. Performance Reporting (Optional)
+### 6.1 Benchmark Requirements
+For performance-sensitive changes:
+```markdown
+### Test Environment
+- **Hardware**: [e.g., SiFive Unmatched]
+- **CPU**: [Cores, frequency, RISC-V extensions]
+- **Memory**:
+- **Go Version**:
+- **Test Date**:
+
+### Benchmark Results
+`benchstat` comparison:
+```bash
+benchstat old.txt new.txt
+nameold time/opnew time/opdelta
+Fibonacci125ms ± 2%98ms ± 3%-21.60%
+Sort456ms ± 1%401ms ± 2%-12.06%
+```
+
+## 7. Appendix
+Official Go Contribution Guide: https://golang.org/doc/contribute
