@@ -1,10 +1,14 @@
-# Contribution Guidelines for ZTE & ByteDance Go RISC-V Repository
+# Contribution Guidelines for Go RISC-V Repository
 **English Version** | [中文版本](README-CN.md)
 
 Repository: https://github.com/zte-riscv/go
 
 ## 1. Introduction
-This specification applies to the Go RISC-V repository jointly maintained by ZTE and ByteDance. To ensure code quality and collaboration efficiency, all merge requests must comply with these guidelines.
+This specification applies to the Go RISC-V code repository jointly maintained by ZTE and ByteDance. We are committed to enhancing Golang support for RISC-V architecture, regularly contributing code upstream to [golang/go](https://github.com/golang/go) while synchronizing with its latest features.
+
+We warmly welcome community developers to participate! Whether it's fixing bugs, implementing new features, or improving documentation, your contributions will help advance the RISC-V ecosystem.
+
+To ensure efficient collaboration, please review the following guidelines before submitting code:
 
 ## 2. Pre-Submission Preparation
 ### 2.1 Issue Tracking and Discussion
