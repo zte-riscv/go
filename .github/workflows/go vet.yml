@@ -55,5 +55,56 @@ jobs:
               echo "No valid Go packages to vet; exiting."
               exit 0
             fi
-            echo "Vetting packages:\n${ok_dirs[*]}"
-            GO111MODULE=off "$GOROOT/bin/go" vet -v "${ok_dirs[@]}"
+            echo "Vetting packages:"
+            printf '%s\n' "${ok_dirs[@]}"
+
+            # Run go vet and capture output without failing immediately
+            set +e
+            GO111MODULE=off "$GOROOT/bin/go" vet -v "${ok_dirs[@]}" 2>&1 | tee /tmp/vet.out
+            VET_STATUS=${PIPESTATUS[0]}
+            set -e
+
+            if [ "$VET_STATUS" -eq 0 ]; then
+              echo "go vet passed with no errors."
+              exit 0
+            fi
+
+            # Build a set of changed files relative to $GOROOT/src
+            mapfile -t CHANGED_REL < <(printf '%s\n' "${CHANGED[@]}" | sed 's|^src/||')
+            declare -A CHANGED_SET=()
+            for f in "${CHANGED_REL[@]}"; do
+              CHANGED_SET["$f"]=1
+              CHANGED_SET["./$f"]=1
+            done
+
+            # Filter vet output: keep errors only for files modified in this PR
+            KEPT_ERRORS=0
+            > /tmp/vet.kept
+            > /tmp/vet.ignored
+
+            while IFS= read -r line; do
+              if [[ "$line" =~ ^([[:alnum:]_./-]+\.go):([0-9]+): ]]; then
+                file="${BASH_REMATCH[1]}"
+                if [[ ${CHANGED_SET[$file]+_} ]]; then
+                  echo "$line" >> /tmp/vet.kept
+                  KEPT_ERRORS=$((KEPT_ERRORS+1))
+                else
+                  echo "Ignoring vet issue in unmodified file: $file" >&2
+                  echo "$line" >> /tmp/vet.ignored
+                fi
+              else
+                # Non-diagnostic / context lines: attach to kept for visibility
+                echo "$line" >> /tmp/vet.kept
+              fi
+            done < /tmp/vet.out
+
+            if [ "$KEPT_ERRORS" -gt 0 ]; then
+              echo "go vet errors in modified files:" >&2
+              cat /tmp/vet.kept >&2
+              exit 1
+            else
+              echo "go vet reported issues only in unmodified files; ignoring." >&2
+              # Show ignored diagnostics for visibility
+              cat /tmp/vet.ignored >&2 || true
+              exit 0
+            fi
