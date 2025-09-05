@@ -3,19 +3,10 @@
 package zte
 
 import (
-	"os"
-	"runtime"
 	"testing"
 )
 
 func TestVLSEG2E8_Deinterleave(t *testing.T) {
-	if runtime.GOARCH != "riscv64" {
-		t.Skip("riscv64 only")
-	}
-	// 可选：需要 RVV 支持时再跑
-	if os.Getenv("RUN_RVV") != "1" {
-		t.Skip("set RUN_RVV=1 to run on RVV-capable machine")
-	}
 
 	// 构造交错输入: [a0,b0,a1,b1,...]
 	const pairs = 64
