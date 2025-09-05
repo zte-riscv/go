@@ -51,3 +51,4 @@
 
 // Make sure we can rewrite all CondSelects.
 (CondSelect <t> x y cond) && buildcfg.GORISCV64 >= 23 => (OR (CZEROEQZ <t> x cond) (CZERONEZ <t> y cond))
+

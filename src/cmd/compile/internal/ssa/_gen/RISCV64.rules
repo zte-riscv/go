@@ -854,3 +854,4 @@
 
 //  "Zicond" Extension for Integer Conditional Operations
 (CondSelect <t> x y (SEQZ x)) && buildcfg.GORISCV64 >= 23 => (CZEROEQZ <t> y x)
+
