@@ -54,4 +54,4 @@ jobs:
           # Compile package tests into a riscv64 test binary and run with QEMU
           cd "$TEST_DIR"
           GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" test -c -o test.rv64 .
-          qemu-riscv64 ./test.rv64
+          QEMU_CPU='rv64,v=true,vlen=128,elen=64' RUN_RVV=1 qemu-riscv64 ./test.rv64
