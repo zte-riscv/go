@@ -42,4 +42,5 @@ func TestVLSEG2E8_Deinterleave(t *testing.T) {
 	if string(out1) != string(exp1) {
 		t.Fatalf("segment1 mismatch")
 	}
+	t.Fatalf("in: %v, out0: %v, exp0: %v, out1: %v, exp1: %v", in, out0, exp0, out1, exp1)
 }
