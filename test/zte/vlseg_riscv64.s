@@ -25,6 +25,9 @@ loop:
 	// rd=X12 接收实际 vl，rs1=X11 提供 nPairs（使用调用者保存寄存器）
 	VSETVLI	X12, E8, M1, TA, MA, X11
 
+    MOVBU (X10), X5
+    MOVB X5, (X13)
+
 	// 分段加载：v8=偶数元素，v9=奇数元素（以对为单位）
 	VLSEG2E8V	(X10), V0
 
