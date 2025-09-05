@@ -2719,6 +2719,34 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AVMV4RV & obj.AMask: {enc: rVVEncoding},
 	AVMV8RV & obj.AMask: {enc: rVVEncoding},
 
+	// 32. Cryptography Extensions: Vector Instructions, Version 1.0
+	// Zvbb - Vector Basic Bit-manipulation
+	AVANDNVV & obj.AMask: {enc: rVVVEncoding},
+	AVANDNVX & obj.AMask: {enc: rVIVEncoding},
+	AVBREVV & obj.AMask:  {enc: rVVEncoding},
+	AVBREV8V & obj.AMask: {enc: rVVEncoding},
+	AVREV8V & obj.AMask:  {enc: rVVEncoding},
+	AVCLZV & obj.AMask:   {enc: rVVEncoding},
+	AVCTZV & obj.AMask:   {enc: rVVEncoding},
+	AVCPOPV & obj.AMask:  {enc: rVVEncoding},
+	AVROLVV & obj.AMask:  {enc: rVVVEncoding},
+	AVROLVX & obj.AMask:  {enc: rVIVEncoding},
+	AVWSLLVV & obj.AMask: {enc: rVVVEncoding},
+	AVWSLLVX & obj.AMask: {enc: rVIVEncoding},
+	AVWSLLVI & obj.AMask: {enc: rVVuEncoding},
+
+	// Zvbc - Vector Carryless Multiplication
+	AVCLMULVV & obj.AMask:  {enc: rVVVEncoding},
+	AVCLMULVX & obj.AMask:  {enc: rVIVEncoding},
+	AVCLMULHVV & obj.AMask: {enc: rVVVEncoding},
+	AVCLMULHVX & obj.AMask: {enc: rVIVEncoding},
+
+	// Zvkb - Vector Cryptography Bit-manipulation
+	AVRORVV & obj.AMask: {enc: rVVVEncoding},
+	AVRORVX & obj.AMask: {enc: rVIVEncoding},
+	AVRORVI & obj.AMask: {enc: rVVuEncoding},
+
+
 	//
 	// Privileged ISA
 	//
@@ -3714,7 +3742,9 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		AVREDSUMVS, AVREDMAXUVS, AVREDMAXVS, AVREDMINUVS, AVREDMINVS, AVREDANDVS, AVREDORVS, AVREDXORVS,
 		AVWREDSUMUVS, AVWREDSUMVS, AVFREDOSUMVS, AVFREDUSUMVS, AVFREDMAXVS, AVFREDMINVS, AVFWREDOSUMVS, AVFWREDUSUMVS,
 		AVSLIDEUPVX, AVSLIDEDOWNVX, AVSLIDE1UPVX, AVFSLIDE1UPVF, AVSLIDE1DOWNVX, AVFSLIDE1DOWNVF,
-		AVRGATHERVV, AVRGATHEREI16VV, AVRGATHERVX:
+		AVRGATHERVV, AVRGATHEREI16VV, AVRGATHERVX,
+		AVANDNVV, AVANDNVX, AVROLVV, AVROLVX, AVWSLLVV, AVWSLLVX, AVCLMULVV, AVCLMULVX,
+		AVCLMULHVV, AVCLMULHVX, AVRORVV, AVRORVX:
 		// Set mask bit
 		switch {
 		case ins.rs3 == obj.REG_NONE:
@@ -3751,7 +3781,8 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 	case AVZEXTVF2, AVSEXTVF2, AVZEXTVF4, AVSEXTVF4, AVZEXTVF8, AVSEXTVF8, AVFSQRTV, AVFRSQRT7V, AVFREC7V, AVFCLASSV,
 		AVFCVTXUFV, AVFCVTXFV, AVFCVTRTZXUFV, AVFCVTRTZXFV, AVFCVTFXUV, AVFCVTFXV,
 		AVFWCVTXUFV, AVFWCVTXFV, AVFWCVTRTZXUFV, AVFWCVTRTZXFV, AVFWCVTFXUV, AVFWCVTFXV, AVFWCVTFFV,
-		AVFNCVTXUFW, AVFNCVTXFW, AVFNCVTRTZXUFW, AVFNCVTRTZXFW, AVFNCVTFXUW, AVFNCVTFXW, AVFNCVTFFW, AVFNCVTRODFFW:
+		AVFNCVTXUFW, AVFNCVTXFW, AVFNCVTRTZXUFW, AVFNCVTRTZXFW, AVFNCVTFXUW, AVFNCVTFXW, AVFNCVTFFW, AVFNCVTRODFFW,
+		AVBREVV, AVBREV8V, AVREV8V, AVCLZV, AVCTZV, AVCPOPV:
 		// Set mask bit
 		switch {
 		case ins.rs1 == obj.REG_NONE:
