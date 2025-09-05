@@ -21,26 +21,18 @@ TEXT ·vlseg2Deinterleave(SB), NOSPLIT, $0-72
 	BEQZ	X11, done
 
 loop:
-	// 设置 vl = min(nPairs, VLEN/SEW)，SEW=E8, LMUL=M1，TA/MA
-	// rd=X12 接收实际 vl，rs1=X11 提供 nPairs（使用调用者保存寄存器）
-	VSETVLI	X12, E8, M1, TA, MA, X11
-
-	// 分段加载：v8=偶数元素，v9=奇数元素（以对为单位）
-	VLSEG2E8V	(X10), V8
-
-	// 分别存回两个输出缓冲
-	VSE8V	V8, (X13)
-	VSE8V	V9, (X16)
-
-	// 指针前移：in += vl*2，out0/out1 各 += vl
-	ADD	X12, X13
-	ADD	X12, X16
-	SLLI	$1, X12, X6
-	ADD	X6, X10
-
-	// nPairs -= vl
-	SUB	X12, X11
-	BNEZ	X11, loop
+	// 标量版本：每次搬运一对字节 [a,b]，分别写入 out0/out1
+sloop:
+	MOVBU	(X10), X5
+	MOVB	X5, (X13)
+	ADDI	$1, X10
+	MOVBU	(X10), X5
+	MOVB	X5, (X16)
+	ADDI	$1, X10
+	ADDI	$1, X13
+	ADDI	$1, X16
+	ADDI	$-1, X11
+	BNEZ	X11, sloop
 
 done:
 	RET
