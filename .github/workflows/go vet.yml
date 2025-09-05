@@ -96,9 +96,6 @@ jobs:
                   echo "$line" >> /tmp/vet.ignored
                   IGNORED_ERRORS=$((IGNORED_ERRORS+1))
                 fi
-              else
-                # Drop non-diagnostic / context lines to keep logs concise
-                :
               fi
             done < /tmp/vet.out
 
