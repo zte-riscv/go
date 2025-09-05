@@ -2719,7 +2719,7 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AVMV4RV & obj.AMask: {enc: rVVEncoding},
 	AVMV8RV & obj.AMask: {enc: rVVEncoding},
 
-	// 32. Cryptography Extensions: Vector Instructions, Version 1.0
+	//// 32. Cryptography Extensions: Vector Instructions, Version 1.0
 	// Zvbb - Vector Basic Bit-manipulation
 	AVANDNVV & obj.AMask: {enc: rVVVEncoding},
 	AVANDNVX & obj.AMask: {enc: rVIVEncoding},
@@ -2746,6 +2746,36 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AVRORVX & obj.AMask: {enc: rVIVEncoding},
 	AVRORVI & obj.AMask: {enc: rVVuEncoding},
 
+	// Zvkg - Vector GCM/GMAC
+	AVGHSHVV & obj.AMask: {enc: rVVVEncoding},
+	AVGMULVV & obj.AMask: {enc: rVVEncoding},
+
+	// Zvkned - NIST Suite: Vector AES Block Cipher
+	AVAESEFVV & obj.AMask:  {enc: rVVEncoding},
+	AVAESEFVS & obj.AMask:  {enc: rVVEncoding},
+	AVAESEMVV & obj.AMask:  {enc: rVVEncoding},
+	AVAESEMVS & obj.AMask:  {enc: rVVEncoding},
+	AVAESDFVV & obj.AMask:  {enc: rVVEncoding},
+	AVAESDFVS & obj.AMask:  {enc: rVVEncoding},
+	AVAESDMVV & obj.AMask:  {enc: rVVEncoding},
+	AVAESDMVS & obj.AMask:  {enc: rVVEncoding},
+	AVAESKF1VI & obj.AMask: {enc: rVVuEncoding},
+	AVAESKF2VI & obj.AMask: {enc: rVVuEncoding},
+	AVAESZVS & obj.AMask:   {enc: rVVEncoding},
+
+	// Zvknh[ab] - NIST Suite: Vector SHA-2 Secure Hash
+	AVSHA2MSVV & obj.AMask: {enc: rVVVEncoding},
+	AVSHA2CHVV & obj.AMask: {enc: rVVVEncoding},
+	AVSHA2CLVV & obj.AMask: {enc: rVVVEncoding},
+
+	// Zvksed - ShangMi Suite: SM4 Block Cipher
+	AVSM4KVI & obj.AMask: {enc: rVVuEncoding},
+	AVSM4RVV & obj.AMask: {enc: rVVEncoding},
+	AVSM4RVS & obj.AMask: {enc: rVVEncoding},
+
+	// Zvksh - ShangMi Suite: SM3 Secure Hash
+	AVSM3MEVV & obj.AMask: {enc: rVVVEncoding},
+	AVSM3CVI & obj.AMask:  {enc: rVVuEncoding},
 
 	//
 	// Privileged ISA
@@ -3954,6 +3984,25 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 			ins.rd = uint32(p.From.Reg)
 		}
 		ins.rs1, ins.rs2 = obj.REG_NONE, REG_V0
+
+	case AVAESKF1VI, AVAESKF2VI, AVSM4KVI, AVSM3CVI:
+		if ins.rs3 != obj.REG_NONE {
+			p.Ctxt.Diag("%v: too many operands for instruction", p)
+		}
+		ins.rd, ins.rs1, ins.rs2, ins.rs3 = uint32(p.To.Reg), obj.REG_NONE, uint32(p.Reg), obj.REG_NONE
+
+	case AVGMULVV, AVAESEFVV, AVAESEFVS, AVAESEMVV, AVAESEMVS, AVAESDFVV, AVAESDFVS, AVAESDMVV,
+		AVAESDMVS, AVAESZVS, AVSM4RVV, AVSM4RVS:
+		if ins.rs3 != obj.REG_NONE {
+			p.Ctxt.Diag("%v: too many operands for instruction", p)
+		}
+		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), obj.REG_NONE, uint32(p.From.Reg)
+
+	case AVGHSHVV, AVSHA2MSVV, AVSHA2CHVV, AVSHA2CLVV, AVSM3MEVV:
+		if ins.rs3 != obj.REG_NONE {
+			p.Ctxt.Diag("%v: too many operands for instruction", p)
+		}
+		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), uint32(p.From.Reg), uint32(p.Reg)
 	}
 
 	for _, ins := range inss {
