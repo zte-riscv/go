@@ -3923,9 +3923,6 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 			ins.rd = uint32(p.From.Reg)
 		}
 		ins.rs1, ins.rs2 = obj.REG_NONE, REG_V0
-	case ACZERONEZ, ACZEROEQZ:
-		// Zicond instructions: rd, rs1, rs2
-		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), uint32(p.Reg), uint32(p.From.Reg)
 	}
 
 	for _, ins := range inss {
