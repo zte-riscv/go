@@ -19,7 +19,7 @@ func zicond(a, b int) int {
 }
 
 //go:noinline
-func testSelectIfZero(cond, a, b int) int {
+func selectIfZero(cond, a, b int) int {
 	r := a
 	if cond == 0 {
 		r = b
@@ -47,7 +47,7 @@ func testCondAddZero(cond, a, b int) int {
 		result = a + b
 	}
 	// riscv64/rva23u64:`CZERONEZ`, `ADD`
-	// riscv64/rva23u64:-`SEQZ`, `CZEROEQZ`, `OR`
+	// riscv64/rva23u64:-`SEQZ`, -`CZEROEQZ`, -`OR`
 	return result
 }
    
@@ -60,7 +60,7 @@ func testCondAddNonZero(cond, a, b int) int {
 		result = a
 	}
 	// riscv64/rva23u64:`CZEROEQZ`, `ADD`
-	// riscv64/rva23u64:-`SNEZ`, `CZERONEZ`, `OR`
+	// riscv64/rva23u64:-`SNEZ`, -`CZERONEZ`, -`OR`
 	return result
 }
 
@@ -73,7 +73,7 @@ func testCondSubZero(cond, a, b int) int {
 		result = a
 	}
 	// riscv64/rva23u64:`CZERONEZ`, `SUB`
-	// riscv64/rva23u64:-`SEQZ`, `CZEROEQZ`, `OR`
+	// riscv64/rva23u64:-`SEQZ`, -`CZEROEQZ`, -`OR`
 	return result
 }
 
@@ -86,7 +86,7 @@ func testCondSubNonZero(cond, a, b int) int {
 		result = a
 	}
 	// riscv64/rva23u64:`CZEROEQZ`, `SUB`
-	// riscv64/rva23u64:-`SNEZ`, `CZERONEZ`, `OR`
+	// riscv64/rva23u64:-`SNEZ`, -`CZERONEZ`, -`OR`
 	return result
 }
 
@@ -99,7 +99,7 @@ func testCondOrZero(cond, a, b int) int {
 		result = a	
 	}
 	// riscv64/rva23u64:`CZERONEZ`, `OR`
-	// riscv64/rva23u64:-`SEQZ`, `CZEROEQZ`, `OR`
+	// riscv64/rva23u64:-`SEQZ`, -`CZEROEQZ`
 	return result
 }
 
@@ -112,7 +112,7 @@ func testCondOrNonZero(cond, a, b int) int {
 		result = a	
 	}
 	// riscv64/rva23u64:`CZEROEQZ`, `OR`
-	// riscv64/rva23u64:-`SNEZ`, `CZERONEZ`, `OR`
+	// riscv64/rva23u64:-`SNEZ`, -`CZERONEZ`
 	return result
 }	
 
@@ -125,7 +125,7 @@ func testCondXorZero(cond, a, b int) int {
 		result = a
 	}
 	// riscv64/rva23u64:`CZERONEZ`, `XOR`
-	// riscv64/rva23u64:-`SEQZ`, `CZEROEQZ`, `OR`
+	// riscv64/rva23u64:-`SEQZ`, -`CZEROEQZ`, -`OR`
 	return result
 }
    
@@ -138,7 +138,7 @@ func testCondXorNonZero(cond, a, b int) int {
 		result = a
 	}
 	// riscv64/rva23u64:`CZEROEQZ`, `XOR`
-	// riscv64/rva23u64:-`SNEZ`, `CZERONEZ`, `OR`
+	// riscv64/rva23u64:-`SNEZ`, -`CZERONEZ`, -`OR`
 	return result
 }
 
@@ -151,20 +151,20 @@ func testCondAndZero(cond, a, b int) int {
 		result = a
 	}
 	// riscv64/rva23u64:`CZEROEQZ`, `AND`, `OR`
-	// riscv64/rva23u64:-`SEQZ`, `CZERONEZ`
+	// riscv64/rva23u64:-`SEQZ`, -`CZERONEZ`
 	return result
 }
 	
 //go:noinline
 func testCondAndNonZero(cond, a, b int) int {
 	var result int
-	if cond == 0 {
+	if cond != 0 {
 		result = a & b
 	} else {
 		result = a
 	}
 	// riscv64/rva23u64:`CZERONEZ`, `AND`, `OR`
-	// riscv64/rva23u64:-`SNEZ`, `CZEROEQZ`
+	// riscv64/rva23u64:-`SNEZ`, -`CZEROEQZ`
 	return result
 }
    
