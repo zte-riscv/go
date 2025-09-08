@@ -5,8 +5,8 @@
 
 // 参数为三个 []byte，默认 ABI（ABI0）下从栈帧读取：
 //   in:   in_base+0(FP),  in_len+8(FP),  in_cap+16(FP)
-//   out0: out0_base+0(FP),out0_len+8(FP),out0_cap+16(FP)
-//   out1: out1_base+0(FP),out1_len+8(FP),out1_cap+16(FP)
+//   out0: out0_base+24(FP),out0_len+32(FP),out0_cap+40(FP)
+//   out1: out1_base+48(FP),out1_len+56(FP),out1_cap+64(FP)
 
 TEXT ·vlseg2Deinterleave(SB), NOSPLIT, $0-72
 	// 从栈帧取参到工作寄存器
