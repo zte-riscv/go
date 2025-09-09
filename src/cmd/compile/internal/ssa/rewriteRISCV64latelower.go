@@ -30,6 +30,21 @@ func rewriteValueRISCV64latelower_OpCondSelect(v *Value) bool {
 	v_1 := v.Args[1]
 	v_0 := v.Args[0]
 	b := v.Block
+	// match: (CondSelect <t> x y (SEQZ x))
+	// cond: buildcfg.GORISCV64 >= 23
+	// result: (CZEROEQZ <t> y x)
+	for {
+		t := v.Type
+		x := v_0
+		y := v_1
+		if v_2.Op != OpRISCV64SEQZ || x != v_2.Args[0] || !(buildcfg.GORISCV64 >= 23) {
+			break
+		}
+		v.reset(OpRISCV64CZEROEQZ)
+		v.Type = t
+		v.AddArg2(y, x)
+		return true
+	}
 	// match: (CondSelect <t> (ADD x y) x (SEQZ z))
 	// cond: buildcfg.GORISCV64 >= 23
 	// result: (ADD x (CZERONEZ <t> y z))

@@ -7,7 +7,17 @@
 package codegen
 
 //go:noinline
-func zicond(a, b int) int {
+func testIfxZero(a, b int) int {
+	r := b
+	if a == 0 {
+		r = a
+	}
+	// riscv64/rva23u64:`CZEROEQZ`, -`CZERONEZ`
+	return r
+}
+
+//go:noinline
+func testZicond(a, b int) int {
 	var c int
 	if a > b {
 		c = a
