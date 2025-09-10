@@ -53,6 +53,5 @@ jobs:
           fi
           # Compile package tests into a riscv64 test binary and run with QEMU
           cd "$TEST_DIR"
-          GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" test -c -o test.rv64 .
-
-          qemu-riscv64 -cpu rva23s64 ./test.rv64 -test.v
+          GOOS=linux GOARCH=riscv64 "$GOROOT/bin/go" test -c -o test.rv64 ./*_test.go
+          qemu-riscv64 ./test.rv64
