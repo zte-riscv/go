@@ -1501,6 +1501,8 @@ var csrs = map[uint16]string{
 	0x48:  "USCRATCHCSW",
 	0x49:  "USCRATCHCSWL",
 	0x100: "SSTATUS",
+	0x102: "SEDELEG",
+	0x103: "SIDELEG",
 	0x104: "SIE",
 	0x105: "STVEC",
 	0x106: "SCOUNTEREN",
