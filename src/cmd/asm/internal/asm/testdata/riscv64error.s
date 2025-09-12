@@ -80,6 +80,11 @@ TEXT errors(SB),$0
 	VSUXEI8V	V3, V2, V1, (X10)		// ERROR "invalid vector mask register"
 	VLOXEI8V	(X10), V2, V1, V3		// ERROR "invalid vector mask register"
 	VSOXEI8V	V3, V2, V1, (X10)		// ERROR "invalid vector mask register"
+
+	VLSEG2E8V	(X10), V1, V3			// ERROR "invalid vector mask register"
+	VLSEG2E8FFV	(X10), V1, V3			// ERROR "invalid vector mask register"
+	VSSEG2E8V	V3, V1, (X10)			// ERROR "invalid vector mask register"
+
 	VL1RV		(X10), V0, V3			// ERROR "too many operands for instruction"
 	VS1RV		V3, V0, (X11)			// ERROR "too many operands for instruction"
 	VADDVV		V1, V2, V4, V3			// ERROR "invalid vector mask register"
