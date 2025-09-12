@@ -1469,7 +1469,7 @@ const (
 	AVCLMULHVX
 
 	// 32.2.3. Zvkb - Vector Cryptography Bit-manipulation
-	AVRORVV 
+	AVRORVV
 	AVRORVX
 	AVRORVI
 
