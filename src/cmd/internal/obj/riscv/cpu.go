@@ -687,9 +687,9 @@ const (
 	AVLE32FFV
 	AVLE64FFV
 
-	// 31.7.8. Vector Load/Store Segment Instructions
+	// 31.7.8: Vector Load/Store Segment Instructions
 
-	// 31.7.8.1. Vector Unit-Stride Segment Loads and Stores
+	// 31.7.8.1: Vector Unit-Stride Segment Loads and Stores
 	AVLSEG2E8V
 	AVLSEG3E8V
 	AVLSEG4E8V
@@ -1236,7 +1236,7 @@ const (
 	AVCLMULHVX
 
 	// 32.2.3. Zvkb - Vector Cryptography Bit-manipulation
-	AVRORVV 
+	AVRORVV
 	AVRORVX
 	AVRORVI
 
