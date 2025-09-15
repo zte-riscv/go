@@ -2375,6 +2375,63 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AVLSEG6E64FFV & obj.AMask: {enc: iVEncoding},
 	AVLSEG7E64FFV & obj.AMask: {enc: iVEncoding},
 	AVLSEG8E64FFV & obj.AMask: {enc: iVEncoding},
+	AVLSSEG2E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG3E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG4E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG5E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG6E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG7E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG8E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG2E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG3E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG4E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG5E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG6E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG7E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG8E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG2E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG3E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG4E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG5E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG6E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG7E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG8E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG2E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG3E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG4E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG5E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG6E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG7E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG8E64V & obj.AMask:  {enc: iIIVEncoding},
+
+	AVSSSEG2E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG3E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG4E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG5E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG6E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG7E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG8E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG2E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG3E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG4E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG5E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG6E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG7E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG8E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG2E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG3E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG4E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG5E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG6E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG7E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG8E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG2E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG3E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG4E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG5E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG6E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG7E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG8E64V & obj.AMask: {enc: sVIIEncoding},
 
 	// 31.7.9: Vector Load/Store Whole Register Instructions
 	AVL1RE8V & obj.AMask:  {enc: iVEncoding},
@@ -3847,7 +3904,11 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), uint32(p.From.Reg), obj.REG_NONE
 
 	case AVLSE8V, AVLSE16V, AVLSE32V, AVLSE64V,
-		AVLUXEI8V, AVLUXEI16V, AVLUXEI32V, AVLUXEI64V, AVLOXEI8V, AVLOXEI16V, AVLOXEI32V, AVLOXEI64V:
+		AVLUXEI8V, AVLUXEI16V, AVLUXEI32V, AVLUXEI64V, AVLOXEI8V, AVLOXEI16V, AVLOXEI32V, AVLOXEI64V,
+		AVLSSEG2E8V, AVLSSEG3E8V, AVLSSEG4E8V, AVLSSEG5E8V, AVLSSEG6E8V, AVLSSEG7E8V, AVLSSEG8E8V,
+		AVLSSEG2E16V, AVLSSEG3E16V, AVLSSEG4E16V, AVLSSEG5E16V, AVLSSEG6E16V, AVLSSEG7E16V, AVLSSEG8E16V,
+		AVLSSEG2E32V, AVLSSEG3E32V, AVLSSEG4E32V, AVLSSEG5E32V, AVLSSEG6E32V, AVLSSEG7E32V, AVLSSEG8E32V,
+		AVLSSEG2E64V, AVLSSEG3E64V, AVLSSEG4E64V, AVLSSEG5E64V, AVLSSEG6E64V, AVLSSEG7E64V, AVLSSEG8E64V:
 		// Set mask bit
 		switch {
 		case ins.rs3 == obj.REG_NONE:
@@ -3858,7 +3919,11 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		ins.rs1, ins.rs2, ins.rs3 = ins.rs2, ins.rs1, obj.REG_NONE
 
 	case AVSSE8V, AVSSE16V, AVSSE32V, AVSSE64V,
-		AVSUXEI8V, AVSUXEI16V, AVSUXEI32V, AVSUXEI64V, AVSOXEI8V, AVSOXEI16V, AVSOXEI32V, AVSOXEI64V:
+		AVSUXEI8V, AVSUXEI16V, AVSUXEI32V, AVSUXEI64V, AVSOXEI8V, AVSOXEI16V, AVSOXEI32V, AVSOXEI64V,
+		AVSSSEG2E8V, AVSSSEG3E8V, AVSSSEG4E8V, AVSSSEG5E8V, AVSSSEG6E8V, AVSSSEG7E8V, AVSSSEG8E8V,
+		AVSSSEG2E16V, AVSSSEG3E16V, AVSSSEG4E16V, AVSSSEG5E16V, AVSSSEG6E16V, AVSSSEG7E16V, AVSSSEG8E16V,
+		AVSSSEG2E32V, AVSSSEG3E32V, AVSSSEG4E32V, AVSSSEG5E32V, AVSSSEG6E32V, AVSSSEG7E32V, AVSSSEG8E32V,
+		AVSSSEG2E64V, AVSSSEG3E64V, AVSSSEG4E64V, AVSSSEG5E64V, AVSSSEG6E64V, AVSSSEG7E64V, AVSSSEG8E64V:
 		// Set mask bit
 		switch {
 		case ins.rs3 == obj.REG_NONE:
