@@ -2549,6 +2549,12 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AVSUXSEG7EI64V & obj.AMask: {enc: sVIVEncoding},
 	AVSUXSEG8EI64V & obj.AMask: {enc: sVIVEncoding},
 
+	// 31.7.7: Unit-stride Fault-Only-First Loads
+	AVLE8FFV & obj.AMask:  {enc: iVEncoding},
+	AVLE16FFV & obj.AMask: {enc: iVEncoding},
+	AVLE32FFV & obj.AMask: {enc: iVEncoding},
+	AVLE64FFV & obj.AMask: {enc: iVEncoding},
+
 	// 31.7.9: Vector Load/Store Whole Register Instructions
 	AVL1RE8V & obj.AMask:  {enc: iVEncoding},
 	AVL1RE16V & obj.AMask: {enc: iVEncoding},
