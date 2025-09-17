@@ -211,7 +211,7 @@ start:
 	RDTIME		X5				// f32210c0
 	RDINSTRET	X5				// f32220c0
 
-	// 10.0: Zimop Extension for May-Be-Operations
+	// 11: Zimop Extension for May-Be-Operations
 	MOPR0	X5, X6			//73c3c281
 	MOPR1	X5, X6			//73c3d281
 	MOPR2	X5, X6			//73c3e281
