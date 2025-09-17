@@ -386,6 +386,10 @@ start:
 	// 26.5.5: Compressed - NOP Instruction
 	CNOP						// 0100
 
+	CMOV	X5, X6				// 1683
+	CADD	X5, X6				// 1693
+
+
 	// 28.4.1: Address Generation Instructions (Zba)
 	ADDUW		X10, X11, X12			// 3b86a508
 	ADDUW		X10, X11			// bb85a508

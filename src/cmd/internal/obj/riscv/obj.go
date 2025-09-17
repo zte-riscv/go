@@ -1314,6 +1314,11 @@ func validateCI(ctxt *obj.Link, ins *instruction) {
 	wantNoneReg(ctxt, ins, "rs2", ins.rs2)
 }
 
+func validateCR(ctxt *obj.Link, ins *instruction) {
+	wantIntReg(ctxt, ins, "rd", ins.rd)
+	wantIntReg(ctxt, ins, "rs2", ins.rs2)
+}
+
 func validateRII(ctxt *obj.Link, ins *instruction) {
 	wantIntReg(ctxt, ins, "rd", ins.rd)
 	wantIntReg(ctxt, ins, "rs1", ins.rs1)
@@ -1591,6 +1596,16 @@ func encodeCI(ins *instruction) uint32 {
 	}
 	imm := uint32(ins.imm)
 	return enc.funct3<<12 | ((imm&0x20)>>5)<<12 | regI(ins.rd)<<7 | (imm&0x1f)<<2 | enc.opcode
+}
+
+// encodeCR encodes a compressed register (CR-type) instruction.
+// the funct4 is saved in ins.funct3 field.
+func encodeCR(ins *instruction) uint32 {
+	enc := encode(ins.as)
+	if enc == nil {
+		panic("encodeCR: could not encode instruction")
+	}
+	return enc.funct3<<12 | regI(ins.rd)<<7 | regI(ins.rs2)<<2 | enc.opcode
 }
 
 // encodeR encodes an R-type RISC-V instruction.
@@ -2012,6 +2027,7 @@ var (
 
 	// Compressed encodings.
 	ciEncoding = encoding{encode: encodeCI, validate: validateCI, length: 2}
+	crEncoding = encoding{encode: encodeCR, validate: validateCR, length: 2}
 
 	// Encodings for vector configuration setting instruction.
 	vsetvliEncoding  = encoding{encode: encodeVsetvli, validate: validateVsetvli, length: 4}
@@ -2247,6 +2263,10 @@ var instructions = [ALAST & obj.AMask]instructionData{
 
 	// 26.5.5: Compressed - NOP Instruction
 	ACNOP & obj.AMask: {enc: ciEncoding},
+
+	// compressed add
+	ACADD & obj.AMask:  {enc: crEncoding},
+	ACADDI & obj.AMask: {enc: ciEncoding},
 
 	//
 	// "B" Extension for Bit Manipulation, Version 1.0.0
@@ -3819,6 +3839,9 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 
 	case AADDI, AANDI, AORI, AXORI:
 		inss = instructionsForOpImmediate(p, ins.as, p.Reg)
+
+	case ACADD, ACMV:
+		ins.rd, ins.rs2 = uint32(p.To.Reg), uint32(p.From.Reg)
 
 	case ASCW, ASCD:
 		// Set release access ordering
