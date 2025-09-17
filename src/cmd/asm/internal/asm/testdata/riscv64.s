@@ -386,7 +386,7 @@ start:
 	// 26.5.5: Compressed - NOP Instruction
 	CNOP						// 0100
 
-	CMOV	X5, X6				// 1683
+	CMV	X5, X6				// 1683
 	CADD	X5, X6				// 1693
 
 

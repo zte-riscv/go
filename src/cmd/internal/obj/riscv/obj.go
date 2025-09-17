@@ -2266,6 +2266,7 @@ var instructions = [ALAST & obj.AMask]instructionData{
 
 	// compressed add
 	ACADD & obj.AMask:  {enc: crEncoding},
+	ACMV & obj.AMask:   {enc: crEncoding},
 	ACADDI & obj.AMask: {enc: ciEncoding},
 
 	//
