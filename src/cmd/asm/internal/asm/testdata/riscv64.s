@@ -387,7 +387,9 @@ start:
 	CNOP						// 0100
 
 	CMV	X5, X6				// 1683
-	CADD	X5, X6				// 1693
+	CADD	X5, X6			// 1693
+	ADD X5, X6, X6			// 1693
+	ADD X6, X5, X6 			// 1693
 
 
 	// 28.4.1: Address Generation Instructions (Zba)

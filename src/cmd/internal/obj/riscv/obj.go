@@ -85,6 +85,21 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 		p.As = ACSRRWI
 	}
 
+	switch p.As {
+	// we take add instrucion that can be compressed as the pseudo instruction of cadd
+	case AADD:
+		if p.To.Reg != REG_ZERO {
+			if p.To.Reg == p.From.Reg && p.Reg != REG_X0 {
+				p.As = ACADD
+				p.From.Reg = p.Reg
+				p.Reg = obj.REG_NONE
+			} else if p.To.Reg == p.Reg && p.From.Reg != REG_X0 {
+				p.As = ACADD
+				p.Reg = obj.REG_NONE
+			}
+		}
+	}
+
 	insData, err := instructionDataForAs(p.As)
 	if err != nil {
 		panic(fmt.Sprintf("failed to lookup instruction data for %v: %v", p.As, err))
