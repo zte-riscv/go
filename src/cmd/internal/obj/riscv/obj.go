@@ -88,7 +88,7 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 	switch p.As {
 	// we take add instrucion that can be compressed as the pseudo instruction of cadd
 	case AADD:
-		if p.To.Reg != REG_ZERO {
+		if p.To.Type == obj.TYPE_REG && p.To.Reg != REG_ZERO && p.From.Type == obj.TYPE_REG && p.From.Reg != obj.REG_NONE {
 			if p.To.Reg == p.From.Reg && p.Reg != REG_X0 {
 				p.As = ACADD
 				p.From.Reg = p.Reg
