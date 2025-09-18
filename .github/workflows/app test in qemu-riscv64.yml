@@ -31,6 +31,11 @@ jobs:
           make -j"$(nproc)"
           sudo make install
           qemu-riscv64 -version
+      - name: Just for test
+        run: |
+          cd "$GITHUB_WORKSPACE/test"
+          echo "------------Test start----------------"
+          qemu-riscv64 -cpu max ./test
       - name: Build toolchain (host amd64) and run rv64 tests via qemu-user
         run: |
           set -euxo pipefail
