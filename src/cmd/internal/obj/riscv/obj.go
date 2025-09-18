@@ -3086,6 +3086,10 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AECALL & obj.AMask:  {enc: iIIEncoding},
 	AEBREAK & obj.AMask: {enc: iIIEncoding},
 
+	// 11: "Zimop" Extension for May-Be-Operations
+	AMOPRN & obj.AMask:  {enc: iIIEncoding},
+	AMOPRRN & obj.AMask: {enc: rIIIEncoding},
+
 	// Escape hatch
 	AWORD & obj.AMask: {enc: rawEncoding},
 
@@ -3809,6 +3813,30 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		}
 		ins.rs1 = REG_ZERO
 		ins.imm = insEnc.csr
+	
+	case AMOPR0, AMOPR1, AMOPR2, AMOPR3, AMOPR4, AMOPR5, AMOPR6, AMOPR7, AMOPR8, AMOPR9, AMOPR10, AMOPR11, AMOPR12, 
+		AMOPR13, AMOPR14, AMOPR15, AMOPR16, AMOPR17, AMOPR18, AMOPR19, AMOPR20, AMOPR21, AMOPR22, AMOPR23, AMOPR24,
+		AMOPR25, AMOPR26, AMOPR27, AMOPR28, AMOPR29, AMOPR30, AMOPR31:
+		//MOP.R.N [31:20] represent its func, and located imm field. 
+		//range [30][27:26][21:20] specify N, others are fixed ,define in csr field.
+		num := uint32(ins.as - AMOPR0) // N
+		numBit := extractBitAndShift(num, 4, 10)
+		numBit |= extractBitAndShift(num, 3, 7)
+		numBit |= extractBitAndShift(num, 2, 6)
+		numBit |= extractBitAndShift(num, 1, 1)
+		numBit |= extractBitAndShift(num, 0, 0)
+		ins.as, ins.rd, ins.rs1, ins.rs2 = AMOPRN, uint32(p.To.Reg), uint32(p.From.Reg), obj.REG_NONE
+		ins.imm = int64(numBit)
+	
+	case AMOPRR0, AMOPRR1, AMOPRR2, AMOPRR3, AMOPRR4, AMOPRR5, AMOPRR6, AMOPRR7:
+		//MOP.RR.N [31:25] represent its func7. 
+		//range [30][27:26] specify N, others are fixed.
+		num := uint32(ins.as - AMOPRR0) // N
+		numBit := extractBitAndShift(num, 2, 5)
+		numBit |= extractBitAndShift(num, 1, 2)
+		numBit |= extractBitAndShift(num, 0, 1)
+		ins.as = AMOPRRN
+		ins.funct7 = numBit
 
 	case ARDCYCLE, ARDTIME, ARDINSTRET:
 		ins.as = ACSRRS
