@@ -185,6 +185,40 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 			p.From.Name = obj.NAME_EXTERN
 			p.From.Offset = 0
 		}
+
+	case ASSPOPCHKX1, ASSPOPCHKX5, ASSRDP:
+		p.As = AMOPR28
+
+		switch p.As {
+		case ASSRDP:
+			if p.To.Reg == obj.REG_NONE {
+				p.Ctxt.Diag("%v: encoding rd as x0 is not supported for SSRDP.", p)
+			}
+			p.From.Reg = obj.REG_NONE
+
+		case ASSPOPCHKX1:
+			p.To.Reg = obj.REG_NONE
+			p.From.Type = obj.TYPE_REG
+			p.From.Reg = REG_RA
+
+		case ASSPOPCHKX5:
+			p.To.Reg = obj.REG_NONE
+			p.From.Type = obj.TYPE_REG
+			p.From.Reg = REG_T0
+		}
+
+	case ASSPUSHX1, ASSPUSHX5:
+		p.As = AMOPRR7
+		p.To.Reg = obj.REG_NONE
+		p.From.Reg = obj.REG_NONE
+
+		switch p.As {
+		case ASSPUSHX1:
+			p.Reg = REG_RA
+
+		case ASSPUSHX5:
+			p.Reg = REG_T0
+		}
 	}
 
 	if ctxt.Flag_dynlink {
@@ -3078,6 +3112,10 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AVSM3MEVV & obj.AMask: {enc: rVVVEncoding},
 	AVSM3CVI & obj.AMask:  {enc: rVVuEncoding},
 
+	// 33.2: "Zicfiss" Extension
+	ASSAMOSWAPD & obj.AMask: {enc: rIIIEncoding},
+	ASSAMOSWAPW & obj.AMask: {enc: rIIIEncoding},
+
 	//
 	// Privileged ISA
 	//
@@ -3801,7 +3839,8 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.RegTo2), uint32(p.To.Reg), uint32(p.From.Reg)
 
 	case AAMOSWAPW, AAMOSWAPD, AAMOADDW, AAMOADDD, AAMOANDW, AAMOANDD, AAMOORW, AAMOORD,
-		AAMOXORW, AAMOXORD, AAMOMINW, AAMOMIND, AAMOMINUW, AAMOMINUD, AAMOMAXW, AAMOMAXD, AAMOMAXUW, AAMOMAXUD:
+		AAMOXORW, AAMOXORD, AAMOMINW, AAMOMIND, AAMOMINUW, AAMOMINUD, AAMOMAXW, AAMOMAXD, AAMOMAXUW, AAMOMAXUD,
+		ASSAMOSWAPD, ASSAMOSWAPW:
 		// Set aqrl to use acquire & release access ordering
 		ins.funct7 = 3
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.RegTo2), uint32(p.To.Reg), uint32(p.From.Reg)

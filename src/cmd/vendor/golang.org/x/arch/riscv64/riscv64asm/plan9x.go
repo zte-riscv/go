@@ -50,7 +50,8 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 		AMOSWAP_D_AQ, AMOSWAP_D_RL, AMOSWAP_D_AQRL, AMOSWAP_W, AMOSWAP_W_AQ, AMOSWAP_W_RL,
 		AMOSWAP_W_AQRL, AMOXOR_D, AMOXOR_D_AQ, AMOXOR_D_RL, AMOXOR_D_AQRL, AMOXOR_W,
 		AMOXOR_W_AQ, AMOXOR_W_RL, AMOXOR_W_AQRL, SC_D, SC_D_AQ, SC_D_RL, SC_D_AQRL,
-		SC_W, SC_W_AQ, SC_W_RL, SC_W_AQRL:
+		SC_W, SC_W_AQ, SC_W_RL, SC_W_AQRL,
+		SSAMOSWAP_D, SSAMOSWAP_W:
 		// Atomic instructions have special operand order.
 		args[2], args[1] = args[1], args[2]
 
