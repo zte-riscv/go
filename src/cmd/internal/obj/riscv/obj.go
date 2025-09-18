@@ -187,38 +187,43 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 		}
 
 	case ASSPOPCHKX1, ASSPOPCHKX5, ASSRDP:
-		p.As = AMOPR28
-
 		switch p.As {
 		case ASSRDP:
-			if p.To.Reg == obj.REG_NONE {
+			if p.To.Type == obj.TYPE_REG && p.To.Reg == REG_ZERO {
 				p.Ctxt.Diag("%v: encoding rd as x0 is not supported for SSRDP.", p)
 			}
-			p.From.Reg = obj.REG_NONE
+			p.From.Type = obj.TYPE_REG
+			p.From.Reg = REG_ZERO
 
 		case ASSPOPCHKX1:
-			p.To.Reg = obj.REG_NONE
+			p.To.Type = obj.TYPE_REG
+			p.To.Reg = REG_ZERO
 			p.From.Type = obj.TYPE_REG
-			p.From.Reg = REG_RA
+			p.From.Reg = REG_LR
 
 		case ASSPOPCHKX5:
-			p.To.Reg = obj.REG_NONE
+			p.To.Type = obj.TYPE_REG
+			p.To.Reg = REG_ZERO
 			p.From.Type = obj.TYPE_REG
 			p.From.Reg = REG_T0
 		}
 
-	case ASSPUSHX1, ASSPUSHX5:
-		p.As = AMOPRR7
-		p.To.Reg = obj.REG_NONE
-		p.From.Reg = obj.REG_NONE
+		p.As = AMOPR28
 
+	case ASSPUSHX1, ASSPUSHX5:
 		switch p.As {
 		case ASSPUSHX1:
-			p.Reg = REG_RA
+			p.From.Reg = REG_LR
 
 		case ASSPUSHX5:
-			p.Reg = REG_T0
+			p.From.Reg = REG_T0
 		}
+
+		p.As = AMOPRR7
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = REG_ZERO
+		p.From.Type = obj.TYPE_REG
+		p.Reg = REG_ZERO
 	}
 
 	if ctxt.Flag_dynlink {
@@ -3852,11 +3857,11 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		}
 		ins.rs1 = REG_ZERO
 		ins.imm = insEnc.csr
-	
-	case AMOPR0, AMOPR1, AMOPR2, AMOPR3, AMOPR4, AMOPR5, AMOPR6, AMOPR7, AMOPR8, AMOPR9, AMOPR10, AMOPR11, AMOPR12, 
+
+	case AMOPR0, AMOPR1, AMOPR2, AMOPR3, AMOPR4, AMOPR5, AMOPR6, AMOPR7, AMOPR8, AMOPR9, AMOPR10, AMOPR11, AMOPR12,
 		AMOPR13, AMOPR14, AMOPR15, AMOPR16, AMOPR17, AMOPR18, AMOPR19, AMOPR20, AMOPR21, AMOPR22, AMOPR23, AMOPR24,
 		AMOPR25, AMOPR26, AMOPR27, AMOPR28, AMOPR29, AMOPR30, AMOPR31:
-		//MOP.R.N [31:20] represent its func, and located imm field. 
+		//MOP.R.N [31:20] represent its func, and located imm field.
 		//range [30][27:26][21:20] specify N, others are fixed ,define in csr field.
 		num := uint32(ins.as - AMOPR0) // N
 		numBit := extractBitAndShift(num, 4, 10)
@@ -3866,9 +3871,9 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		numBit |= extractBitAndShift(num, 0, 0)
 		ins.as, ins.rd, ins.rs1, ins.rs2 = AMOPRN, uint32(p.To.Reg), uint32(p.From.Reg), obj.REG_NONE
 		ins.imm = int64(numBit)
-	
+
 	case AMOPRR0, AMOPRR1, AMOPRR2, AMOPRR3, AMOPRR4, AMOPRR5, AMOPRR6, AMOPRR7:
-		//MOP.RR.N [31:25] represent its func7. 
+		//MOP.RR.N [31:25] represent its func7.
 		//range [30][27:26] specify N, others are fixed.
 		num := uint32(ins.as - AMOPRR0) // N
 		numBit := extractBitAndShift(num, 2, 5)
