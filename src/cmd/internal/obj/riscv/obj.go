@@ -3086,7 +3086,7 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AECALL & obj.AMask:  {enc: iIIEncoding},
 	AEBREAK & obj.AMask: {enc: iIIEncoding},
 
-	//11 "Zimop" Extension for May-Be-Operations,
+	// 11: "Zimop" Extension for May-Be-Operations
 	AMOPRN & obj.AMask:  {enc: iIIEncoding},
 	AMOPRRN & obj.AMask: {enc: rIIIEncoding},
 
