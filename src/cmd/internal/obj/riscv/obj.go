@@ -185,45 +185,6 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 			p.From.Name = obj.NAME_EXTERN
 			p.From.Offset = 0
 		}
-
-	case ASSPOPCHKX1, ASSPOPCHKX5, ASSRDP:
-		switch p.As {
-		case ASSRDP:
-			if p.To.Type == obj.TYPE_REG && p.To.Reg == REG_ZERO {
-				p.Ctxt.Diag("%v: encoding rd as x0 is not supported for SSRDP.", p)
-			}
-			p.From.Type = obj.TYPE_REG
-			p.From.Reg = REG_ZERO
-
-		case ASSPOPCHKX1:
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = REG_ZERO
-			p.From.Type = obj.TYPE_REG
-			p.From.Reg = REG_LR
-
-		case ASSPOPCHKX5:
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = REG_ZERO
-			p.From.Type = obj.TYPE_REG
-			p.From.Reg = REG_T0
-		}
-
-		p.As = AMOPR28
-
-	case ASSPUSHX1, ASSPUSHX5:
-		switch p.As {
-		case ASSPUSHX1:
-			p.From.Reg = REG_LR
-
-		case ASSPUSHX5:
-			p.From.Reg = REG_T0
-		}
-
-		p.As = AMOPRR7
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = REG_ZERO
-		p.From.Type = obj.TYPE_REG
-		p.Reg = REG_ZERO
 	}
 
 	if ctxt.Flag_dynlink {
@@ -3778,6 +3739,41 @@ func instructionsForMinMax(p *obj.Prog, ins *instruction) []*instruction {
 
 // instructionsForProg returns the machine instructions for an *obj.Prog.
 func instructionsForProg(p *obj.Prog) []*instruction {
+	// Additional instruction rewriting for extensions based on Zimop/Zcmop.
+	switch p.As {
+	case ASSPOPCHKX1, ASSPOPCHKX5, ASSRDP:
+		switch p.As {
+		case ASSRDP:
+			if p.To.Type == obj.TYPE_REG && p.To.Reg == REG_ZERO {
+				p.Ctxt.Diag("%v: encoding rd as x0 is not supported for SSRDP.", p)
+			}
+			p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_ZERO}
+
+		case ASSPOPCHKX1:
+			p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_ZERO}
+			p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_LR}
+
+		case ASSPOPCHKX5:
+			p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_ZERO}
+			p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_T0}
+		}
+
+		p.As = AMOPR28
+
+	case ASSPUSHX1, ASSPUSHX5:
+		switch p.As {
+		case ASSPUSHX1:
+			p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_LR}
+
+		case ASSPUSHX5:
+			p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_T0}
+		}
+
+		p.As = AMOPRR7
+		p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_ZERO}
+		p.Reg = REG_ZERO
+	}
+
 	ins := instructionForProg(p)
 	inss := []*instruction{ins}
 
