@@ -2025,6 +2025,15 @@ start:
 	VSM3MEVV	V1, V2, V3			// f7a12082
 	VSM3CVI		$16, V2, V3			// f72128ae
 
+	// 33.2: "Zicfiss" Extension
+	SSRDP       X5					// f342c0cd
+	SSPUSHX1						// 734010ce
+	SSPUSHX5						// 734050ce
+	SSPOPCHKX1						// 73c0c0cd
+	SSPOPCHKX5						// 73c0c2cd
+	SSAMOSWAPD  X5, (X6), X7		// af33534e
+	SSAMOSWAPW  X5, (X6), X7		// af23534e
+
 	//
 	// Privileged ISA
 	//
