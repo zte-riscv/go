@@ -1682,6 +1682,10 @@ const (
 	AVSM3MEVV
 	AVSM3CVI
 
+	// 33.2: "Zicfiss" Extension
+	ASSAMOSWAPD
+	ASSAMOSWAPW
+
 	//
 	// Privileged ISA (version 20240411)
 	//
@@ -1781,6 +1785,11 @@ const (
 	ARDTIME
 	ASEQZ
 	ASNEZ
+	ASSPOPCHKX1
+	ASSPOPCHKX5
+	ASSPUSHX1
+	ASSPUSHX5
+	ASSRDP
 	AVFABSV
 	AVFNEGV
 	AVL1RV
@@ -1958,6 +1967,7 @@ var unaryDst = map[obj.As]bool{
 	ARDCYCLE:   true,
 	ARDTIME:    true,
 	ARDINSTRET: true,
+	ASSRDP:     true,
 }
 
 // Instruction encoding masks.
