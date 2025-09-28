@@ -591,17 +591,17 @@ func checkShiftToMask(u []uint64, s []int64) {
 // ------------------------------- //
 
 func checkAddWithLeftShiftLowerUnsigned32Bits(a uint64, b int64) uint64 {
-	// riscv64/rva22u64: "SH1ADDUW\t"
+	// riscv64/rva22u64: "SH1ADDUW"
 	x := a + uint64(uint32(b))<<1
-	// riscv64/rva22u64: "SH2ADDUW\t"
+	// riscv64/rva22u64: "SH2ADDUW"
 	y := a + uint64(uint32(b))<<2
-	// riscv64/rva22u64: "SH3ADDUW\t"
+	// riscv64/rva22u64: "SH3ADDUW"
 	z := a + uint64(uint32(b))<<3
 	return x + y + z
 }
 
 func checkLeftShiftLowerUnsigned32Bits(a int64) uint64 {
-	// riscv64/rva22u64: "SLLIUW\t"
+	// riscv64/rva22u64: "SLLIUW"
 	return uint64(uint32(a)) << 6
 }
 
