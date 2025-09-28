@@ -36,6 +36,7 @@ jobs:
           cd "$GITHUB_WORKSPACE/test"
           echo "------------Test start----------------"
           qemu-riscv64 -cpu max ./test
+          qemu-riscv64 -cpu max ./new
       - name: Build toolchain (host amd64) and run rv64 tests via qemu-user
         run: |
           set -euxo pipefail
