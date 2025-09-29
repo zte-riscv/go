@@ -2262,37 +2262,31 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	// 21.7: Double-Precision Floating-Point Classify Instruction
 	AFCLASSD & obj.AMask: {enc: rFIEncoding},
 
-	// 26. "Zfa" Extension for Additional Floating-Point Instructions
-	/// 26.1. Load-Immediate Instructions
+	// 24: "Zfa" Extension for Additional Floating-Point Instructions
+	// 24.1: Load-Immediate Instructions
 	AFLIS & obj.AMask: {enc: rIFEncoding},
 	AFLID & obj.AMask: {enc: rIFEncoding},
 
-	/// 26.2. Minimum and Maximum Instructions
+	// 24.2: Minimum and Maximum Instructions
 	AFMAXMS & obj.AMask: {enc: rFFFEncoding},
 	AFMINMS & obj.AMask: {enc: rFFFEncoding},
 	AFMAXMD & obj.AMask: {enc: rFFFEncoding},
 	AFMINMD & obj.AMask: {enc: rFFFEncoding},
 
-	/// 26.3. Round-to-Integer Instructions
+	// 24.3: Round-to-Integer Instructions
 	AFROUNDS & obj.AMask:   {enc: rFFEncoding},
 	AFROUNDNXS & obj.AMask: {enc: rFFEncoding},
 	AFROUNDD & obj.AMask:   {enc: rFFEncoding},
 	AFROUNDNXD & obj.AMask: {enc: rFFEncoding},
 
-	/// 26.4. Modular Convert-to-Integer Instruction
+	// 24.4: Modular Convert-to-Integer Instruction
 	AFCVTMODWD & obj.AMask: {enc: rFIEncoding},
 
-	/// 26.6. Comparison Instructions
+	// 24.6: Comparison Instructions
 	AFLEQS & obj.AMask: {enc: rFFIEncoding},
 	AFLTQS & obj.AMask: {enc: rFFIEncoding},
 	AFLEQD & obj.AMask: {enc: rFFIEncoding},
 	AFLTQD & obj.AMask: {enc: rFFIEncoding},
-
-	// Privileged ISA
-
-	// 3.2.1: Environment Call and Breakpoint
-	AECALL & obj.AMask:  {enc: iIIEncoding},
-	AEBREAK & obj.AMask: {enc: iIIEncoding},
 
 	//
 	// "B" Extension for Bit Manipulation, Version 1.0.0
@@ -4051,10 +4045,15 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 
 	case AFLIS, AFLID:
 		fimm := p.From.Val.(float64)
-		var index = fimmMapping[fimm]
-		// NaN is specical as it can't be used in comparison.
+		var index uint32
+		// NaN is special as it can't be used in comparison.
 		if math.IsNaN(fimm) {
 			index = 31
+		} else if idx, ok:= fimmMapping[fimm]; ok {
+			index = idx
+		} else {
+			p.Ctxt.Diag("%v: unknown floating point immediate", fimm)
+			return nil
 		}
 		ins.rs2 = REG_ZERO + index
 
