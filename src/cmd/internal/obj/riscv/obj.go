@@ -196,11 +196,38 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 
 	case AMOVD:
 		if p.From.Type == obj.TYPE_FCONST && p.From.Name == obj.NAME_NONE && p.From.Reg == obj.REG_NONE {
+			if p.To.Type == obj.TYPE_REG {
+				f64 := p.From.Val.(float64)
+				if math.IsNaN(f64) {
+					p.As = AFLID
+					break
+				}
+				if _, ok := fimmMapping[f64]; ok {
+					p.As = AFLID
+					break
+				}
+			}
 			f64 := p.From.Val.(float64)
 			p.From.Type = obj.TYPE_MEM
 			p.From.Sym = ctxt.Float64Sym(f64)
 			p.From.Name = obj.NAME_EXTERN
 			p.From.Offset = 0
+		}
+
+	case AMOVF:
+		if p.From.Type == obj.TYPE_FCONST && p.From.Name == obj.NAME_NONE && p.From.Reg == obj.REG_NONE {
+			if p.To.Type == obj.TYPE_REG {
+				f64 := p.From.Val.(float64)
+				f32 := float32(f64)
+				if math.IsNaN(float64(f32)) {
+					p.As = AFLIS
+					break
+				}
+				if _, ok := fimmMapping[float64(f32)]; ok {
+					p.As = AFLIS
+					break
+				}
+			}
 		}
 	}
 
@@ -4049,7 +4076,7 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		// NaN is special as it can't be used in comparison.
 		if math.IsNaN(fimm) {
 			index = 31
-		} else if idx, ok:= fimmMapping[fimm]; ok {
+		} else if idx, ok := fimmMapping[fimm]; ok {
 			index = idx
 		} else {
 			p.Ctxt.Diag("%v: unknown floating point immediate", fimm)
