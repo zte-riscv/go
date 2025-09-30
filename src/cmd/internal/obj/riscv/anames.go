@@ -100,6 +100,8 @@ var Anames = []string{
 	"AMOMAXUW",
 	"AMOMINW",
 	"AMOMINUW",
+	"WRSNTO",
+	"WRSSTO",
 	"AMOSWAPB",
 	"AMOADDB",
 	"AMOXORB",
