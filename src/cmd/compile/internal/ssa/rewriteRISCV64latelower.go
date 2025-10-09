@@ -493,7 +493,7 @@ func rewriteValueRISCV64latelower_OpRISCV64SLLI(v *Value) bool {
 		return true
 	}
 	// match: (SLLI [c] (MOVWUreg x))
-	// cond: c <= 32
+	// cond: c <= 32 && buildcfg.GORISCV64 < 22
 	// result: (SRLI [32-c] (SLLI <typ.UInt64> [32] x))
 	for {
 		c := auxIntToInt64(v.AuxInt)
@@ -501,7 +501,7 @@ func rewriteValueRISCV64latelower_OpRISCV64SLLI(v *Value) bool {
 			break
 		}
 		x := v_0.Args[0]
-		if !(c <= 32) {
+		if !(c <= 32 && buildcfg.GORISCV64 < 22) {
 			break
 		}
 		v.reset(OpRISCV64SRLI)

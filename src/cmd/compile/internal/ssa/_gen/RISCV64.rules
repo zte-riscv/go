@@ -854,6 +854,15 @@
 (ADD (SLLI [2] x) y) && buildcfg.GORISCV64 >= 22 => (SH2ADD x y)
 (ADD (SLLI [3] x) y) && buildcfg.GORISCV64 >= 22 => (SH3ADD x y)
 
+// Fold shift-and-add with MOVWUreg (commutative cases)
+(ADD x (MOVWUreg y)) && buildcfg.GORISCV64 >= 22 => (ADDUW y x)
+(SH1ADD x (MOVWUreg y)) && buildcfg.GORISCV64 >= 22 => (SH1ADDUW y x)
+(SH2ADD x (MOVWUreg y)) && buildcfg.GORISCV64 >= 22 => (SH2ADDUW y x)
+(SH3ADD x (MOVWUreg y)) && buildcfg.GORISCV64 >= 22 => (SH3ADDUW y x)
+(SH1ADD (MOVWUreg x) y) && buildcfg.GORISCV64 >= 22 => (SH1ADDUW x y)
+(SH2ADD (MOVWUreg x) y) && buildcfg.GORISCV64 >= 22 => (SH2ADDUW x y)
+(SH3ADD (MOVWUreg x) y) && buildcfg.GORISCV64 >= 22 => (SH3ADDUW x y)
+
 // Integer minimum and maximum.
 (Min64  x y) && buildcfg.GORISCV64 >= 22 => (MIN  x y)
 (Max64  x y) && buildcfg.GORISCV64 >= 22 => (MAX  x y)
