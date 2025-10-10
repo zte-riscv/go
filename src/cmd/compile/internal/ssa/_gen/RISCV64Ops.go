@@ -499,8 +499,6 @@ func init() {
 		// RISC-V Integer Conditional (Zicond) operations extension
 		{name: "CZEROEQZ", argLength: 2, reg: gp21, asm: "CZEROEQZ"},
 		{name: "CZERONEZ", argLength: 2, reg: gp21, asm: "CZERONEZ"},
-
-
 	}
 
 	RISCV64blocks := []blockData{
