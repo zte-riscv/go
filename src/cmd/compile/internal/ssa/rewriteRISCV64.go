@@ -6882,21 +6882,21 @@ func rewriteValueRISCV64_OpRISCV64SLLI(v *Value) bool {
 		v.AuxInt = int64ToAuxInt(y << uint32(x))
 		return true
 	}
-	// match: (SLLI [i] (MOVWUreg x))
-	// cond: i < 64 && buildcfg.GORISCV64 >= 22
-	// result: (SLLIUW [i] x)
+	// match: (SLLI [x] (MOVWUreg y))
+	// cond: x < 64 && buildcfg.GORISCV64 >= 22
+	// result: (SLLIUW [x] y)
 	for {
-		i := auxIntToInt64(v.AuxInt)
+		x := auxIntToInt64(v.AuxInt)
 		if v_0.Op != OpRISCV64MOVWUreg {
 			break
 		}
-		x := v_0.Args[0]
-		if !(i < 64 && buildcfg.GORISCV64 >= 22) {
+		y := v_0.Args[0]
+		if !(x < 64 && buildcfg.GORISCV64 >= 22) {
 			break
 		}
 		v.reset(OpRISCV64SLLIUW)
-		v.AuxInt = int64ToAuxInt(i)
-		v.AddArg(x)
+		v.AuxInt = int64ToAuxInt(x)
+		v.AddArg(y)
 		return true
 	}
 	return false

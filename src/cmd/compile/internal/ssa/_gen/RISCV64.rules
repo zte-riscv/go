@@ -841,7 +841,7 @@
 // Optimisations for rva22u64 and above.
 //
 // Fold left shift least significant word
-(SLLI [i] (MOVWUreg x)) && i < 64 && buildcfg.GORISCV64 >= 22 => (SLLIUW [i] x)
+(SLLI [x] (MOVWUreg y)) && x < 64 && buildcfg.GORISCV64 >= 22 => (SLLIUW [x] y)
 
 // Fold the add with (left shift) least significant word
 (ADD (MOVWUreg x) y) && buildcfg.GORISCV64 >= 22 => (ADDUW x y)
