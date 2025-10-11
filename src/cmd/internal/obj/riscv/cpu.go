@@ -609,6 +609,65 @@ const (
 	AFCLASSQ
 
 	//
+	// "C" Extension for Compressed Instructions
+	//
+
+	// 26.3.1: Compressed Stack-Pointer-Based Loads and Stores
+	ACLWSP
+	ACFLWSP
+	ACLDSP
+	ACFLDSP
+	ACSWSP
+	ACSDSP
+	ACFSWSP
+	ACFSDSP
+
+	// 26.3.2: Compressed Register-Based Loads and Stores
+	ACLW
+	ACLD
+	ACFLW
+	ACFLD
+	ACSW
+	ACSD
+	ACFSW
+	ACFSD
+
+	// 26.4: Compressed Control Transfer Instructions
+	ACJ
+	ACJR
+	ACJALR
+	ACBEQZ
+	ACBNEZ
+
+	// 26.5.1: Compressed Integer Constant-Generation Instructions
+	ACLI
+	ACLUI
+	ACADDI
+	ACADDIW
+	ACADDI16SP
+	ACADDI4SPN
+	ACSLLI
+	ACSRLI
+	ACSRAI
+	ACANDI
+
+	// 26.5.3: Compressed Integer Register-Register Operations
+	ACMV
+	ACADD
+	ACAND
+	ACOR
+	ACXOR
+	ACSUB
+	ACADDW
+	ACSUBW
+
+	// 26.5.5: Compressed NOP Instruction
+	ACNOP
+
+	// 26.5.6: Compressed Breakpoint Instruction
+	ACEBREAK
+
+	//
 	// "B" Extension for Bit Manipulation, Version 1.0.0
 	//
 
