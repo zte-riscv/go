@@ -196,7 +196,7 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 
 	case AMOVD:
 		if p.From.Type == obj.TYPE_FCONST && p.From.Name == obj.NAME_NONE && p.From.Reg == obj.REG_NONE {
-			if p.To.Type == obj.TYPE_REG {
+			if buildcfg.GORISCV64 >= 23 && p.To.Type == obj.TYPE_REG {
 				f64 := p.From.Val.(float64)
 				if math.IsNaN(f64) {
 					p.As = AFLID
@@ -216,7 +216,7 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 
 	case AMOVF:
 		if p.From.Type == obj.TYPE_FCONST && p.From.Name == obj.NAME_NONE && p.From.Reg == obj.REG_NONE {
-			if p.To.Type == obj.TYPE_REG {
+			if buildcfg.GORISCV64 >= 23 && p.To.Type == obj.TYPE_REG {
 				f64 := p.From.Val.(float64)
 				f32 := float32(f64)
 				if math.IsNaN(float64(f32)) {
@@ -228,6 +228,11 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 					break
 				}
 			}
+			f32 := float32(p.From.Val.(float64))
+			p.From.Type = obj.TYPE_MEM
+			p.From.Sym = ctxt.Float32Sym(f32)
+			p.From.Name = obj.NAME_EXTERN
+			p.From.Offset = 0
 		}
 	}
 
