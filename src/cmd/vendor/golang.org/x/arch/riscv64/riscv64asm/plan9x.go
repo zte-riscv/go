@@ -274,6 +274,21 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 			args[0], args[1] = args[1], args[0]
 		}
 
+	case ORI:
+		if inst.Args[0].(Reg) == X0 {
+			imm := inst.Args[2].(Simm).Imm
+			switch imm & ((1 << 5) - 1) {
+			case 0:
+				op = "PREFETCHI"
+			case 1:
+				op = "PREFETCHR"
+			case 3:
+				op = "PREFETCHW"
+			}
+			args[0] = plan9Arg(&inst, pc, symname, RegOffset{inst.Args[1].(Reg), inst.Args[2].(Simm)})
+			args = args[:len(args)-2]
+		}
+
 	case SUB:
 		if inst.Args[1].(Reg) == X0 {
 			op = "NEG"

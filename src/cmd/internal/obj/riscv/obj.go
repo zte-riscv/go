@@ -4485,6 +4485,18 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 			p.Ctxt.Diag("%v: too many operands for instruction", p)
 		}
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), uint32(p.From.Reg), uint32(p.Reg)
+	case APREFETCHI, APREFETCHR, APREFETCHW:
+		ins.imm = ins.imm &^ 0b11111
+		switch ins.as {
+		case APREFETCHI:
+			ins.imm |= 0x00000
+		case APREFETCHR:
+			ins.imm |= 0b00001
+		case APREFETCHW:
+			ins.imm |= 0b00011
+		}
+		ins.imm = signExtend(ins.imm, 12)
+		ins.as, ins.rd, ins.rs1, ins.rs2 = AORI, REG_ZERO, uint32(p.From.Reg), obj.REG_NONE
 	}
 
 	for _, ins := range inss {
