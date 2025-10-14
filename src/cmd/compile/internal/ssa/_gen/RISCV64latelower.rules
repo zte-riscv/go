@@ -17,7 +17,7 @@
 (SRLI [c] (MOVWUreg x)) && c <  32 => (SRLI [32+c] (SLLI <typ.UInt64> [32] x))
 (SLLI [c] (MOVBUreg x)) && c <= 56 => (SRLI [56-c] (SLLI <typ.UInt64> [56] x))
 (SLLI [c] (MOVHUreg x)) && c <= 48 => (SRLI [48-c] (SLLI <typ.UInt64> [48] x))
-(SLLI [c] (MOVWUreg x)) && c <= 32 && buildcfg.GORISCV64 < 22 => (SRLI [32-c] (SLLI <typ.UInt64> [32] x))
+(SLLI [c] (MOVWUreg x)) && c <= 32 => (SRLI [32-c] (SLLI <typ.UInt64> [32] x))
 
 // Shift by zero.
 (SRAI [0] x) => x
