@@ -84,13 +84,14 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 		p.To.Reg = REG_ZERO
 		p.As = ACSRRWI
 	case ANTLP1, ANTLPALL, ANTLS1, ANTLALL:
-		if p.As == ANTLP1 {
+		switch p.As {
+		case ANTLP1:
 			p.From.Reg = REG_X2
-		} else if p.As == ANTLPALL {
+		case ANTLPALL:
 			p.From.Reg = REG_X3
-		} else if p.As == ANTLS1 {
+		case ANTLS1:
 			p.From.Reg = REG_X4
-		} else if p.As == ANTLALL {
+		case ANTLALL:
 			p.From.Reg = REG_X5
 		}
 		p.As = AADD
