@@ -345,6 +345,13 @@ start:
 	// 19.6.2: Cache-Block Zero Instructions (Zicboz)
 	CBOZERO		X5				// 0fa04200
 
+	// 19.6.3 Cache-Block Prefetch Instructions
+	PREFETCHI 448(X5)					// 1c02e013
+	PREFETCHI -64(X5)					// fc02e013
+	PREFETCHI 453(X5)					// 1c02e013
+	PREFETCHR 449(X5)					// 1c12e013
+	PREFETCHW 451(X5)					// 1c32e013
+
 	// 20.5: Single-Precision Load and Store Instructions
 	FLW	(X5), F0				// 07a00200
 	FLW	4(X5), F0				// 07a04200
