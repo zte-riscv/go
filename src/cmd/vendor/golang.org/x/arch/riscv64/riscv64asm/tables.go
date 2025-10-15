@@ -451,6 +451,8 @@ const (
 	SUB
 	SUBW
 	SW
+	WRS_NTO
+	WRS_STO
 	XNOR
 	XOR
 	XORI
@@ -900,6 +902,8 @@ var opstr = [...]string{
 	SUB:            "SUB",
 	SUBW:           "SUBW",
 	SW:             "SW",
+	WRS_NTO:        "WRS.NTO",
+	WRS_STO:        "WRS.STO",
 	XNOR:           "XNOR",
 	XOR:            "XOR",
 	XORI:           "XORI",
@@ -1791,6 +1795,10 @@ var instFormats = [...]instFormat{
 	{mask: 0xfe00707f, value: 0x4000003b, op: SUBW, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
 	// SW rs2, rs1_store
 	{mask: 0x0000707f, value: 0x00002023, op: SW, args: argTypeList{arg_rs2, arg_rs1_store}},
+	// WRS.NTO
+	{mask: 0xffffffff, value: 0x00d00073, op: WRS_NTO, args: argTypeList{}},
+	// WRS.STO
+	{mask: 0xffffffff, value: 0x01d00073, op: WRS_STO, args: argTypeList{}},
 	// XNOR rd, rs1, rs2
 	{mask: 0xfe00707f, value: 0x40004033, op: XNOR, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
 	// XOR rd, rs1, rs2
