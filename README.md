@@ -21,9 +21,9 @@ To ensure efficient collaboration, please review the following guidelines before
 
 ### 2.2 Branch Management
 ```bash
-# Create a feature branch from the current development branch (e.g., go1.25.1-zte-dev):
+# Create a feature branch from the current development branch (e.g., go1.25.3-zte-dev):
 git fetch origin
-git checkout -b your_dev_branch origin/go1.25.1-zte-dev
+git checkout -b your_dev_branch origin/go1.25.3-zte-dev
 ```
 
 ## 3. Code Contribution Process
