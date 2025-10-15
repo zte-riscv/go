@@ -5,6 +5,7 @@
 package riscv64asm
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -55,6 +56,24 @@ func GNUSyntax(inst Inst) string {
 		if inst.Op == XORI && inst.Args[2].(Simm).String() == "-1" {
 			op = "not"
 			args = args[:len(args)-1]
+		}
+
+		if inst.Op == ORI && inst.Args[0].(Reg) == X0 {
+			imm := inst.Args[2].(Simm).Imm
+			switch imm & ((1 << 5) - 1) {
+			case 0:
+				op = "prefetch.i"
+			case 1:
+				op = "prefetch.r"
+			case 3:
+				op = "prefetch.w"
+			}
+			if imm == 0 {
+				args[0] = fmt.Sprintf("(X%d)", inst.Args[1].(Reg))
+			} else {
+				args[0] = fmt.Sprintf("%s(X%d)", inst.Args[2].(Simm).String(), inst.Args[1].(Reg))
+			}
+			args = args[:len(args)-2]
 		}
 
 	case ADD:
