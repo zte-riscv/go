@@ -2155,6 +2155,14 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AAMOCASB & obj.AMask:  {enc: rIIIEncoding},
 	AAMOCASH & obj.AMask:  {enc: rIIIEncoding},
 
+	// 19.6.1: Cache-Block Management Instructions (Zicbom)
+	ACBOCLEAN & obj.AMask: {enc: rIIEncoding},
+	ACBOFLUSH & obj.AMask: {enc: rIIEncoding},
+	ACBOINVAL & obj.AMask: {enc: rIIEncoding},
+
+	// 19.6.2: Cache-Block Zero Instructions (Zicboz)
+	ACBOZERO & obj.AMask: {enc: rIIEncoding},
+
 	// 20.5: Single-Precision Load and Store Instructions
 	AFLW & obj.AMask: {enc: iFEncoding},
 	AFSW & obj.AMask: {enc: sFEncoding},
@@ -4088,6 +4096,9 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		if ins.imm < 0 || ins.imm > 31 {
 			p.Ctxt.Diag("%v: immediate out of range 0 to 31", p)
 		}
+
+	case ACBOCLEAN, ACBOFLUSH, ACBOINVAL, ACBOZERO:
+		ins.rd, ins.rs1, ins.rs2 = REG_ZERO, uint32(p.From.Reg), obj.REG_NONE
 
 	case ACLZ, ACLZW, ACTZ, ACTZW, ACPOP, ACPOPW, ASEXTB, ASEXTH, AZEXTH:
 		ins.rs1, ins.rs2 = uint32(p.From.Reg), obj.REG_NONE
