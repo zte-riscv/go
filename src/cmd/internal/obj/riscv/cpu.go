@@ -413,6 +413,12 @@ const (
 	ACZEROEQZ
 	ACZERONEZ
 
+	// 9: Zihintntl Extension
+	ANTLP1
+	ANTLPALL
+	ANTLS1
+	ANTLALL
+
 	// 11: Zimop Extension for May-Be-Operations
 	AMOPRN
 	AMOPRRN
