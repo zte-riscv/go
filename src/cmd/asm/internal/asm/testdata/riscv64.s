@@ -211,6 +211,12 @@ start:
 	RDTIME		X5				// f32210c0
 	RDINSTRET	X5				// f32220c0
 
+	// 9: Zihintntl Extension
+	NTLP1					// 33002000
+	NTLPALL					// 33003000
+	NTLS1					// 33004000
+	NTLALL					// 33005000
+
 	// 10.1: Zihintpause Extension for Pause Hint
 	PAUSE						// 0f000001
 
