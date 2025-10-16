@@ -2172,12 +2172,12 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AAMOCASH & obj.AMask:  {enc: rIIIEncoding},
 
 	// 19.6.1: Cache-Block Management Instructions (Zicbom)
-	ACBOCLEAN & obj.AMask: {enc: rIIEncoding},
-	ACBOFLUSH & obj.AMask: {enc: rIIEncoding},
-	ACBOINVAL & obj.AMask: {enc: rIIEncoding},
+	ACBOCLEAN & obj.AMask: {enc: iIIEncoding},
+	ACBOFLUSH & obj.AMask: {enc: iIIEncoding},
+	ACBOINVAL & obj.AMask: {enc: iIIEncoding},
 
 	// 19.6.2: Cache-Block Zero Instructions (Zicboz)
-	ACBOZERO & obj.AMask: {enc: rIIEncoding},
+	ACBOZERO & obj.AMask: {enc: iIIEncoding},
 
 	// 20.5: Single-Precision Load and Store Instructions
 	AFLW & obj.AMask: {enc: iFEncoding},
@@ -4114,7 +4114,17 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		}
 
 	case ACBOCLEAN, ACBOFLUSH, ACBOINVAL, ACBOZERO:
-		ins.rd, ins.rs1, ins.rs2 = REG_ZERO, uint32(p.From.Reg), obj.REG_NONE
+		ins.rd, ins.rs1 = REG_ZERO, uint32(p.From.Reg)
+		switch ins.as {
+		case ACBOCLEAN:
+			ins.imm = 0x1
+		case ACBOFLUSH:
+			ins.imm = 0x2
+		case ACBOINVAL:
+			ins.imm = 0x0
+		case ACBOZERO:
+			ins.imm = 0x4
+		}
 
 	case ACLZ, ACLZW, ACTZ, ACTZW, ACPOP, ACPOPW, ASEXTB, ASEXTH, AZEXTH:
 		ins.rs1, ins.rs2 = uint32(p.From.Reg), obj.REG_NONE
