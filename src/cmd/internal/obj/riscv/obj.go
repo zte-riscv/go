@@ -4115,16 +4115,6 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 
 	case ACBOCLEAN, ACBOFLUSH, ACBOINVAL, ACBOZERO:
 		ins.rd, ins.rs1, ins.rs2 = REG_ZERO, uint32(p.From.Reg), obj.REG_NONE
-		switch ins.as {
-		case ACBOCLEAN:
-			ins.imm = 0x1
-		case ACBOFLUSH:
-			ins.imm = 0x2
-		case ACBOINVAL:
-			ins.imm = 0x0
-		case ACBOZERO:
-			ins.imm = 0x4
-		}
 
 	case ACLZ, ACLZW, ACTZ, ACTZW, ACPOP, ACPOPW, ASEXTB, ASEXTH, AZEXTH:
 		ins.rs1, ins.rs2 = uint32(p.From.Reg), obj.REG_NONE
