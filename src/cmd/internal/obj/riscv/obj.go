@@ -4114,7 +4114,7 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		}
 
 	case ACBOCLEAN, ACBOFLUSH, ACBOINVAL, ACBOZERO:
-		ins.rd, ins.rs1 = REG_ZERO, uint32(p.From.Reg)
+		ins.rd, ins.rs1, ins.rs2 = REG_ZERO, uint32(p.From.Reg), obj.REG_NONE
 		switch ins.as {
 		case ACBOCLEAN:
 			ins.imm = 0x1
