@@ -396,6 +396,8 @@ const (
 	MAXU
 	MIN
 	MINU
+	MOP_RR_N
+	MOP_R_N
 	MUL
 	MULH
 	MULHSU
@@ -851,6 +853,8 @@ var opstr = [...]string{
 	MAXU:           "MAXU",
 	MIN:            "MIN",
 	MINU:           "MINU",
+	MOP_RR_N:       "MOP.RR.N",
+	MOP_R_N:        "MOP.R.N",
 	MUL:            "MUL",
 	MULH:           "MULH",
 	MULHSU:         "MULHSU",
@@ -1693,6 +1697,10 @@ var instFormats = [...]instFormat{
 	{mask: 0xfe00707f, value: 0x0a004033, op: MIN, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
 	// MINU rd, rs1, rs2
 	{mask: 0xfe00707f, value: 0x0a005033, op: MINU, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
+	// MOP.RR.N rd, rs1, rs2
+	{mask: 0xb200707f, value: 0x82004073, op: MOP_RR_N, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
+	// MOP.R.N rd, rs1
+	{mask: 0xb3c0707f, value: 0x81c04073, op: MOP_R_N, args: argTypeList{arg_rd, arg_rs1}},
 	// MUL rd, rs1, rs2
 	{mask: 0xfe00707f, value: 0x02000033, op: MUL, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
 	// MULH rd, rs1, rs2
