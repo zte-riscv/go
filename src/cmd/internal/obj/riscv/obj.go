@@ -29,6 +29,7 @@ import (
 	"internal/abi"
 	"internal/buildcfg"
 	"log"
+	"math"
 	"math/bits"
 	"strings"
 )
@@ -193,9 +194,49 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 			p.From.Offset = 0
 		}
 
+	case AMOVF:
+		if p.From.Type == obj.TYPE_FCONST && p.From.Name == obj.NAME_NONE && p.From.Reg == obj.REG_NONE {
+			f64 := p.From.Val.(float64)
+			f32 := float32(f64)
+			if math.Float32bits(f32) == 0 {
+				p.From.Type = obj.TYPE_REG
+				p.From.Reg = REG_ZERO
+				break
+			}
+			if buildcfg.GORISCV64 >= 23 && p.To.Type == obj.TYPE_REG {
+				if math.IsNaN(float64(f32)) {
+					p.As = AFLIS
+					break
+				}
+				if _, ok := fimmMapping[float64(f32)]; ok {
+					p.As = AFLIS
+					break
+				}
+			}
+			p.From.Type = obj.TYPE_MEM
+			p.From.Sym = ctxt.Float32Sym(f32)
+			p.From.Name = obj.NAME_EXTERN
+			p.From.Offset = 0
+		}
+
 	case AMOVD:
 		if p.From.Type == obj.TYPE_FCONST && p.From.Name == obj.NAME_NONE && p.From.Reg == obj.REG_NONE {
 			f64 := p.From.Val.(float64)
+			if math.Float64bits(f64) == 0 {
+				p.From.Type = obj.TYPE_REG
+				p.From.Reg = REG_ZERO
+				break
+			}
+			if buildcfg.GORISCV64 >= 23 && p.To.Type == obj.TYPE_REG {
+				if math.IsNaN(f64) {
+					p.As = AFLID
+					break
+				}
+				if _, ok := fimmMapping[f64]; ok {
+					p.As = AFLID
+					break
+				}
+			}
 			p.From.Type = obj.TYPE_MEM
 			p.From.Sym = ctxt.Float64Sym(f64)
 			p.From.Name = obj.NAME_EXTERN
@@ -2261,6 +2302,32 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	// 21.7: Double-Precision Floating-Point Classify Instruction
 	AFCLASSD & obj.AMask: {enc: rFIEncoding},
 
+	// 24: "Zfa" Extension for Additional Floating-Point Instructions
+	// 24.1: Load-Immediate Instructions
+	AFLIS & obj.AMask: {enc: rIFEncoding},
+	AFLID & obj.AMask: {enc: rIFEncoding},
+
+	// 24.2: Minimum and Maximum Instructions
+	AFMAXMS & obj.AMask: {enc: rFFFEncoding},
+	AFMINMS & obj.AMask: {enc: rFFFEncoding},
+	AFMAXMD & obj.AMask: {enc: rFFFEncoding},
+	AFMINMD & obj.AMask: {enc: rFFFEncoding},
+
+	// 24.3: Round-to-Integer Instructions
+	AFROUNDS & obj.AMask:   {enc: rFFEncoding},
+	AFROUNDNXS & obj.AMask: {enc: rFFEncoding},
+	AFROUNDD & obj.AMask:   {enc: rFFEncoding},
+	AFROUNDNXD & obj.AMask: {enc: rFFEncoding},
+
+	// 24.4: Modular Convert-to-Integer Instruction
+	AFCVTMODWD & obj.AMask: {enc: rFIEncoding},
+
+	// 24.6: Comparison Instructions
+	AFLEQS & obj.AMask: {enc: rFFIEncoding},
+	AFLTQS & obj.AMask: {enc: rFFIEncoding},
+	AFLEQD & obj.AMask: {enc: rFFIEncoding},
+	AFLTQD & obj.AMask: {enc: rFFIEncoding},
+
 	//
 	// "B" Extension for Bit Manipulation, Version 1.0.0
 	//
@@ -3543,16 +3610,37 @@ func instructionsForMOV(p *obj.Prog) []*instruction {
 	case p.From.Type == obj.TYPE_REG && p.To.Type == obj.TYPE_REG:
 		// Handle register to register moves.
 		switch p.As {
-		case AMOV: // MOV Ra, Rb -> ADDI $0, Ra, Rb
+		case AMOV:
+			// MOV Ra, Rb -> ADDI $0, Ra, Rb
 			ins.as, ins.rs1, ins.rs2, ins.imm = AADDI, uint32(p.From.Reg), obj.REG_NONE, 0
-		case AMOVW: // MOVW Ra, Rb -> ADDIW $0, Ra, Rb
+		case AMOVW:
+			// MOVW Ra, Rb -> ADDIW $0, Ra, Rb
 			ins.as, ins.rs1, ins.rs2, ins.imm = AADDIW, uint32(p.From.Reg), obj.REG_NONE, 0
-		case AMOVBU: // MOVBU Ra, Rb -> ANDI $255, Ra, Rb
+		case AMOVBU:
+			// MOVBU Ra, Rb -> ANDI $255, Ra, Rb
 			ins.as, ins.rs1, ins.rs2, ins.imm = AANDI, uint32(p.From.Reg), obj.REG_NONE, 255
-		case AMOVF: // MOVF Ra, Rb -> FSGNJS Ra, Ra, Rb
-			ins.as, ins.rs1 = AFSGNJS, uint32(p.From.Reg)
-		case AMOVD: // MOVD Ra, Rb -> FSGNJD Ra, Ra, Rb
-			ins.as, ins.rs1 = AFSGNJD, uint32(p.From.Reg)
+		case AMOVF:
+			// MOVF Ra, Rb -> FSGNJS Ra, Ra, Rb
+			//          or -> FMVWX  Ra, Rb
+			//          or -> FMVXW  Ra, Rb
+			if ins.rs2 >= REG_X0 && ins.rs2 <= REG_X31 && ins.rd >= REG_F0 && ins.rd <= REG_F31 {
+				ins.as = AFMVWX
+			} else if ins.rs2 >= REG_F0 && ins.rs2 <= REG_F31 && ins.rd >= REG_X0 && ins.rd <= REG_X31 {
+				ins.as = AFMVXW
+			} else {
+				ins.as, ins.rs1 = AFSGNJS, uint32(p.From.Reg)
+			}
+		case AMOVD:
+			// MOVD Ra, Rb -> FSGNJD Ra, Ra, Rb
+			//          or -> FMVDX  Ra, Rb
+			//          or -> FMVXD  Ra, Rb
+			if ins.rs2 >= REG_X0 && ins.rs2 <= REG_X31 && ins.rd >= REG_F0 && ins.rd <= REG_F31 {
+				ins.as = AFMVDX
+			} else if ins.rs2 >= REG_F0 && ins.rs2 <= REG_F31 && ins.rd >= REG_X0 && ins.rd <= REG_X31 {
+				ins.as = AFMVXD
+			} else {
+				ins.as, ins.rs1 = AFSGNJD, uint32(p.From.Reg)
+			}
 		case AMOVB, AMOVH:
 			if buildcfg.GORISCV64 >= 22 {
 				// Use SEXTB or SEXTH to extend.
@@ -3736,6 +3824,40 @@ func instructionsForRotate(p *obj.Prog, ins *instruction) []*instruction {
 		p.Ctxt.Diag("%v: unknown rotation", p)
 		return nil
 	}
+}
+
+var fimmMapping = map[float64]uint32{
+	-1.0:               0,
+	math.Inf(-1):       1,
+	1.52587890625e-05:  2,
+	3.0517578125e-05:   3,
+	0.00390625:         4,
+	0.0078125:          5,
+	0.0625:             6,
+	0.125:              7,
+	0.25:               8,
+	0.3125:             9,
+	0.375:              10,
+	0.4375:             11,
+	0.5:                12,
+	0.625:              13,
+	0.75:               14,
+	0.875:              15,
+	1.0:                16,
+	1.25:               17,
+	1.5:                18,
+	1.75:               19,
+	2.0:                20,
+	2.5:                21,
+	3.0:                22,
+	4.0:                23,
+	8.0:                24,
+	1.6000000000000001: 25,
+	1.28:               26,
+	2.5600000000000001: 27,
+	3.27:               28,
+	6.5499999999999998: 29,
+	math.Inf(1):        30,
 }
 
 // instructionsForMinMax returns the machine instructions for an integer minimum or maximum.
@@ -3981,6 +4103,20 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 			ins.imm -= 4096
 		}
 		ins.rs2 = obj.REG_NONE
+
+	case AFLIS, AFLID:
+		fimm := p.From.Val.(float64)
+		var index uint32
+		// NaN is special as it can't be used in comparison.
+		if math.IsNaN(fimm) {
+			index = 31
+		} else if idx, ok := fimmMapping[fimm]; ok {
+			index = idx
+		} else {
+			p.Ctxt.Diag("%v: unknown floating point immediate", fimm)
+			return nil
+		}
+		ins.rs2 = REG_ZERO + index
 
 	case AFENCE:
 		ins.rd, ins.rs1, ins.rs2 = REG_ZERO, REG_ZERO, obj.REG_NONE
