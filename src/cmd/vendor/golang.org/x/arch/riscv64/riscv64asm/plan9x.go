@@ -274,6 +274,20 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 			args[0], args[1] = args[1], args[0]
 		}
 
+	case MOP_RR_N:
+		num := (inst.Enc >> 30) & 0x1 << 2
+		num |= (inst.Enc >> 27) & 0x1 << 1
+		num |= (inst.Enc >> 26) & 0x1 << 0
+		op = fmt.Sprintf("MOPRR%d", num)
+
+	case MOP_R_N:
+		num := (inst.Enc >> 30) & 0x1 << 4
+		num |= (inst.Enc >> 27) & 0x1 << 3
+		num |= (inst.Enc >> 26) & 0x1 << 2
+		num |= (inst.Enc >> 21) & 0x1 << 1
+		num |= (inst.Enc >> 20) & 0x1 << 0
+		op = fmt.Sprintf("MOPR%d", num)
+
 	case SUB:
 		if inst.Args[1].(Reg) == X0 {
 			op = "NEG"
