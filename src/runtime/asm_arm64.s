@@ -966,10 +966,12 @@ aesloop:
 
 TEXT runtime·procyieldAsm(SB),NOSPLIT,$0-0
 	MOVWU	cycles+0(FP), R0
+	CBZ	R0, done
 again:
 	YIELD
 	SUBW	$1, R0
 	CBNZ	R0, again
+done:
 	RET
 
 // Save state of caller into g->sched,
