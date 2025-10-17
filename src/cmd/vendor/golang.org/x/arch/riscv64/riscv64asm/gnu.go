@@ -5,6 +5,7 @@
 package riscv64asm
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -255,6 +256,20 @@ func GNUSyntax(inst Inst) string {
 			op = "fneg.s"
 			args = args[:len(args)-1]
 		}
+
+	case MOP_RR_N:
+		num := (inst.Enc >> 30) & 0x1 << 2
+		num |= (inst.Enc >> 27) & 0x1 << 1
+		num |= (inst.Enc >> 26) & 0x1 << 0
+		op = fmt.Sprintf("mop.rr.%d", num)
+
+	case MOP_R_N:
+		num := (inst.Enc >> 30) & 0x1 << 4
+		num |= (inst.Enc >> 27) & 0x1 << 3
+		num |= (inst.Enc >> 26) & 0x1 << 2
+		num |= (inst.Enc >> 21) & 0x1 << 1
+		num |= (inst.Enc >> 20) & 0x1 << 0
+		op = fmt.Sprintf("mop.r.%d", num)
 
 	case JAL:
 		if inst.Args[0].(Reg) == X0 {
