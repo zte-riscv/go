@@ -242,6 +242,22 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 			p.From.Name = obj.NAME_EXTERN
 			p.From.Offset = 0
 		}
+
+	case APREFETCHI, APREFETCHR, APREFETCHW:
+		p.From.Offset = p.From.Offset &^ 0b11111
+		switch p.As {
+		case APREFETCHI:
+			p.From.Offset |= 0b00000
+		case APREFETCHR:
+			p.From.Offset |= 0b00001
+		case APREFETCHW:
+			p.From.Offset |= 0b00011
+		}
+		p.From.Offset = signExtend(p.From.Offset, 12)
+		p.As = AORI
+		p.To.Reg = REG_ZERO
+		// AORI used instructionsForOpImmediate to encode. so p.Reg will used by rs1 and rs2 will be REG_NONE
+		p.Reg = p.From.Reg
 	}
 
 	if ctxt.Flag_dynlink {
@@ -4643,18 +4659,6 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 			p.Ctxt.Diag("%v: too many operands for instruction", p)
 		}
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), uint32(p.From.Reg), uint32(p.Reg)
-	case APREFETCHI, APREFETCHR, APREFETCHW:
-		ins.imm = ins.imm &^ 0b11111
-		switch ins.as {
-		case APREFETCHI:
-			ins.imm |= 0x00000
-		case APREFETCHR:
-			ins.imm |= 0b00001
-		case APREFETCHW:
-			ins.imm |= 0b00011
-		}
-		ins.imm = signExtend(ins.imm, 12)
-		ins.as, ins.rd, ins.rs1, ins.rs2 = AORI, REG_ZERO, uint32(p.From.Reg), obj.REG_NONE
 	}
 
 	for _, ins := range inss {
