@@ -20,22 +20,23 @@ import (
 )
 
 var (
-	GOROOT    = os.Getenv("GOROOT") // cached for efficiency
-	GOARCH    = envOr("GOARCH", defaultGOARCH)
-	GOOS      = envOr("GOOS", defaultGOOS)
-	GO386     = envOr("GO386", DefaultGO386)
-	GOAMD64   = goamd64()
-	GOARM     = goarm()
-	GOARM64   = goarm64()
-	GOMIPS    = gomips()
-	GOMIPS64  = gomips64()
-	GOPPC64   = goppc64()
-	GORISCV64 = goriscv64()
-	GOWASM    = gowasm()
-	ToolTags  = toolTags()
-	GO_LDSO   = defaultGO_LDSO
-	GOFIPS140 = gofips140()
-	Version   = version
+	GOROOT       = os.Getenv("GOROOT") // cached for efficiency
+	GOARCH       = envOr("GOARCH", defaultGOARCH)
+	GOOS         = envOr("GOOS", defaultGOOS)
+	GO386        = envOr("GO386", DefaultGO386)
+	GOAMD64      = goamd64()
+	GOARM        = goarm()
+	GOARM64      = goarm64()
+	GOMIPS       = gomips()
+	GOMIPS64     = gomips64()
+	GOPPC64      = goppc64()
+	GORISCV64    = goriscv64()
+	GORISCV64OPT = goriscv64opt()
+	GOWASM       = gowasm()
+	ToolTags     = toolTags()
+	GO_LDSO      = defaultGO_LDSO
+	GOFIPS140    = gofips140()
+	Version      = version
 )
 
 // Error is one of the errors found (if any) in the build configuration.
@@ -318,6 +319,26 @@ func goriscv64() int {
 	})
 	year, _ := strconv.Atoi(v[:i])
 	return year
+}
+
+func goriscv64opt() map[string]bool {
+	opts := make(map[string]bool)
+	opt := os.Getenv("GORISCV64OPT")
+	if opt == "" {
+		return opts
+	}
+	// Accept comma, space, tab, semicolon as separators.
+	// Normalize to upper-case; drop empty items.
+	seps := func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == ';' }
+	for _, it := range strings.FieldsFunc(opt, seps) {
+		it = strings.TrimSpace(it)
+		if it == "" {
+			continue
+		}
+		it = strings.ToUpper(it)
+		opts[it] = true
+	}
+	return opts
 }
 
 type gowasmFeatures struct {
