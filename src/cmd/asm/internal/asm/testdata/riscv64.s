@@ -345,7 +345,7 @@ start:
 	// 19.6.2: Cache-Block Zero Instructions (Zicboz)
 	CBOZERO		X5				// 0fa04200
 
-	// 19.6.3 Cache-Block Prefetch Instructions
+	// 19.6.3: Cache-Block Prefetch Instructions
 	PREFETCHI 448(X5)					// 13e0021c
 	PREFETCHI -64(X5)					// 13e002fc
 	PREFETCHI 453(X5)					// 13e0021c
