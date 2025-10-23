@@ -301,6 +301,20 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 		num |= (inst.Enc >> 26) & 0x1 << 0
 		op = fmt.Sprintf("MOPRR%d", num)
 
+		switch num {
+		case moprr7:
+			if inst.Args[0].(Reg) == X0 && inst.Args[1].(Reg) == X0 {
+				switch inst.Args[2].(Reg) {
+				case X1:
+					op = "SSPUSHX1"
+					args = nil
+				case X5:
+					op = "SSPUSHX5"
+					args = nil
+				}
+			}
+		}
+
 	case MOP_R_N:
 		num := (inst.Enc >> 30) & 0x1 << 4
 		num |= (inst.Enc >> 27) & 0x1 << 3
@@ -308,6 +322,23 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 		num |= (inst.Enc >> 21) & 0x1 << 1
 		num |= (inst.Enc >> 20) & 0x1 << 0
 		op = fmt.Sprintf("MOPR%d", num)
+
+		switch num {
+		case mopr28:
+			if inst.Args[0].(Reg) == X0 {
+				switch inst.Args[1].(Reg) {
+				case X1:
+					op = "SSPOPCHKX1"
+					args = nil
+				case X5:
+					op = "SSPOPCHKX5"
+					args = nil
+				}
+			} else if inst.Args[1].(Reg) == X0 {
+				op = "SSRDP"
+				args = args[0:1]
+			}
+		}
 
 	case SUB:
 		if inst.Args[1].(Reg) == X0 {
