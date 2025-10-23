@@ -2,11 +2,9 @@
 
 package ssa
 
-import (
-	"cmd/compile/internal/types"
-	"internal/buildcfg"
-	"math"
-)
+import "internal/buildcfg"
+import "math"
+import "cmd/compile/internal/types"
 
 func rewriteValueRISCV64(v *Value) bool {
 	switch v.Op {
@@ -7240,6 +7238,7 @@ func rewriteValueRISCV64_OpRISCV64SLLI(v *Value) bool {
 		}
 		v.reset(OpRISCV64MOVDconst)
 		v.AuxInt = int64ToAuxInt(0)
+		return true
 	}
 	// match: (SLLI [x] (MOVWUreg y))
 	// cond: x < 64 && buildcfg.GORISCV64 >= 22
