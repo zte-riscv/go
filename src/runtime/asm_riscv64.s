@@ -271,6 +271,11 @@ TEXT gogo<>(SB), NOSPLIT|NOFRAME, $0
 
 // func procyield(cycles uint32)
 TEXT runtime·procyield(SB),NOSPLIT,$0-0
+	MOVWU	cycles+0(FP), T0
+yieldloop:
+	PAUSE
+	SUBW	$1, T0
+	BNEZ	T0, yieldloop
 	RET
 
 // Switch to m->g0's stack, call fn(g).
