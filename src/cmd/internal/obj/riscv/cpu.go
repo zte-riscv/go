@@ -492,6 +492,14 @@ const (
 	AAMOMAXUH
 	AAMOCASH
 
+	// 19.6.1: Cache-Block Management Instructions (Zicbom)
+	ACBOCLEAN
+	ACBOFLUSH
+	ACBOINVAL
+
+	// 19.6.2: Cache-Block Zero Instructions (Zicboz)
+	ACBOZERO
+
 	// 20.5: Single-Precision Load and Store Instructions
 	AFLW
 	AFSW
@@ -617,6 +625,32 @@ const (
 
 	// 22.5 Quad-Precision Floating-Point Classify Instruction
 	AFCLASSQ
+
+	// 24: "Zfa" Extension for Additional Floating-Point Instructions
+	// 24.1: Load-Immediate Instructions
+	AFLIS
+	AFLID
+
+	// 24.2: Minimum and Maximum Instructions
+	AFMAXMS
+	AFMINMS
+	AFMAXMD
+	AFMINMD
+
+	// 24.3: Round-to-Integer Instructions
+	AFROUNDS
+	AFROUNDNXS
+	AFROUNDD
+	AFROUNDNXD
+
+	// 24.4: Modular Convert-to-Integer Instruction
+	AFCVTMODWD
+
+	// 24.6: Comparison Instructions
+	AFLEQS
+	AFLTQS
+	AFLEQD
+	AFLTQD
 
 	//
 	// "C" Extension for Compressed Instructions
@@ -1648,6 +1682,9 @@ const (
 	ANEGW
 	ANOT
 	APAUSE
+	APREFETCHI
+	APREFETCHR
+	APREFETCHW
 	ARDCYCLE
 	ARDINSTRET
 	ARDTIME

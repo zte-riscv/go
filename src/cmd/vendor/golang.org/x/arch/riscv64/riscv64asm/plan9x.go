@@ -67,6 +67,26 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 		// Atomic instructions have special operand order.
 		args[2], args[1] = args[1], args[2]
 
+	case ADD:
+		if inst.Args[0].(Reg) == X0 && inst.Args[1].(Reg) == X0 {
+			isZihintntl := true
+			switch inst.Args[2].(Reg) {
+			case X2:
+				op = "NTLP1"
+			case X3:
+				op = "NTLPALL"
+			case X4:
+				op = "NTLS1"
+			case X5:
+				op = "NTLALL"
+			default:
+				isZihintntl = false
+			}
+			if isZihintntl {
+				args = args[:0]
+			}
+		}
+
 	case ADDI:
 		if inst.Args[2].(Simm).Imm == 0 {
 			op = "MOV"
@@ -288,6 +308,20 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 			args[0] = plan9Arg(&inst, pc, symname, RegOffset{inst.Args[1].(Reg), inst.Args[2].(Simm)})
 			args = args[:len(args)-2]
 		}
+
+	case MOP_RR_N:
+		num := (inst.Enc >> 30) & 0x1 << 2
+		num |= (inst.Enc >> 27) & 0x1 << 1
+		num |= (inst.Enc >> 26) & 0x1 << 0
+		op = fmt.Sprintf("MOPRR%d", num)
+
+	case MOP_R_N:
+		num := (inst.Enc >> 30) & 0x1 << 4
+		num |= (inst.Enc >> 27) & 0x1 << 3
+		num |= (inst.Enc >> 26) & 0x1 << 2
+		num |= (inst.Enc >> 21) & 0x1 << 1
+		num |= (inst.Enc >> 20) & 0x1 << 0
+		op = fmt.Sprintf("MOPR%d", num)
 
 	case SUB:
 		if inst.Args[1].(Reg) == X0 {
