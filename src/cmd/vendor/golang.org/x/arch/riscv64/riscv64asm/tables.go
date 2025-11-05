@@ -454,6 +454,8 @@ const (
 	SRLI
 	SRLIW
 	SRLW
+	SSAMOSWAP_D
+	SSAMOSWAP_W
 	SUB
 	SUBW
 	SW
@@ -911,6 +913,8 @@ var opstr = [...]string{
 	SRLI:           "SRLI",
 	SRLIW:          "SRLIW",
 	SRLW:           "SRLW",
+	SSAMOSWAP_D:    "SSAMOSWAP.D",
+	SSAMOSWAP_W:    "SSAMOSWAP.W",
 	SUB:            "SUB",
 	SUBW:           "SUBW",
 	SW:             "SW",
@@ -1813,6 +1817,10 @@ var instFormats = [...]instFormat{
 	{mask: 0xfe00707f, value: 0x0000501b, op: SRLIW, args: argTypeList{arg_rd, arg_rs1, arg_shamt5}},
 	// SRLW rd, rs1, rs2
 	{mask: 0xfe00707f, value: 0x0000503b, op: SRLW, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
+	// SSAMOSWAP.D rd, rs2, rs1_amo
+	{mask: 0xf800707f, value: 0x4800302f, op: SSAMOSWAP_D, args: argTypeList{arg_rd, arg_rs2, arg_rs1_amo}},
+	// SSAMOSWAP.W rd, rs2, rs1_amo
+	{mask: 0xf800707f, value: 0x4800202f, op: SSAMOSWAP_W, args: argTypeList{arg_rd, arg_rs2, arg_rs1_amo}},
 	// SUB rd, rs1, rs2
 	{mask: 0xfe00707f, value: 0x40000033, op: SUB, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
 	// SUBW rd, rs1, rs2

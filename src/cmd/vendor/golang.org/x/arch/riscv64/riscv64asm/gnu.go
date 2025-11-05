@@ -300,6 +300,20 @@ func GNUSyntax(inst Inst) string {
 		num |= (inst.Enc >> 26) & 0x1 << 0
 		op = fmt.Sprintf("mop.rr.%d", num)
 
+		switch num {
+		case moprr7:
+			if inst.Args[0].(Reg) == X0 && inst.Args[1].(Reg) == X0 {
+				switch inst.Args[2].(Reg) {
+				case X1:
+					op = "sspush.x1"
+					args = nil
+				case X5:
+					op = "sspush.x5"
+					args = nil
+				}
+			}
+		}
+
 	case MOP_R_N:
 		num := (inst.Enc >> 30) & 0x1 << 4
 		num |= (inst.Enc >> 27) & 0x1 << 3
@@ -307,6 +321,23 @@ func GNUSyntax(inst Inst) string {
 		num |= (inst.Enc >> 21) & 0x1 << 1
 		num |= (inst.Enc >> 20) & 0x1 << 0
 		op = fmt.Sprintf("mop.r.%d", num)
+
+		switch num {
+		case mopr28:
+			if inst.Args[0].(Reg) == X0 {
+				switch inst.Args[1].(Reg) {
+				case X1:
+					op = "sspopchk.x1"
+					args = nil
+				case X5:
+					op = "sspopchk.x5"
+					args = nil
+				}
+			} else if inst.Args[1].(Reg) == X0 {
+				op = "ssrdp"
+				args = args[0:1]
+			}
+		}
 
 	case JAL:
 		if inst.Args[0].(Reg) == X0 {
