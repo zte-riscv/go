@@ -493,3 +493,49 @@ func (memOrder MemOrder) String() string {
 	}
 	return str
 }
+
+const (
+	mopr0 = iota
+	mopr1
+	mopr2
+	mopr3
+	mopr4
+	mopr5
+	mopr6
+	mopr7
+	mopr8
+	mopr9
+	mopr10
+	mopr11
+	mopr12
+	mopr13
+	mopr14
+	mopr15
+	mopr16
+	mopr17
+	mopr18
+	mopr19
+	mopr20
+	mopr21
+	mopr22
+	mopr23
+	mopr24
+	mopr25
+	mopr26
+	mopr27
+	mopr28
+	mopr29
+	mopr30
+	mopr31
+)
+
+const (
+	moprr0 = iota
+	moprr1
+	moprr2
+	moprr3
+	moprr4
+	moprr5
+	moprr6
+	moprr7
+)
