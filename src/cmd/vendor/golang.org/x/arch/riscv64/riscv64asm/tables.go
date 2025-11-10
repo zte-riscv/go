@@ -188,6 +188,9 @@ const (
 	CBO_FLUSH
 	CBO_INVAL
 	CBO_ZERO
+	CLMUL
+	CLMULH
+	CLMULR
 	CLZ
 	CLZW
 	CPOP
@@ -647,6 +650,9 @@ var opstr = [...]string{
 	CBO_FLUSH:      "CBO.FLUSH",
 	CBO_INVAL:      "CBO.INVAL",
 	CBO_ZERO:       "CBO.ZERO",
+	CLMUL:          "CLMUL",
+	CLMULH:         "CLMULH",
+	CLMULR:         "CLMULR",
 	CLZ:            "CLZ",
 	CLZW:           "CLZW",
 	CPOP:           "CPOP",
@@ -1285,6 +1291,12 @@ var instFormats = [...]instFormat{
 	{mask: 0xfff07fff, value: 0x0000200f, op: CBO_INVAL, args: argTypeList{arg_rs1}},
 	// CBO.ZERO rs1
 	{mask: 0xfff07fff, value: 0x0040200f, op: CBO_ZERO, args: argTypeList{arg_rs1}},
+	// CLMUL rd, rs1, rs2
+	{mask: 0xfe00707f, value: 0x0a001033, op: CLMUL, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
+	// CLMULH rd, rs1, rs2
+	{mask: 0xfe00707f, value: 0x0a003033, op: CLMULH, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
+	// CLMULR rd, rs1, rs2
+	{mask: 0xfe00707f, value: 0x0a002033, op: CLMULR, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
 	// CLZ rd, rs1
 	{mask: 0xfff0707f, value: 0x60001013, op: CLZ, args: argTypeList{arg_rd, arg_rs1}},
 	// CLZW rd, rs1

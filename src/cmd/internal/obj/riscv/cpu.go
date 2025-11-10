@@ -743,7 +743,7 @@ const (
 	ASEXTH
 	AZEXTH
 
-	// 28.4.3: Bitwise Rotation (Zbb)
+	// 28.4.2: Bitwise Rotation (Zbb)
 	AROL
 	AROLW
 	AROR
@@ -752,6 +752,11 @@ const (
 	ARORW
 	AORCB
 	AREV8
+
+	// 28.4.3: Carry-less multiplication (Zbc)
+	ACLMUL
+	ACLMULH
+	ACLMULR
 
 	// 28.4.4: Single-bit Instructions (Zbs)
 	ABCLR
