@@ -1641,6 +1641,12 @@ func validateRaw(ctxt *obj.Link, ins *instruction) {
 	}
 }
 
+// extractBitAndShift extracts the specified bit from the given immediate,
+// before shifting it to the requested position and returning it.
+func extractBitAndShift(imm uint32, bit, pos int) uint32 {
+	return ((imm >> bit) & 1) << pos
+}
+
 // encodeBitPattern encodes an immediate value by extracting the specified
 // bit pattern from the given immediate. Each value in the pattern specifies
 // the position of the bit to extract from the immediate, which are then
