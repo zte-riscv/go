@@ -15,27 +15,29 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
 
 var (
-	GOROOT    = os.Getenv("GOROOT") // cached for efficiency
-	GOARCH    = envOr("GOARCH", defaultGOARCH)
-	GOOS      = envOr("GOOS", defaultGOOS)
-	GO386     = envOr("GO386", DefaultGO386)
-	GOAMD64   = goamd64()
-	GOARM     = goarm()
-	GOARM64   = goarm64()
-	GOMIPS    = gomips()
-	GOMIPS64  = gomips64()
-	GOPPC64   = goppc64()
-	GORISCV64 = goriscv64()
-	GOWASM    = gowasm()
-	ToolTags  = toolTags()
-	GO_LDSO   = defaultGO_LDSO
-	GOFIPS140 = gofips140()
-	Version   = version
+	GOROOT       = os.Getenv("GOROOT") // cached for efficiency
+	GOARCH       = envOr("GOARCH", defaultGOARCH)
+	GOOS         = envOr("GOOS", defaultGOOS)
+	GO386        = envOr("GO386", DefaultGO386)
+	GOAMD64      = goamd64()
+	GOARM        = goarm()
+	GOARM64      = goarm64()
+	GOMIPS       = gomips()
+	GOMIPS64     = gomips64()
+	GOPPC64      = goppc64()
+	GORISCV64    = goriscv64()
+	GORISCV64OPT = goriscv64opt()
+	GOWASM       = gowasm()
+	ToolTags     = toolTags()
+	GO_LDSO      = defaultGO_LDSO
+	GOFIPS140    = gofips140()
+	Version      = version
 )
 
 // Error is one of the errors found (if any) in the build configuration.
@@ -318,6 +320,44 @@ func goriscv64() int {
 	})
 	year, _ := strconv.Atoi(v[:i])
 	return year
+}
+
+var allowedRiscv64Opt = map[string]bool{
+	"ZACAS": true,
+	"ZABHA": true,
+}
+
+func allowedRiscv64OptList() string {
+	keys := make([]string, 0, len(allowedRiscv64Opt))
+	for k := range allowedRiscv64Opt {
+		keys = append(keys, strings.ToLower(k))
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ", ")
+}
+
+func goriscv64opt() map[string]bool {
+	opts := make(map[string]bool)
+	opt := os.Getenv("GORISCV64OPT")
+	if opt == "" {
+		return opts
+	}
+	// Accept comma as separators.
+	// Normalize to upper-case; drop empty items.
+	seps := func(r rune) bool { return r == ',' }
+	for _, it := range strings.FieldsFunc(opt, seps) {
+		it = strings.TrimSpace(it)
+		if it == "" {
+			continue
+		}
+		it = strings.ToUpper(it)
+		if !allowedRiscv64Opt[it] {
+			Error = fmt.Errorf("invalid GORISCV64OPT: must be one of %s (got %q)", allowedRiscv64OptList(), strings.ToLower(it))
+			continue
+		}
+		opts[it] = true
+	}
+	return opts
 }
 
 type gowasmFeatures struct {

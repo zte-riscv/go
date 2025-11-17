@@ -360,6 +360,23 @@ func asmArgs(a *Action, p *load.Package) []any {
 	if cfg.Goarch == "riscv64" {
 		// Define GORISCV64_value from cfg.GORISCV64.
 		args = append(args, "-D", "GORISCV64_"+cfg.GORISCV64)
+
+		// Define per-extension macros from GORISCV64OPT.
+		// Example: GORISCV64OPT="Zba,Zbb" -> -D GORISCV64OPT_ZBA -D GORISCV64OPT_ZBB
+		if opt := os.Getenv("GORISCV64OPT"); opt != "" {
+			// Accept comma as separators.
+			// Normalize to upper-case, drop empty items.
+			// Do not validate here; the assembler can simply see or ignore the defines.
+			seps := func(r rune) bool { return r == ',' }
+			for _, it := range strings.FieldsFunc(opt, seps) {
+				it = strings.TrimSpace(it)
+				if it == "" {
+					continue
+				}
+				it = strings.ToUpper(it)
+				args = append(args, "-D", "GORISCV64OPT_"+it)
+			}
+		}
 	}
 
 	if cfg.Goarch == "arm" {
