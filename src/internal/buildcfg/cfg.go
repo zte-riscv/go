@@ -20,23 +20,23 @@ import (
 )
 
 var (
-	GOROOT       = os.Getenv("GOROOT") // cached for efficiency
-	GOARCH       = envOr("GOARCH", defaultGOARCH)
-	GOOS         = envOr("GOOS", defaultGOOS)
-	GO386        = envOr("GO386", DefaultGO386)
-	GOAMD64      = goamd64()
-	GOARM        = goarm()
-	GOARM64      = goarm64()
-	GOMIPS       = gomips()
-	GOMIPS64     = gomips64()
-	GOPPC64      = goppc64()
-	GORISCV64    = goriscv64()
-	GORISCV64OPT = goriscv64Extensions()
-	GOWASM       = gowasm()
-	ToolTags     = toolTags()
-	GO_LDSO      = defaultGO_LDSO
-	GOFIPS140    = gofips140()
-	Version      = version
+	GOROOT              = os.Getenv("GOROOT") // cached for efficiency
+	GOARCH              = envOr("GOARCH", defaultGOARCH)
+	GOOS                = envOr("GOOS", defaultGOOS)
+	GO386               = envOr("GO386", DefaultGO386)
+	GOAMD64             = goamd64()
+	GOARM               = goarm()
+	GOARM64             = goarm64()
+	GOMIPS              = gomips()
+	GOMIPS64            = gomips64()
+	GOPPC64             = goppc64()
+	GORISCV64           = goriscv64()
+	GORISCV64EXTENSIONS = goriscv64Extensions()
+	GOWASM              = gowasm()
+	ToolTags            = toolTags()
+	GO_LDSO             = defaultGO_LDSO
+	GOFIPS140           = gofips140()
+	Version             = version
 )
 
 // Error is one of the errors found (if any) in the build configuration.
