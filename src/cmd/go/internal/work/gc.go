@@ -359,23 +359,15 @@ func asmArgs(a *Action, p *load.Package) []any {
 
 	if cfg.Goarch == "riscv64" {
 		// Define GORISCV64_value from cfg.GORISCV64.
-		args = append(args, "-D", "GORISCV64_"+cfg.GORISCV64)
+		// Extract profile from GORISCV64 (may contain extensions like "rva23u64,zacas,zabha")
+		v := cfg.GORISCV64
+		profile, extensions, _ := buildcfg.ParseGORISCV64(v)
+		args = append(args, "-D", "GORISCV64_"+profile)
 
-		// Define per-extension macros from GORISCV64OPT.
-		// Example: GORISCV64OPT="Zba,Zbb" -> -D GORISCV64OPT_ZBA -D GORISCV64OPT_ZBB
-		if opt := os.Getenv("GORISCV64OPT"); opt != "" {
-			// Accept comma as separators.
-			// Normalize to upper-case, drop empty items.
-			// Do not validate here; the assembler can simply see or ignore the defines.
-			seps := func(r rune) bool { return r == ',' }
-			for _, it := range strings.FieldsFunc(opt, seps) {
-				it = strings.TrimSpace(it)
-				if it == "" {
-					continue
-				}
-				it = strings.ToUpper(it)
-				args = append(args, "-D", "GORISCV64OPT_"+it)
-			}
+		// Define per-extension macros from GORISCV64 extensions.
+		// Example: GORISCV64="rva23u64,zacas,zabha" -> -D GORISCV64OPT_ZACAS -D GORISCV64OPT_ZABHA
+		for ext := range extensions {
+			args = append(args, "-D", "GORISCV64OPT_"+ext)
 		}
 	}
 
