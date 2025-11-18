@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -332,7 +331,6 @@ func allowedRiscv64OptList() string {
 	for k := range allowedRiscv64Opt {
 		keys = append(keys, strings.ToLower(k))
 	}
-	sort.Strings(keys)
 	return strings.Join(keys, ", ")
 }
 
