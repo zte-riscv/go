@@ -359,12 +359,16 @@ func asmArgs(a *Action, p *load.Package) []any {
 
 	if cfg.Goarch == "riscv64" {
 		// Define GORISCV64_value from cfg.GORISCV64.
-		args = append(args, "-D", "GORISCV64_"+cfg.GORISCV64)
+		// Extract profile part (before comma) since GORISCV64 may contain extensions like "rva23u64,zabha"
+		profile := cfg.GORISCV64
+		if idx := strings.Index(cfg.GORISCV64, ","); idx >= 0 {
+			profile = cfg.GORISCV64[:idx]
+		}
+		args = append(args, "-D", "GORISCV64_"+profile)
 
 		for it := range buildcfg.GORISCV64EXTENSIONS {
-			args = append(args, "-D", "GORISCV64OPT_"+strings.ToUpper(it))
+			args = append(args, "-D", "GORISCV64EXT_"+strings.ToUpper(it))
 		}
-
 	}
 
 	if cfg.Goarch == "arm" {
