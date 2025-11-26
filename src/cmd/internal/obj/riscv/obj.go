@@ -598,6 +598,13 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		return
 	}
 
+	// Disable compression for DUFF functions since they rely on fixed instruction sizes
+	// for computed jumps into the middle of the function.
+	compress := ctxt.CompressInstructions
+	if cursym.Name == "runtime.duffzero" || cursym.Name == "runtime.duffcopy" {
+		compress = false
+	}
+
 	// Generate the prologue.
 	text := cursym.Func().Text
 	if text.As != obj.ATEXT {
@@ -870,7 +877,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	// a fixed point will be reached).  No attempt to handle functions > 2GiB.
 	for {
 		big, rescan := false, false
-		maxPC := setPCs(cursym.Func().Text, 0, ctxt.CompressInstructions)
+		maxPC := setPCs(cursym.Func().Text, 0, compress)
 		if maxPC+maxTrampSize > (1 << 20) {
 			big = true
 		}
@@ -1000,7 +1007,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 
 	// Validate all instructions - this provides nice error messages.
 	for p := cursym.Func().Text; p != nil; p = p.Link {
-		for _, ins := range instructionsForProg(p, ctxt.CompressInstructions) {
+		for _, ins := range instructionsForProg(p, compress) {
 			ins.validate(ctxt)
 		}
 	}
@@ -5404,6 +5411,12 @@ func assemble(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		return
 	}
 
+	// Disable compression for DUFF functions since they rely on fixed instruction sizes
+	compress := ctxt.CompressInstructions
+	if cursym.Name == "runtime.duffzero" || cursym.Name == "runtime.duffcopy" {
+		compress = false
+	}
+
 	for p := cursym.Func().Text; p != nil; p = p.Link {
 		switch p.As {
 		case AJAL:
@@ -5487,7 +5500,7 @@ func assemble(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		}
 
 		offset := p.Pc
-		for _, ins := range instructionsForProg(p, ctxt.CompressInstructions) {
+		for _, ins := range instructionsForProg(p, compress) {
 			if ic, err := ins.encode(); err == nil {
 				cursym.WriteInt(ctxt, offset, ins.length(), int64(ic))
 				offset += int64(ins.length())
@@ -5495,6 +5508,10 @@ func assemble(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			if ins.usesRegTmp() {
 				p.Mark |= USES_REG_TMP
 			}
+		}
+		// Track the final offset after the last instruction
+		if p.Link == nil {
+			cursym.Size = offset
 		}
 	}
 
