@@ -2565,6 +2565,7 @@ const (
 	OpRISCV64DUFFCOPY
 	OpRISCV64LoweredZero
 	OpRISCV64LoweredMove
+	OpRISCV64LoweredMoveLoop
 	OpRISCV64LoweredAtomicLoad8
 	OpRISCV64LoweredAtomicLoad32
 	OpRISCV64LoweredAtomicLoad64
@@ -34568,17 +34569,32 @@ var opcodeTable = [...]opInfo{
 	},
 	{
 		name:           "LoweredMove",
-		auxType:        auxInt64,
-		argLen:         4,
+		auxType:        auxSymValAndOff,
+		argLen:         3,
 		faultOnNilArg0: true,
 		faultOnNilArg1: true,
+		symEffect:      SymWrite,
 		reg: regInfo{
 			inputs: []inputInfo{
-				{0, 16},         // X5
-				{1, 32},         // X6
-				{2, 1006632880}, // X5 X6 X8 X9 X10 X11 X12 X13 X14 X15 X16 X17 X18 X19 X20 X21 X22 X23 X24 X25 X26 X28 X29 X30
+				{0, 32}, // X6
+				{1, 64}, // X7
 			},
 			clobbers: 112, // X5 X6 X7
+		},
+	},
+	{
+		name:           "LoweredMoveLoop",
+		auxType:        auxSymValAndOff,
+		argLen:         3,
+		faultOnNilArg0: true,
+		faultOnNilArg1: true,
+		symEffect:      SymWrite,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, 64},  // X7
+				{1, 128}, // X8
+			},
+			clobbers: 240, // X5 X6 X7 X8
 		},
 	},
 	{
