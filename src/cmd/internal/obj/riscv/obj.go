@@ -38,7 +38,7 @@ func buildop(ctxt *obj.Link) {}
 
 func jalToSym(ctxt *obj.Link, p *obj.Prog, lr int16) {
 	switch p.As {
-	case obj.ACALL, obj.AJMP, obj.ARET, obj.ADUFFZERO, obj.ADUFFCOPY:
+	case obj.ACALL, obj.AJMP, obj.ARET:
 	default:
 		ctxt.Diag("unexpected Prog in jalToSym: %v", p)
 		return
@@ -271,42 +271,6 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 
 // Rewrite p, if necessary, to access global data via the global offset table.
 func rewriteToUseGot(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
-	if p.As == obj.ADUFFCOPY || p.As == obj.ADUFFZERO {
-		//     ADUFFxxx $offset
-		// becomes
-		//     MOV runtime.duffxxx@GOT, REG_TMP
-		//     ADD $offset, REG_TMP
-		//     CALL REG_TMP
-		var sym *obj.LSym
-		if p.As == obj.ADUFFCOPY {
-			sym = ctxt.LookupABI("runtime.duffcopy", obj.ABIInternal)
-		} else {
-			sym = ctxt.LookupABI("runtime.duffzero", obj.ABIInternal)
-		}
-		offset := p.To.Offset
-		p.As = AMOV
-		p.From.Type = obj.TYPE_MEM
-		p.From.Name = obj.NAME_GOTREF
-		p.From.Sym = sym
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = REG_TMP
-		p.To.Name = obj.NAME_NONE
-		p.To.Offset = 0
-		p.To.Sym = nil
-
-		p1 := obj.Appendp(p, newprog)
-		p1.As = AADD
-		p1.From.Type = obj.TYPE_CONST
-		p1.From.Offset = offset
-		p1.To.Type = obj.TYPE_REG
-		p1.To.Reg = REG_TMP
-
-		p2 := obj.Appendp(p1, newprog)
-		p2.As = obj.ACALL
-		p2.To.Type = obj.TYPE_REG
-		p2.To.Reg = REG_TMP
-	}
-
 	// We only care about global data: NAME_EXTERN means a global
 	// symbol in the Go sense and p.Sym.Local is true for a few internally
 	// defined symbols.
@@ -520,7 +484,7 @@ func containsCall(sym *obj.LSym) bool {
 	// CALLs are CALL or JAL(R) with link register LR.
 	for p := sym.Func().Text; p != nil; p = p.Link {
 		switch p.As {
-		case obj.ACALL, obj.ADUFFZERO, obj.ADUFFCOPY:
+		case obj.ACALL:
 			return true
 		case ACJALR, AJAL, AJALR:
 			if p.From.Type == obj.TYPE_REG && p.From.Reg == REG_LR {
@@ -778,7 +742,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				p.From.Reg = REG_SP
 			}
 
-		case obj.ACALL, obj.ADUFFZERO, obj.ADUFFCOPY:
+		case obj.ACALL:
 			switch p.To.Type {
 			case obj.TYPE_MEM:
 				jalToSym(ctxt, p, REG_LR)
@@ -3765,8 +3729,6 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	obj.APCDATA:   {enc: pseudoOpEncoding},
 	obj.ATEXT:     {enc: pseudoOpEncoding},
 	obj.ANOP:      {enc: pseudoOpEncoding},
-	obj.ADUFFZERO: {enc: pseudoOpEncoding},
-	obj.ADUFFCOPY: {enc: pseudoOpEncoding},
 	obj.APCALIGN:  {enc: pseudoOpEncoding},
 }
 
