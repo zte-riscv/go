@@ -114,6 +114,7 @@ func init() {
 
 	regCtxt := regNamed["X26"]
 	callerSave := gpMask | fpMask | regNamed["g"]
+	regX5 := regNamed["X5"]
 
 	var (
 		gpstore  = regInfo{inputs: []regMask{gpspsbMask, gpspMask, 0}} // SB in first input so we can load from a global, but not in second to avoid using SB as a temporary register
@@ -137,9 +138,13 @@ func init() {
 		fpload  = regInfo{inputs: []regMask{gpspsbMask, 0}, outputs: []regMask{fpMask}}
 		fp2gp   = regInfo{inputs: []regMask{fpMask, fpMask}, outputs: []regMask{gpMask}}
 
-		call        = regInfo{clobbers: callerSave}
-		callClosure = regInfo{inputs: []regMask{gpspMask, regCtxt, 0}, clobbers: callerSave}
-		callInter   = regInfo{inputs: []regMask{gpMask}, clobbers: callerSave}
+		call = regInfo{clobbers: callerSave}
+		// Avoid using X5 as the source register of calls. Using X5 here triggers
+		// RAS pop-then-push behavior which is not correct for function calls.
+		// Please refer to section 2.5.1 of the RISC-V ISA
+		// (https://docs.riscv.org/reference/isa/unpriv/rv32.html#rashints) for details.
+		callClosure = regInfo{inputs: []regMask{gpspMask ^ regX5, regCtxt, 0}, clobbers: callerSave}
+		callInter   = regInfo{inputs: []regMask{gpMask ^ regX5}, clobbers: callerSave}
 	)
 
 	RISCV64ops := []opData{
@@ -219,12 +224,12 @@ func init() {
 		{name: "SRAIW", argLength: 1, reg: gp11, asm: "SRAIW", aux: "Int64"}, // arg0 >> auxint, shift amount 0-31, arithmetic right shift of 32 bit value, sign extended to 64 bits
 		{name: "SRLI", argLength: 1, reg: gp11, asm: "SRLI", aux: "Int64"},   // arg0 >> auxint, shift amount 0-63, logical right shift
 		{name: "SRLIW", argLength: 1, reg: gp11, asm: "SRLIW", aux: "Int64"}, // arg0 >> auxint, shift amount 0-31, logical right shift of 32 bit value, sign extended to 64 bits
-		
+
 		//B extension (Zba)
 		// Shift and add
-		{name: "SH1ADD", argLength: 2, reg: gp21, asm: "SH1ADD"}, // arg0 << 1 + arg1
-		{name: "SH2ADD", argLength: 2, reg: gp21, asm: "SH2ADD"}, // arg0 << 2 + arg1
-		{name: "SH3ADD", argLength: 2, reg: gp21, asm: "SH3ADD"}, // arg0 << 3 + arg1
+		{name: "SH1ADD", argLength: 2, reg: gp21, asm: "SH1ADD"},               // arg0 << 1 + arg1
+		{name: "SH2ADD", argLength: 2, reg: gp21, asm: "SH2ADD"},               // arg0 << 2 + arg1
+		{name: "SH3ADD", argLength: 2, reg: gp21, asm: "SH3ADD"},               // arg0 << 3 + arg1
 		{name: "ADDUW", argLength: 2, reg: gp21, asm: "ADDUW"},                 // ZeroExt32to64(Trunc64to32(arg0)) + arg1
 		{name: "SH1ADDUW", argLength: 2, reg: gp21, asm: "SH1ADDUW"},           // ZeroExt32to64(Trunc64to32(arg0))<<1 + arg1
 		{name: "SH2ADDUW", argLength: 2, reg: gp21, asm: "SH2ADDUW"},           // ZeroExt32to64(Trunc64to32(arg0))<<2 + arg1
@@ -495,7 +500,7 @@ func init() {
 		{name: "FLED", argLength: 2, reg: fp2gp, asm: "FLED"},                                                                               // arg0 <= arg1
 		{name: "LoweredFMIND", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMIND", commutative: true, typ: "Float64"},             // min(arg0, arg1)
 		{name: "LoweredFMAXD", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMAXD", commutative: true, typ: "Float64"},             // max(arg0, arg1)
-		
+
 		// RISC-V Integer Conditional (Zicond) operations extension
 		{name: "CZEROEQZ", argLength: 2, reg: gp21, asm: "CZEROEQZ"},
 		{name: "CZERONEZ", argLength: 2, reg: gp21, asm: "CZERONEZ"},
