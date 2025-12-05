@@ -144,7 +144,63 @@ TEXT ·messageExpansionRISCV64(SB),NOSPLIT,$0-32
 	VSHA2MSVV	V8, V31, V1		
 	
 	ADD	$128, X6, X7		// 常数相比上一轮加16
-	VSE32V		V1, (X7)
+	VSE32V		V1, (X7)	// 覆盖
+
+// 第六个
+	VMERGEVVM	V6, V8, V0, V31 	// 合并两个源操作数，1时选择第一个v中的元素	
+		
+	VSHA2MSVV	V1, V31, V4		
 	
+	ADD	$144, X6, X7		// 常数相比上一轮加16
+	VSE32V		V4, (X7)	// 覆盖
+
+// 第七个
+	VMERGEVVM	V8, V1, V0, V31 	// 合并两个源操作数，1时选择第一个v中的元素	
+		
+	VSHA2MSVV	V4, V31, V6		
+	
+	ADD	$160, X6, X7		// 常数相比上一轮加16
+	VSE32V		V6, (X7)	// 覆盖
+
+// 第八个
+	VMERGEVVM	V1, V4, V0, V31 	// 合并两个源操作数，1时选择第一个v中的元素	
+		
+	VSHA2MSVV	V6, V31, V8		
+	
+	ADD	$176, X6, X7		// 常数相比上一轮加16
+	VSE32V		V8, (X7)	// 覆盖
+
+// 第九个
+	VMERGEVVM	V4, V6, V0, V31 	// 合并两个源操作数，1时选择第一个v中的元素	
+		
+	VSHA2MSVV	V8, V31, V1		
+	
+	ADD	$192, X6, X7		// 常数相比上一轮加16
+	VSE32V		V1, (X7)	// 覆盖
+
+// 第十个
+	VMERGEVVM	V6, V8, V0, V31 	// 合并两个源操作数，1时选择第一个v中的元素	
+		
+	VSHA2MSVV	V1, V31, V4		
+	
+	ADD	$208, X6, X7		// 常数相比上一轮加16
+	VSE32V		V4, (X7)	// 覆盖
+
+// 第十一个
+	VMERGEVVM	V8, V1, V0, V31 	// 合并两个源操作数，1时选择第一个v中的元素	
+		
+	VSHA2MSVV	V4, V31, V6		
+	
+	ADD	$224, X6, X7		// 常数相比上一轮加16
+	VSE32V		V6, (X7)	// 覆盖
+
+// 第十二个
+	VMERGEVVM	V1, V4, V0, V31 	// 合并两个源操作数，1时选择第一个v中的元素	
+		
+	VSHA2MSVV	V6, V31, V8		
+	
+	ADD	$240, X6, X7		// 常数相比上一轮加16
+	VSE32V		V8, (X7)	// 覆盖
+
 	RET
 
