@@ -27,10 +27,6 @@ func branchelim(f *Func) {
 	switch f.Config.arch {
 	case "arm64", "ppc64le", "ppc64", "amd64", "wasm", "loong64":
 		// implemented
-	case "riscv64":
-		if buildcfg.GORISCV64 < 23 {
-			return
-		}
 	default:
 		return
 	}
