@@ -6,6 +6,8 @@ package buildcfg
 
 import (
 	"os"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -75,6 +77,61 @@ func TestConfigFlags(t *testing.T) {
 	os.Setenv("GOARM64", "v9.0")
 	if goarm64().Version != "v9.0" || goarm64().LSE != true || goarm64().Crypto != false {
 		t.Errorf("Wrong parsing of GOARM64=v9.0")
+	}
+}
+
+func TestParseGORISCV64Valid(t *testing.T) {
+	profile, ext, err := ParseGORISCV64("rva23u64,zacas,zabha")
+	if err != nil {
+		t.Fatalf("ParseGORISCV64 returned error: %v", err)
+	}
+	if profile != "rva23u64" {
+		t.Fatalf("profile = %q, want %q", profile, "rva23u64")
+	}
+	want := map[string]bool{"ZACAS": true, "ZABHA": true}
+	if !reflect.DeepEqual(ext, want) {
+		t.Fatalf("extensions = %#v, want %#v", ext, want)
+	}
+}
+
+func TestParseGORISCV64InvalidExtension(t *testing.T) {
+	_, _, err := ParseGORISCV64("rva23u64,foo")
+	if err == nil {
+		t.Fatalf("expected error for invalid extension")
+	}
+	if !strings.Contains(err.Error(), "invalid GORISCV64 extension") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestAllowedRiscv64OptListTrueOnly(t *testing.T) {
+	orig := allowedRiscv64Opt
+	t.Cleanup(func() { allowedRiscv64Opt = orig })
+
+	allowedRiscv64Opt = map[string]bool{
+		"ZACAS": true,
+		"ZFAKE": false,
+	}
+	list := allowedRiscv64OptList()
+	if list != "zacas" {
+		t.Fatalf("allowedRiscv64OptList() = %q, want %q", list, "zacas")
+	}
+}
+
+func TestGoriscv64Extensions(t *testing.T) {
+	t.Setenv("GORISCV64", "rva23u64,zacas")
+	ext := goriscv64Extensions()
+	want := map[string]bool{"ZACAS": true}
+	if !reflect.DeepEqual(ext, want) {
+		t.Fatalf("extensions = %#v, want %#v", ext, want)
+	}
+}
+
+func TestGoriscv64ExtensionsInvalid(t *testing.T) {
+	t.Setenv("GORISCV64", "rva23u64,foo")
+	ext := goriscv64Extensions()
+	if len(ext) != 0 {
+		t.Fatalf("extensions = %#v, want empty map on invalid extension", ext)
 	}
 }
 

@@ -341,8 +341,6 @@ func goriscv64() int {
 	profile, _, err := ParseGORISCV64(v)
 	if err != nil {
 		Error = err
-		// Fallback to default
-		profile = DefaultGORISCV64
 	}
 
 	// Process profile (existing logic)
@@ -370,8 +368,10 @@ var allowedRiscv64Opt = map[string]bool{
 
 func allowedRiscv64OptList() string {
 	keys := make([]string, 0, len(allowedRiscv64Opt))
-	for k := range allowedRiscv64Opt {
-		keys = append(keys, strings.ToLower(k))
+	for k, v := range allowedRiscv64Opt {
+		if v {
+			keys = append(keys, strings.ToLower(k))
+		}
 	}
 	return strings.Join(keys, ", ")
 }
