@@ -399,8 +399,6 @@ const (
 	MAXU
 	MIN
 	MINU
-	MOP_RR_N
-	MOP_R_N
 	MUL
 	MULH
 	MULHSU
@@ -457,8 +455,6 @@ const (
 	SRLI
 	SRLIW
 	SRLW
-	SSAMOSWAP_D
-	SSAMOSWAP_W
 	SUB
 	SUBW
 	SW
@@ -1488,8 +1484,6 @@ var opstr = [...]string{
 	MAXU:              "MAXU",
 	MIN:               "MIN",
 	MINU:              "MINU",
-	MOP_RR_N:          "MOP.RR.N",
-	MOP_R_N:           "MOP.R.N",
 	MUL:               "MUL",
 	MULH:              "MULH",
 	MULHSU:            "MULHSU",
@@ -1546,8 +1540,6 @@ var opstr = [...]string{
 	SRLI:              "SRLI",
 	SRLIW:             "SRLIW",
 	SRLW:              "SRLW",
-	SSAMOSWAP_D:       "SSAMOSWAP.D",
-	SSAMOSWAP_W:       "SSAMOSWAP.W",
 	SUB:               "SUB",
 	SUBW:              "SUBW",
 	SW:                "SW",
@@ -2967,10 +2959,6 @@ var instFormats = [...]instFormat{
 	{mask: 0xfe00707f, value: 0x0a004033, op: MIN, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
 	// MINU rd, rs1, rs2
 	{mask: 0xfe00707f, value: 0x0a005033, op: MINU, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
-	// MOP.RR.N rd, rs1, rs2
-	{mask: 0xb200707f, value: 0x82004073, op: MOP_RR_N, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
-	// MOP.R.N rd, rs1
-	{mask: 0xb3c0707f, value: 0x81c04073, op: MOP_R_N, args: argTypeList{arg_rd, arg_rs1}},
 	// MUL rd, rs1, rs2
 	{mask: 0xfe00707f, value: 0x02000033, op: MUL, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
 	// MULH rd, rs1, rs2
@@ -3083,10 +3071,6 @@ var instFormats = [...]instFormat{
 	{mask: 0xfe00707f, value: 0x0000501b, op: SRLIW, args: argTypeList{arg_rd, arg_rs1, arg_shamt5}},
 	// SRLW rd, rs1, rs2
 	{mask: 0xfe00707f, value: 0x0000503b, op: SRLW, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
-	// SSAMOSWAP.D rd, rs2, rs1_amo
-	{mask: 0xf800707f, value: 0x4800302f, op: SSAMOSWAP_D, args: argTypeList{arg_rd, arg_rs2, arg_rs1_ptr}},
-	// SSAMOSWAP.W rd, rs2, rs1_amo
-	{mask: 0xf800707f, value: 0x4800202f, op: SSAMOSWAP_W, args: argTypeList{arg_rd, arg_rs2, arg_rs1_ptr}},
 	// SUB rd, rs1, rs2
 	{mask: 0xfe00707f, value: 0x40000033, op: SUB, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
 	// SUBW rd, rs1, rs2
