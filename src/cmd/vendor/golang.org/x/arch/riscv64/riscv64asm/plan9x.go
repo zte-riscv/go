@@ -71,8 +71,7 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 		AMOOR_H_RL, AMOSWAP_B, AMOSWAP_B_AQ, AMOSWAP_B_AQRL, AMOSWAP_B_RL, AMOSWAP_H,
 		AMOSWAP_H_AQ, AMOSWAP_H_AQRL, AMOSWAP_H_RL, AMOXOR_B, AMOXOR_B_AQ, AMOXOR_B_AQRL,
 		AMOXOR_B_RL, AMOXOR_H, AMOXOR_H_AQ, AMOXOR_H_AQRL, AMOXOR_H_RL,
-		SC_D, SC_D_AQ, SC_D_RL, SC_D_AQRL, SC_W, SC_W_AQ, SC_W_RL, SC_W_AQRL,
-		SSAMOSWAP_D, SSAMOSWAP_W:
+		SC_D, SC_D_AQ, SC_D_RL, SC_D_AQRL, SC_W, SC_W_AQ, SC_W_RL, SC_W_AQRL:
 		// Atomic instructions have special operand order.
 		args[2], args[1] = args[1], args[2]
 
@@ -316,51 +315,6 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 			}
 			args[0] = plan9Arg(&inst, pc, symname, RegOffset{inst.Args[1].(Reg), inst.Args[2].(Simm)})
 			args = args[:len(args)-2]
-		}
-
-	case MOP_RR_N:
-		num := (inst.Enc >> 30) & 0x1 << 2
-		num |= (inst.Enc >> 27) & 0x1 << 1
-		num |= (inst.Enc >> 26) & 0x1 << 0
-		op = fmt.Sprintf("MOPRR%d", num)
-
-		switch num {
-		case moprr7:
-			if inst.Args[0].(Reg) == X0 && inst.Args[1].(Reg) == X0 {
-				switch inst.Args[2].(Reg) {
-				case X1:
-					op = "SSPUSHX1"
-					args = nil
-				case X5:
-					op = "SSPUSHX5"
-					args = nil
-				}
-			}
-		}
-
-	case MOP_R_N:
-		num := (inst.Enc >> 30) & 0x1 << 4
-		num |= (inst.Enc >> 27) & 0x1 << 3
-		num |= (inst.Enc >> 26) & 0x1 << 2
-		num |= (inst.Enc >> 21) & 0x1 << 1
-		num |= (inst.Enc >> 20) & 0x1 << 0
-		op = fmt.Sprintf("MOPR%d", num)
-
-		switch num {
-		case mopr28:
-			if inst.Args[0].(Reg) == X0 {
-				switch inst.Args[1].(Reg) {
-				case X1:
-					op = "SSPOPCHKX1"
-					args = nil
-				case X5:
-					op = "SSPOPCHKX5"
-					args = nil
-				}
-			} else if inst.Args[1].(Reg) == X0 {
-				op = "SSRDP"
-				args = args[0:1]
-			}
 		}
 
 	case SUB:

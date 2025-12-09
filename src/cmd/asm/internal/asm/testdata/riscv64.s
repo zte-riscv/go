@@ -220,48 +220,6 @@ start:
 	// 10.1: Zihintpause Extension for Pause Hint
 	PAUSE						// 0f000001
 
-	// 11: Zimop Extension for May-Be-Operations
-	MOPR0	X5, X6			//73c3c281
-	MOPR1	X5, X6			//73c3d281
-	MOPR2	X5, X6			//73c3e281
-	MOPR3	X5, X6			//73c3f281
-	MOPR4	X5, X6			//73c3c285
-	MOPR5	X5, X6			//73c3d285
-	MOPR6	X5, X6			//73c3e285
-	MOPR7	X5, X6			//73c3f285
-	MOPR8	X5, X6			//73c3c289
-	MOPR9	X5, X6			//73c3d289
-	MOPR10	X5, X6			//73c3e289
-	MOPR11	X5, X6			//73c3f289
-	MOPR12	X5, X6			//73c3c28d
-	MOPR13	X5, X6			//73c3d28d
-	MOPR14	X5, X6			//73c3e28d
-	MOPR15	X5, X6			//73c3f28d
-	MOPR16	X5, X6			//73c3c2c1
-	MOPR17	X5, X6			//73c3d2c1
-	MOPR18	X5, X6			//73c3e2c1
-	MOPR19	X5, X6			//73c3f2c1
-	MOPR20	X5, X6			//73c3c2c5
-	MOPR21	X5, X6			//73c3d2c5
-	MOPR22	X5, X6			//73c3e2c5
-	MOPR23	X5, X6			//73c3f2c5
-	MOPR24	X5, X6			//73c3c2c9
-	MOPR25	X5, X6			//73c3d2c9
-	MOPR26	X5, X6			//73c3e2c9
-	MOPR27	X5, X6			//73c3f2c9
-	MOPR28	X5, X6			//73c3c2cd
-	MOPR29	X5, X6			//73c3d2cd
-	MOPR30	X5, X6			//73c3e2cd
-	MOPR31	X5, X6			//73c3f2cd
-	MOPRR0	X5, X6, X7		//f3435382
-	MOPRR1	X5, X6, X7		//f3435386
-	MOPRR2	X5, X6, X7		//f343538a
-	MOPRR3	X5, X6, X7		//f343538e
-	MOPRR4	X5, X6, X7		//f34353c2
-	MOPRR5	X5, X6, X7		//f34353c6
-	MOPRR6	X5, X6, X7		//f34353ca
-	MOPRR7	X5, X6, X7		//f34353ce
-
 	// 11.: Zicond Instructions 
 	CZEROEQZ	X1, X13, X5  	// b3d2160e
 	CZEROEQZ	X1, X13			// b3d6160e
@@ -2245,15 +2203,6 @@ start:
 	// Zvksh - ShangMi Suite: SM3 Secure Hash
 	VSM3MEVV	V1, V2, V3			// f7a12082
 	VSM3CVI		$16, V2, V3			// f72128ae
-
-	// 33.2: "Zicfiss" Extension
-	SSRDP       X5					// f342c0cd
-	SSPUSHX1						// 734010ce
-	SSPUSHX5						// 734050ce
-	SSPOPCHKX1						// 73c0c0cd
-	SSPOPCHKX5						// 73c0c2cd
-	SSAMOSWAPD  X5, (X6), X7		// af33534e
-	SSAMOSWAPW  X5, (X6), X7		// af23534e
 
 	//
 	// Privileged ISA
