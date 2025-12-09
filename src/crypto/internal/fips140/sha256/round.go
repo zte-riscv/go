@@ -92,8 +92,11 @@ func blockGenericWithTrace(dig *Digest, p []byte, temp_dig *[64][8]uint32, temp_
 		h5 += f
 		h6 += g
 		h7 += h
+
+		// dig.h[0], dig.h[1], dig.h[2], dig.h[3], dig.h[4], dig.h[5], dig.h[6], dig.h[7] = a, b, c, d, e, f, g, h
 	}
 
 	// Update digest
 	dig.h[0], dig.h[1], dig.h[2], dig.h[3], dig.h[4], dig.h[5], dig.h[6], dig.h[7] = h0, h1, h2, h3, h4, h5, h6, h7
+
 }

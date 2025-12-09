@@ -7,6 +7,7 @@
 package sha256
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -18,37 +19,37 @@ func TestBlockWithTrace(t *testing.T) {
 		name string
 		data []byte
 	}{
-		// {
-		// 	name: "zero block",
-		// 	data: make([]byte, 64),
-		// },
-		// {
-		// 	name: "all ones",
-		// 	data: bytes.Repeat([]byte{0xff}, 64),
-		// },
-		// {
-		// 	name: "incremental",
-		// 	data: func() []byte {
-		// 		b := make([]byte, 64)
-		// 		for i := range b {
-		// 			b[i] = byte(i)
-		// 		}
-		// 		return b
-		// 	}(),
-		// },
-		// {
-		// 	name: "SHA-256 test vector 1",
-		// 	data: []byte{
-		// 		0x61, 0x62, 0x63, 0x64, 0x62, 0x63, 0x64, 0x65,
-		// 		0x63, 0x64, 0x65, 0x66, 0x64, 0x65, 0x66, 0x67,
-		// 		0x65, 0x66, 0x67, 0x68, 0x66, 0x67, 0x68, 0x69,
-		// 		0x67, 0x68, 0x69, 0x6a, 0x68, 0x69, 0x6a, 0x6b,
-		// 		0x69, 0x6a, 0x6b, 0x6c, 0x6a, 0x6b, 0x6c, 0x6d,
-		// 		0x6b, 0x6c, 0x6d, 0x6e, 0x6c, 0x6d, 0x6e, 0x6f,
-		// 		0x6d, 0x6e, 0x6f, 0x70, 0x6e, 0x6f, 0x70, 0x71,
-		// 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		// 	},
-		// },
+		{
+			name: "zero block",
+			data: make([]byte, 64),
+		},
+		{
+			name: "all ones",
+			data: bytes.Repeat([]byte{0xff}, 64),
+		},
+		{
+			name: "incremental",
+			data: func() []byte {
+				b := make([]byte, 64)
+				for i := range b {
+					b[i] = byte(i)
+				}
+				return b
+			}(),
+		},
+		{
+			name: "SHA-256 test vector 1",
+			data: []byte{
+				0x61, 0x62, 0x63, 0x64, 0x62, 0x63, 0x64, 0x65,
+				0x63, 0x64, 0x65, 0x66, 0x64, 0x65, 0x66, 0x67,
+				0x65, 0x66, 0x67, 0x68, 0x66, 0x67, 0x68, 0x69,
+				0x67, 0x68, 0x69, 0x6a, 0x68, 0x69, 0x6a, 0x6b,
+				0x69, 0x6a, 0x6b, 0x6c, 0x6a, 0x6b, 0x6c, 0x6d,
+				0x6b, 0x6c, 0x6d, 0x6e, 0x6c, 0x6d, 0x6e, 0x6f,
+				0x6d, 0x6e, 0x6f, 0x70, 0x6e, 0x6f, 0x70, 0x71,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			},
+		},
 		{
 			name: "random pattern",
 			data: []byte{
@@ -150,63 +151,41 @@ func TestBlockWithTrace(t *testing.T) {
 }
 
 // TestBlockWithTraceAllRounds tests all 64 rounds with detailed output for each round.
-// func TestBlockWithTraceAllRounds(t *testing.T) {
-// 	// Use a test message block
-// 	testMessage := []byte{
-// 		0x61, 0x62, 0x63, 0x64, 0x62, 0x63, 0x64, 0x65,
-// 		0x63, 0x64, 0x65, 0x66, 0x64, 0x65, 0x66, 0x67,
-// 		0x65, 0x66, 0x67, 0x68, 0x66, 0x67, 0x68, 0x69,
-// 		0x67, 0x68, 0x69, 0x6a, 0x68, 0x69, 0x6a, 0x6b,
-// 		0x69, 0x6a, 0x6b, 0x6c, 0x6a, 0x6b, 0x6c, 0x6d,
-// 		0x6b, 0x6c, 0x6d, 0x6e, 0x6c, 0x6d, 0x6e, 0x6f,
-// 		0x6d, 0x6e, 0x6f, 0x70, 0x6e, 0x6f, 0x70, 0x71,
-// 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// 	}
+func TestBlockWithTraceAllRounds(t *testing.T) {
+	// Use a test message block
+	testMessage := []byte{
+		0x61, 0x62, 0x63, 0x64, 0x62, 0x63, 0x64, 0x65,
+		0x63, 0x64, 0x65, 0x66, 0x64, 0x65, 0x66, 0x67,
+		0x65, 0x66, 0x67, 0x68, 0x66, 0x67, 0x68, 0x69,
+		0x67, 0x68, 0x69, 0x6a, 0x68, 0x69, 0x6a, 0x6b,
+		0x69, 0x6a, 0x6b, 0x6c, 0x6a, 0x6b, 0x6c, 0x6d,
+		0x6b, 0x6c, 0x6d, 0x6e, 0x6c, 0x6d, 0x6e, 0x6f,
+		0x6d, 0x6e, 0x6f, 0x70, 0x6e, 0x6f, 0x70, 0x71,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	}
 
-// 	// Create digests with initial state
-// 	digRef := &Digest{}
-// 	digRef.Reset()
-// 	digOpt := &Digest{}
-// 	digOpt.Reset()
+	// Create digests with initial state
+	digRef := &Digest{}
+	digRef.Reset()
+	digOpt := &Digest{}
+	digOpt.Reset()
 
-// 	// Create temp_dig arrays to store intermediate states
-// 	var tempDigRef [64][8]uint32
-// 	var tempDigOpt [64][8]uint32
+	// Create temp_dig arrays to store intermediate states
+	var tempDigRef [64][8]uint32
+	var tempDigOpt [64][8]uint32
+	var tempKwordRef [64]uint32
+	var tempKwordOpt [64]uint32
 
-// 	// Get reference output from generic implementation
-// 	blockGenericWithTrace(digRef, testMessage, &tempDigRef)
+	// Get reference output from generic implementation
+	blockGenericWithTrace(digRef, testMessage, &tempDigRef, &tempKwordRef)
 
-// 	// Get output from RISC-V optimized implementation
-// 	blockRISCV64WithTrace(digOpt, testMessage, &tempDigOpt)
+	// Get output from RISC-V optimized implementation
+	blockRISCV64WithTrace(digOpt, testMessage, &tempDigOpt, &tempKwordOpt)
 
-// 	// Compare each round's intermediate state
-// 	for i := 0; i < 64; i++ {
-// 		t.Run(fmt.Sprintf("round_%d", i), func(t *testing.T) {
-// 			if tempDigRef[i] != tempDigOpt[i] {
-// 				t.Errorf("Round %d: intermediate states differ", i)
-// 				t.Logf("Reference: a=0x%08x, b=0x%08x, c=0x%08x, d=0x%08x, e=0x%08x, f=0x%08x, g=0x%08x, h=0x%08x",
-// 					tempDigRef[i][0], tempDigRef[i][1], tempDigRef[i][2], tempDigRef[i][3],
-// 					tempDigRef[i][4], tempDigRef[i][5], tempDigRef[i][6], tempDigRef[i][7])
-// 				t.Logf("Optimized: a=0x%08x, b=0x%08x, c=0x%08x, d=0x%08x, e=0x%08x, f=0x%08x, g=0x%08x, h=0x%08x",
-// 					tempDigOpt[i][0], tempDigOpt[i][1], tempDigOpt[i][2], tempDigOpt[i][3],
-// 					tempDigOpt[i][4], tempDigOpt[i][5], tempDigOpt[i][6], tempDigOpt[i][7])
-
-// 				// Show individual differences
-// 				stateNames := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
-// 				for j := 0; j < 8; j++ {
-// 					if tempDigRef[i][j] != tempDigOpt[i][j] {
-// 						t.Errorf("  %s differs: ref=0x%08x, opt=0x%08x",
-// 							stateNames[j], tempDigRef[i][j], tempDigOpt[i][j])
-// 					}
-// 				}
-// 			}
-// 		})
-// 	}
-
-// 	// Also compare final digest states
-// 	if digRef.h != digOpt.h {
-// 		t.Errorf("Final digest states differ")
-// 		t.Logf("Reference digest: %x", digRef.h[:])
-// 		t.Logf("Optimized digest: %x", digOpt.h[:])
-// 	}
-// }
+	// Also compare final digest states
+	if digRef.h != digOpt.h {
+		t.Errorf("Final digest states differ")
+		t.Logf("Reference digest: %x", digRef.h[:])
+		t.Logf("Optimized digest: %x", digOpt.h[:])
+	}
+}
