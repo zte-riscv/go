@@ -6,9 +6,9 @@
 
 #include "textflag.h"
 
-#define VSHA2OPT
+#define HasZvknha
 
-#ifndef VSHA2OPT
+#ifndef HasZvknha
 
 // SHA256 block routine. See sha256block.go for Go equivalent.
 //
@@ -264,38 +264,6 @@ loop:
 
 end:
 	RET
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 #else
@@ -698,11 +666,6 @@ blockloop:
 	MOV  $index_final<>+16(SB), X8
 	VLE32V	(X8), V31
 	VLUXEI32V (X6), V31, V4	// V4 = {e,f,g,h}
-
-	
-    
-	
-
 
     VADDVV		V1, V3, V1
     VADDVV		V2, V4, V2
