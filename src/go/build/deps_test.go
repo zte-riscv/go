@@ -493,7 +493,6 @@ var depsRules = `
 	crypto/internal/entropy,
 	crypto/internal/randutil,
 	crypto/internal/constanttime,
-	crypto/internal/entropy/v1.0.0,
 	crypto/internal/fips140deps/byteorder,
 	crypto/internal/fips140deps/cpu,
 	crypto/internal/fips140deps/godebug
