@@ -25,7 +25,7 @@ func blockGenericWithTrace(dig *Digest, p []byte, temp_dig *[64][8]uint32, temp_
 	h0, h1, h2, h3, h4, h5, h6, h7 := dig.h[0], dig.h[1], dig.h[2], dig.h[3], dig.h[4], dig.h[5], dig.h[6], dig.h[7]
 
 	// Process one 64-byte chunk
-	if len(p) >= chunk {
+	for len(p) >= chunk {
 		// Expand message schedule W[0..15]
 		for i := 0; i < 16; i++ {
 			j := i * 4
@@ -94,6 +94,7 @@ func blockGenericWithTrace(dig *Digest, p []byte, temp_dig *[64][8]uint32, temp_
 		h7 += h
 
 		// dig.h[0], dig.h[1], dig.h[2], dig.h[3], dig.h[4], dig.h[5], dig.h[6], dig.h[7] = a, b, c, d, e, f, g, h
+		p = p[chunk:]
 	}
 
 	// Update digest
