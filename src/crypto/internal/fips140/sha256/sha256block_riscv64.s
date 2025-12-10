@@ -318,10 +318,10 @@ GLOBL	vreg_mask<>(SB), RODATA, $16
 // Index vector to reorder final state from scratch layout {f,e,b,a,h,g,d,c}
 // into {a,b,c,d,e,f,g,h}
 // offsets: a=28, b=24, c=12, d=8, e=4, f=0, g=20, h=16
-DATA	index_final<>+0(SB)/4, $28
-DATA	index_final<>+4(SB)/4, $24
-DATA	index_final<>+8(SB)/4, $12
-DATA	index_final<>+12(SB)/4, $8
+DATA	index_final<>+0(SB)/4, $12
+DATA	index_final<>+4(SB)/4, $8
+DATA	index_final<>+8(SB)/4, $28
+DATA	index_final<>+12(SB)/4, $24
 DATA	index_final<>+16(SB)/4, $4
 DATA	index_final<>+20(SB)/4, $0
 DATA	index_final<>+24(SB)/4, $20
@@ -691,29 +691,18 @@ blockloop:
 	VSE32V		V16, (X7)
 	// Scalar load to avoid index ambiguity (corrected offsets)
 	// Layout in scratch: 0:f,4:e,8:b,12:a,16:h,20:g,24:d,28:c
-	MOVW	12(X6), X9          // a
-	MOVW	8(X6), X10          // b
-	MOVW	28(X6), X11         // c
-	MOVW	24(X6), X12         // d
-	MOVW	4(X6), X13          // e
-	MOVW	0(X6), X14          // f
-	MOVW	20(X6), X15         // g
-	MOVW	16(X6), X5          // h
+	// Use indexed gather to reorder scratch {f,e,b,a,h,g,d,c} -> {a,b,c,d,e,f,g,h}
+	MOV  $index_final<>(SB), X8
+	VLE32V	(X8), V31
+	VLUXEI32V (X6), V31, V3	// V3 = {a,b,c,d}
+	MOV  $index_final<>+16(SB), X8
+	VLE32V	(X8), V31
+	VLUXEI32V (X6), V31, V4	// V4 = {e,f,g,h}
 
-	// Store to digest
-    MOV	dig+0(FP), X6
-	MOVW	X9, 0(X6)
-	MOVW	X10, 4(X6)
-	MOVW	X11, 8(X6)
-	MOVW	X12, 12(X6)
-	ADD	$16, X6, X8
-	MOVW	X13, 0(X8)
-	MOVW	X14, 4(X8)
-	MOVW	X15, 8(X8)
-	MOVW	X5, 12(X8)
+	
+    
+	
 
-    VLE32V		(X6), V3
-    VLE32V		(X7), V4
 
     VADDVV		V1, V3, V1
     VADDVV		V2, V4, V2
