@@ -5,7 +5,6 @@
 #include "go_asm.h"
 #include "funcdata.h"
 #include "textflag.h"
-#include "asm_riscv64.h"
 
 // func rt0_go()
 TEXT runtime·rt0_go(SB),NOSPLIT|TOPFRAME,$0
