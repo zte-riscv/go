@@ -34,10 +34,13 @@ TEXT runtime·memclrNoHeapPointers<ABIInternal>(SB),NOSPLIT,$0-16
 vector_loop:
 	VSETVLI	X11, E8, M8, TA, MA, X5
 	VMVVI	$0, V8
+fixed_vl_loop:
 	VSE8V	V8, (X10)
 	ADD	X5, X10
 	SUB	X5, X11
-	BNEZ	X11, vector_loop
+	BGE	X11, X5, fixed_vl_loop // remaining >= current VL, reuse current VL
+	BEQZ	X11, done
+	BGTZ	X11, vector_loop		// remaining < current VL, reset VL
 	RET
 
 memclr_scalar:
