@@ -272,7 +272,7 @@ TEXT gogo<>(SB), NOSPLIT|NOFRAME, $0
 
 // func procyield(cycles uint32)
 TEXT runtime·procyield<ABIInternal>(SB),NOSPLIT,$0-0
-#ifdef hasZihintpause
+#ifdef EnableRuntimeSpinlock
 	MOVW	X10, T0
 yieldloop:
 	PAUSE
