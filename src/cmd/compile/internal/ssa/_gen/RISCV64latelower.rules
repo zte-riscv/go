@@ -58,3 +58,27 @@
 (ADD (SLLI [1] x) y) && buildcfg.GORISCV64 >= 22 => (SH1ADD x y)
 (ADD (SLLI [2] x) y) && buildcfg.GORISCV64 >= 22 => (SH2ADD x y)
 (ADD (SLLI [3] x) y) && buildcfg.GORISCV64 >= 22 => (SH3ADD x y)
+
+// Fold bitwise ops in specific situations into bit clear/extract/invert/set
+(ANDN x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 23 => (BCLR x y)
+(AND x (MOVDconst [y])) && isUint64PowerOfTwo(^y) && buildcfg.GORISCV64 >= 23 => (BCLRI [log64(^y)] x)
+(ANDI (SRL x y) [1]) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
+(ANDI (SRLI x [c]) [1]) && buildcfg.GORISCV64 >= 23 => (BEXTI [c] x)
+(ANDI (SRLW x y) [1]) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
+(ANDI (SRLIW x [c]) [1]) && buildcfg.GORISCV64 >= 23 => (BEXTI [c] x)
+// Optimize (x>>c)&mask to BEXTI when mask is a power of two
+// (x>>c)&mask extracts bit (c+log2(mask)) when mask is 2^k
+(ANDI (SRLI x [c]) [mask]) && isUint64PowerOfTwo(mask) && c+log64(mask) < 64 && buildcfg.GORISCV64 >= 23 => (BEXTI [c+log64(mask)] x)
+(ANDI (SRLIW x [c]) [mask]) && isUint64PowerOfTwo(mask) && c+log64(mask) < 32 && buildcfg.GORISCV64 >= 23 => (BEXTI [c+log64(mask)] x)
+(SNEZ (ANDI x [c])) && isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23 => (BEXTI [log64(c)] x)
+(SNEZ (AND x (SLL (MOVDconst [1]) y))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
+(SNEZ (AND x (SLLW (MOVDconst [1]) y))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
+(SNEZ (AND x (MOVDconst [c]))) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BEXTI [log64(c)] x)
+(SNEZ (MOVWUreg (AND x (SLL (MOVDconst [1]) y)))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
+(SNEZ (MOVWUreg (AND x (SLLW (MOVDconst [1]) y)))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
+(SNEZ (MOVWreg (AND x (SLL (MOVDconst [1]) y)))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
+(SNEZ (MOVWreg (AND x (SLLW (MOVDconst [1]) y)))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
+(XOR x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 23 => (BINV x y)
+(XOR x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 23 => (BINVI [log64(y)] x)
+(OR x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 23 => (BSET x y)
+(OR x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 23 => (BSETI [log64(y)] x)
