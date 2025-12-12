@@ -324,11 +324,12 @@ func ParseGORISCV64(v string) (string, map[string]bool, error) {
 		if ext == "" {
 			continue
 		}
-		ext = strings.ToUpper(ext)
-		if !allowedRiscv64Opt[ext] {
-			return "", nil, fmt.Errorf("invalid GORISCV64 extension: must be one of %s (got %q)", allowedRiscv64OptList(), strings.ToLower(ext))
+		// Convert to lowercase for internal storage (case-insensitive matching)
+		extLower := strings.ToLower(ext)
+		if !allowedRiscv64Opt[extLower] {
+			return "", nil, fmt.Errorf("invalid GORISCV64 extension: must be one of %s (got %q)", allowedRiscv64OptList(), ext)
 		}
-		extensions[ext] = true
+		extensions[extLower] = true
 	}
 
 	return profile, extensions, nil
@@ -361,23 +362,28 @@ func goriscv64() int {
 	return year
 }
 
+const (
+	Riscv64ExtZacas = "zacas"
+	Riscv64ExtZabha = "zabha"
+)
+
 var allowedRiscv64Opt = map[string]bool{
-	"ZACAS": true,
-	"ZABHA": true,
+	Riscv64ExtZacas: true,
+	Riscv64ExtZabha: true,
 }
 
 func allowedRiscv64OptList() string {
 	keys := make([]string, 0, len(allowedRiscv64Opt))
 	for k, v := range allowedRiscv64Opt {
 		if v {
-			keys = append(keys, strings.ToLower(k))
+			keys = append(keys, k)
 		}
 	}
 	return strings.Join(keys, ", ")
 }
 
 // goriscv64Extensions extracts extensions from GORISCV64 environment variable.
-// Format: GORISCV64="rva23u64,zacas,zabha" -> returns map with ZACAS and ZABHA set to true.
+// Format: GORISCV64="rva23u64,zacas,zabha" -> returns map with zacas and zabha set to true.
 func goriscv64Extensions() map[string]bool {
 	v := envOr("GORISCV64", DefaultGORISCV64)
 	_, extensions, err := ParseGORISCV64(v)

@@ -88,7 +88,7 @@ func TestParseGORISCV64Valid(t *testing.T) {
 	if profile != "rva23u64" {
 		t.Fatalf("profile = %q, want %q", profile, "rva23u64")
 	}
-	want := map[string]bool{"ZACAS": true, "ZABHA": true}
+	want := map[string]bool{Riscv64ExtZacas: true, Riscv64ExtZabha: true}
 	if !reflect.DeepEqual(ext, want) {
 		t.Fatalf("extensions = %#v, want %#v", ext, want)
 	}
@@ -109,19 +109,19 @@ func TestAllowedRiscv64OptListTrueOnly(t *testing.T) {
 	t.Cleanup(func() { allowedRiscv64Opt = orig })
 
 	allowedRiscv64Opt = map[string]bool{
-		"ZACAS": true,
-		"ZFAKE": false,
+		Riscv64ExtZacas: true,
+		"zfake":         false,
 	}
 	list := allowedRiscv64OptList()
-	if list != "zacas" {
-		t.Fatalf("allowedRiscv64OptList() = %q, want %q", list, "zacas")
+	if list != Riscv64ExtZacas {
+		t.Fatalf("allowedRiscv64OptList() = %q, want %q", list, Riscv64ExtZacas)
 	}
 }
 
 func TestGoriscv64Extensions(t *testing.T) {
 	t.Setenv("GORISCV64", "rva23u64,zacas")
 	ext := goriscv64Extensions()
-	want := map[string]bool{"ZACAS": true}
+	want := map[string]bool{Riscv64ExtZacas: true}
 	if !reflect.DeepEqual(ext, want) {
 		t.Fatalf("extensions = %#v, want %#v", ext, want)
 	}
@@ -132,6 +132,56 @@ func TestGoriscv64ExtensionsInvalid(t *testing.T) {
 	ext := goriscv64Extensions()
 	if len(ext) != 0 {
 		t.Fatalf("extensions = %#v, want empty map on invalid extension", ext)
+	}
+}
+
+func TestGoriscv64ExtensionsCaseInsensitive(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  map[string]bool
+	}{
+		{
+			name:  "all lowercase",
+			input: "rva23u64,zacas,zabha",
+			want:  map[string]bool{Riscv64ExtZacas: true, Riscv64ExtZabha: true},
+		},
+		{
+			name:  "all uppercase",
+			input: "rva23u64,ZACAS,ZABHA",
+			want:  map[string]bool{Riscv64ExtZacas: true, Riscv64ExtZabha: true},
+		},
+		{
+			name:  "mixed case",
+			input: "rva23u64,ZaCaS,zAbHa",
+			want:  map[string]bool{Riscv64ExtZacas: true, Riscv64ExtZabha: true},
+		},
+		{
+			name:  "first uppercase",
+			input: "rva23u64,Zacas,Zabha",
+			want:  map[string]bool{Riscv64ExtZacas: true, Riscv64ExtZabha: true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			profile, ext, err := ParseGORISCV64(tt.input)
+			if err != nil {
+				t.Fatalf("ParseGORISCV64 returned error: %v", err)
+			}
+			if profile != "rva23u64" {
+				t.Fatalf("profile = %q, want %q", profile, "rva23u64")
+			}
+			if !reflect.DeepEqual(ext, tt.want) {
+				t.Fatalf("extensions = %#v, want %#v", ext, tt.want)
+			}
+			// Verify all keys are lowercase
+			for k := range ext {
+				if k != strings.ToLower(k) {
+					t.Errorf("extension key %q is not lowercase", k)
+				}
+			}
+		})
 	}
 }
 
