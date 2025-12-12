@@ -30,30 +30,37 @@ func bitcheck64_constleft(a uint64) (n int) {
 
 func bitcheck64_constright(a [8]uint64) (n int) {
 	// amd64:"BTQ\t[$]63"
+	// riscv64/rva23u64:"BEXTI\t[$]63"
 	if (a[0]>>63)&1 != 0 {
 		return 1
 	}
 	// amd64:"BTQ\t[$]63"
+	// riscv64/rva23u64:"BEXTI\t[$]63"
 	if a[1]>>63 != 0 {
 		return 1
 	}
 	// amd64:"BTQ\t[$]63"
+	// riscv64/rva23u64:"BEXTI\t[$]63"
 	if a[2]>>63 == 0 {
 		return 1
 	}
 	// amd64:"BTQ\t[$]60"
+	// riscv64/rva23u64:"BEXTI\t[$]60"
 	if (a[3]>>60)&1 == 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]1"
+	// riscv64/rva23u64:"BEXTI\t[$]1"
 	if (a[4]>>1)&1 == 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]0"
+	// riscv64/rva23u64:"BEXTI\t[$]0"
 	if (a[5]>>0)&1 == 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]7"
+	// riscv64/rva23u64:"BEXTI\t[$]7"
 	if (a[6]>>5)&4 == 0 {
 		return 1
 	}
@@ -62,11 +69,12 @@ func bitcheck64_constright(a [8]uint64) (n int) {
 
 func bitcheck64_var(a, b uint64) (n int) {
 	// amd64:"BTQ"
-	// riscv64/rva22u64:"BEXT"
+	// riscv64/rva23u64:"BEXT"
 	if a&(1<<(b&63)) != 0 {
 		return 1
 	}
 	// amd64:"BTQ",-"BT.\t[$]0"
+	// riscv64/rva23u64:"BEXT"
 	if (b>>(a&63))&1 != 0 {
 		return 1
 	}
@@ -75,16 +83,17 @@ func bitcheck64_var(a, b uint64) (n int) {
 
 func bitcheck64_mask(a uint64) (n int) {
 	// amd64:"BTQ\t[$]63"
-	// riscv64/rva22u64:"BEXTI\t[$]63"
+	// riscv64/rva23u64:"BEXTI\t[$]63"
 	if a&0x8000000000000000 != 0 {
 		return 1
 	}
 	// amd64:"BTQ\t[$]59"
-	// riscv64/rva22u64:"BEXTI\t[$]59"
+	// riscv64/rva23u64:"BEXTI\t[$]59"
 	if a&0x800000000000000 != 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]0"
+	// riscv64/rva23u64:"BEXTI\t[$]0"
 	if a&0x1 != 0 {
 		return 1
 	}
@@ -93,15 +102,15 @@ func bitcheck64_mask(a uint64) (n int) {
 
 func biton64(a, b uint64) (n uint64) {
 	// amd64:"BTSQ"
-	// riscv64/rva22u64:"BSET"
+	// riscv64/rva23u64:"BSET"
 	n += b | (1 << (a & 63))
 
 	// amd64:"BTSQ\t[$]63"
-	// riscv64/rva22u64:"BSETI\t[$]63"
+	// riscv64/rva23u64:"BSETI\t[$]63"
 	n += a | (1 << 63)
 
 	// amd64:"BTSQ\t[$]60"
-	// riscv64/rva22u64:"BSETI\t[$]60"
+	// riscv64/rva23u64:"BSETI\t[$]60"
 	n += a | (1 << 60)
 
 	// amd64:"ORQ\t[$]1"
@@ -112,15 +121,15 @@ func biton64(a, b uint64) (n uint64) {
 
 func bitoff64(a, b uint64) (n uint64) {
 	// amd64:"BTRQ"
-	// riscv64/rva22u64:"BCLR"
+	// riscv64/rva23u64:"BCLR"
 	n += b &^ (1 << (a & 63))
 
 	// amd64:"BTRQ\t[$]63"
-	// riscv64/rva22u64:"BCLRI\t[$]63"
+	// riscv64/rva23u64:"BCLRI\t[$]63"
 	n += a &^ (1 << 63)
 
 	// amd64:"BTRQ\t[$]60"
-	// riscv64/rva22u64:"BCLRI\t[$]60"
+	// riscv64/rva23u64:"BCLRI\t[$]60"
 	n += a &^ (1 << 60)
 
 	// amd64:"ANDQ\t[$]-2"
@@ -141,15 +150,15 @@ func clearLastBit(x int64, y int32) (int64, int32) {
 
 func bitcompl64(a, b uint64) (n uint64) {
 	// amd64:"BTCQ"
-	// riscv64/rva22u64:"BINV"
+	// riscv64/rva23u64:"BINV"
 	n += b ^ (1 << (a & 63))
 
 	// amd64:"BTCQ\t[$]63"
-	// riscv64/rva22u64:"BINVI\t[$]63"
+	// riscv64/rva23u64:"BINVI\t[$]63"
 	n += a ^ (1 << 63)
 
 	// amd64:"BTCQ\t[$]60"
-	// riscv64/rva22u64:"BINVI\t[$]60"
+	// riscv64/rva23u64:"BINVI\t[$]60"
 	n += a ^ (1 << 60)
 
 	// amd64:"XORQ\t[$]1"
@@ -164,14 +173,17 @@ func bitcompl64(a, b uint64) (n uint64) {
 
 func bitcheck32_constleft(a uint32) (n int) {
 	// amd64:"BTL\t[$]31"
+	// riscv64/rva23u64:"BEXTI\t[$]31"
 	if a&(1<<31) != 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]28"
+	// riscv64/rva23u64:"BEXTI\t[$]28"
 	if a&(1<<28) != 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]0"
+	// riscv64/rva23u64:"BEXTI\t[$]0"
 	if a&(1<<0) != 0 {
 		return 1
 	}
@@ -180,30 +192,37 @@ func bitcheck32_constleft(a uint32) (n int) {
 
 func bitcheck32_constright(a [8]uint32) (n int) {
 	// amd64:"BTL\t[$]31"
+	// riscv64/rva23u64:"BEXTI\t[$]31"
 	if (a[0]>>31)&1 != 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]31"
+	// riscv64/rva23u64:"BEXTI\t[$]31"
 	if a[1]>>31 != 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]31"
+	// riscv64/rva23u64:"BEXTI\t[$]31"
 	if a[2]>>31 == 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]28"
+	// riscv64/rva23u64:"BEXTI\t[$]28"
 	if (a[3]>>28)&1 == 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]1"
+	// riscv64/rva23u64:"BEXTI\t[$]1"
 	if (a[4]>>1)&1 == 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]0"
+	// riscv64/rva23u64:"BEXTI\t[$]0"
 	if (a[5]>>0)&1 == 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]7"
+	// riscv64/rva23u64:"BEXTI\t[$]7"
 	if (a[6]>>5)&4 == 0 {
 		return 1
 	}
@@ -212,10 +231,12 @@ func bitcheck32_constright(a [8]uint32) (n int) {
 
 func bitcheck32_var(a, b uint32) (n int) {
 	// amd64:"BTL"
+	// riscv64/rva23u64:"BEXT"
 	if a&(1<<(b&31)) != 0 {
 		return 1
 	}
 	// amd64:"BTL",-"BT.\t[$]0"
+	// riscv64/rva23u64:"BEXT"
 	if (b>>(a&31))&1 != 0 {
 		return 1
 	}
@@ -224,14 +245,17 @@ func bitcheck32_var(a, b uint32) (n int) {
 
 func bitcheck32_mask(a uint32) (n int) {
 	// amd64:"BTL\t[$]31"
+	// riscv64/rva23u64:"BEXTI\t[$]31"
 	if a&0x80000000 != 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]27"
+	// riscv64/rva23u64:"BEXTI\t[$]27"
 	if a&0x8000000 != 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]0"
+	// riscv64/rva23u64:"BEXTI\t[$]0"
 	if a&0x1 != 0 {
 		return 1
 	}
@@ -365,6 +389,7 @@ func op_andn(x, y uint32) uint32 {
 // check bitsets
 func bitSetPowerOf2Test(x int) bool {
 	// amd64:"BTL\t[$]3"
+	// riscv64/rva23u64:"BEXTI\t[$]3"
 	return x&8 == 8
 }
 
@@ -388,10 +413,12 @@ func cont0Mask64U(x uint64) uint64 {
 
 func issue44228a(a []int64, i int) bool {
 	// amd64: "BTQ", -"SHL"
+	// riscv64/rva23u64: "BEXT", -"SLL"
 	return a[i>>6]&(1<<(i&63)) != 0
 }
 func issue44228b(a []int32, i int) bool {
 	// amd64: "BTL", -"SHL"
+	// riscv64/rva23u64: "BEXT", -"SLL"
 	return a[i>>5]&(1<<(i&31)) != 0
 }
 

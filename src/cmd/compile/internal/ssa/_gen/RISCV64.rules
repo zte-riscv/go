@@ -531,6 +531,46 @@
 (BEQZ (SLTIU [x] y) yes no) => (BGEU y (MOVDconst [x]) yes no)
 (BNEZ (SLTIU [x] y) yes no) => (BLTU y (MOVDconst [x]) yes no)
 
+// Optimize bit test patterns: (BEQZ|BNEZ) (AND x (MOVDconst [c])) when c is a single bit
+// This matches patterns like "if x&mask != 0" where mask is a power of two
+(BEQZ (AND x (MOVDconst [c])) yes no) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
+(BNEZ (AND x (MOVDconst [c])) yes no) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
+
+// Optimize bit test with variable shift: if a&(1<<b) != 0
+(BEQZ (AND x (SLL (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXT <typ.UInt64> x y) yes no)
+(BNEZ (AND x (SLL (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXT <typ.UInt64> x y) yes no)
+(BEQZ (AND x (SLLW (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXT <typ.UInt64> x y) yes no)
+(BNEZ (AND x (SLLW (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXT <typ.UInt64> x y) yes no)
+// Optimize 32-bit bit test with variable shift wrapped in MOVWUreg: if uint32(a)&(1<<b) != 0
+(BEQZ (MOVWUreg (AND x (SLL (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXT <typ.UInt64> x y) yes no)
+(BNEZ (MOVWUreg (AND x (SLL (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXT <typ.UInt64> x y) yes no)
+(BEQZ (MOVWUreg (AND x (SLLW (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXT <typ.UInt64> x y) yes no)
+(BNEZ (MOVWUreg (AND x (SLLW (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXT <typ.UInt64> x y) yes no)
+
+// Optimize bit test patterns: (BEQZ|BNEZ) (ANDI [1] (SRLI [c] x)) - check if bit c is set
+// This must come before the more general ANDI rules to match (x>>c)&1 patterns correctly
+(BEQZ (ANDI [1] (SRLI [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [c] x) yes no)
+(BNEZ (ANDI [1] (SRLI [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [c] x) yes no)
+(BEQZ (ANDI [1] (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [c] x) yes no)
+(BNEZ (ANDI [1] (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [c] x) yes no)
+
+// Optimize 32-bit bit test patterns: (BEQZ|BNEZ) (MOVWUreg (SRLIW [c] x)) - check if bit c is set
+(BEQZ (MOVWUreg (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [c] x) yes no)
+(BNEZ (MOVWUreg (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [c] x) yes no)
+
+// Optimize bit test patterns with mask after shift: (BEQZ|BNEZ) (ANDI [mask] (SRLIW [c] x))
+(BEQZ (ANDI [mask] (SRLIW [c] x)) yes no) && isUint64PowerOfTwo(mask) && c+log64(mask) < 32 && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [c+log64(mask)] x) yes no)
+(BNEZ (ANDI [mask] (SRLIW [c] x)) yes no) && isUint64PowerOfTwo(mask) && c+log64(mask) < 32 && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [c+log64(mask)] x) yes no)
+
+// Optimize bit test patterns: (BEQZ|BNEZ) (ANDI [c] x) when c is a power of two
+(BEQZ (ANDI [c] x) yes no) && isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
+(BNEZ (ANDI [c] x) yes no) && isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
+
+// Optimize bit test patterns: (BEQZ|BNEZ) (SRLI [c] x) - check if bit c is set after shift
+// For c=63, x>>63 is 0 or 1, so we can use BEXTI to extract bit 63
+(BEQZ (SRLI [63] x) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [63] x) yes no)
+(BNEZ (SRLI [63] x) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [63] x) yes no)
+
 // Convert branch with zero to more optimal branch zero.
 (BEQ  (MOVDconst [0]) cond yes no) => (BEQZ cond yes no)
 (BEQ  cond (MOVDconst [0]) yes no) => (BEQZ cond yes no)
@@ -836,12 +876,4 @@
 (OR (CZERONEZ <t> ((ADDI|ORI|XORI) [c] x) cond) (CZEROEQZ <t> x cond)) => ((ADD|OR|XOR) x (CZERONEZ <t> (MOVDconst [c]) cond))
 (OR (CZEROEQZ <t> ((ADDI|ORI|XORI) [c] x) cond) (CZERONEZ <t> x cond)) => ((ADD|OR|XOR) x (CZEROEQZ <t> (MOVDconst [c]) cond))
 
-// Fold bitwise ops in specific situations into bit clear/extract/invert/set
-(AND x (NOT (SLL (MOVDconst [1]) y))) && buildcfg.GORISCV64 >= 22 => (BCLR x y)
-(AND x (MOVDconst [y])) && isUint64PowerOfTwo(^y) && buildcfg.GORISCV64 >= 22 => (BCLRI [log64(^y)] x)
-(AND x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 22 => (BEXT x y)
-(AND x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 22 => (BEXTI [log64(y)] x)
-(XOR x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 22 => (BINV x y)
-(XOR x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 22 => (BINVI [log64(y)] x)
-(OR x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 22 => (BSET x y)
-(OR x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 22 => (BSETI [log64(y)] x)
+
