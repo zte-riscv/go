@@ -446,7 +446,8 @@ func TrailingZeros16(n uint16) int {
 	// loong64:"CTZV"
 	// ppc64x/power8:"POPCNTW","ADD\t\\$-1"
 	// ppc64x/power9:"CNTTZD","ORIS\\t\\$1"
-	// riscv64/rva22u64,riscv64/rva23u64: "ORI\t\\$65536","CTZW"
+	// riscv64/rva22u64: "ORI\t\\$65536","CTZW"
+	// riscv64/rva23u64: "BSETI\t\\$16","CTZW"
 	// s390x:"FLOGR","OR\t\\$65536"
 	// wasm:"I64Ctz"
 	return bits.TrailingZeros16(n)
@@ -460,7 +461,8 @@ func TrailingZeros8(n uint8) int {
 	// loong64:"CTZV"
 	// ppc64x/power8:"POPCNTB","ADD\t\\$-1"
 	// ppc64x/power9:"CNTTZD","OR\t\\$256"
-	// riscv64/rva22u64,riscv64/rva23u64: "ORI\t\\$256","CTZW"
+	// riscv64/rva22u64: "ORI\t\\$256","CTZW"
+	// riscv64/rva23u64: "BSETI\t\\$8","CTZW"
 	// s390x:"FLOGR","OR\t\\$256"
 	// wasm:"I64Ctz"
 	return bits.TrailingZeros8(n)
