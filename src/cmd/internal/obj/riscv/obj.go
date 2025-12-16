@@ -29,6 +29,7 @@ import (
 	"internal/abi"
 	"internal/buildcfg"
 	"log"
+	"math"
 	"math/bits"
 	"strings"
 )
@@ -53,6 +54,54 @@ func jalToSym(ctxt *obj.Link, p *obj.Prog, lr int16) {
 // progedit is called individually for each *obj.Prog. It normalizes instruction
 // formats and eliminates as many pseudo-instructions as possible.
 func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
+	// Convert CSR pseudo instructions into real riscv64 instructions.
+	switch p.As {
+	case ACSRC:
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = REG_ZERO
+		p.As = ACSRRC
+	case ACSRCI:
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = REG_ZERO
+		p.As = ACSRRCI
+	case ACSRR:
+		p.From.Type = obj.TYPE_REG
+		p.From.Reg = REG_ZERO
+		p.As = ACSRRS
+	case ACSRS:
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = REG_ZERO
+		p.As = ACSRRS
+	case ACSRSI:
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = REG_ZERO
+		p.As = ACSRRSI
+	case ACSRW:
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = REG_ZERO
+		p.As = ACSRRW
+	case ACSRWI:
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = REG_ZERO
+		p.As = ACSRRWI
+	case ANTLP1, ANTLPALL, ANTLS1, ANTLALL:
+		switch p.As {
+		case ANTLP1:
+			p.From.Reg = REG_X2
+		case ANTLPALL:
+			p.From.Reg = REG_X3
+		case ANTLS1:
+			p.From.Reg = REG_X4
+		case ANTLALL:
+			p.From.Reg = REG_X5
+		}
+		p.As = AADD
+		p.From.Type = obj.TYPE_REG
+		p.Reg = REG_ZERO
+		p.To.Reg = REG_ZERO
+		p.To.Type = obj.TYPE_REG
+	}
+
 	insData, err := instructionDataForAs(p.As)
 	if err != nil {
 		panic(fmt.Sprintf("failed to lookup instruction data for %v: %v", p.As, err))
@@ -69,6 +118,10 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 	// form of the instruction.
 	if p.From.Type == obj.TYPE_CONST {
 		switch p.As {
+		case ACSUB:
+			p.As, p.From.Offset = ACADDI, -p.From.Offset
+		case ACSUBW:
+			p.As, p.From.Offset = ACADDIW, -p.From.Offset
 		case ASUB:
 			p.As, p.From.Offset = AADDI, -p.From.Offset
 		case ASUBW:
@@ -145,14 +198,70 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 			p.From.Offset = 0
 		}
 
+	case AMOVF:
+		if p.From.Type == obj.TYPE_FCONST && p.From.Name == obj.NAME_NONE && p.From.Reg == obj.REG_NONE {
+			f64 := p.From.Val.(float64)
+			f32 := float32(f64)
+			if math.Float32bits(f32) == 0 {
+				p.From.Type = obj.TYPE_REG
+				p.From.Reg = REG_ZERO
+				break
+			}
+			if buildcfg.GORISCV64 >= 23 && p.To.Type == obj.TYPE_REG {
+				if math.IsNaN(float64(f32)) {
+					p.As = AFLIS
+					break
+				}
+				if _, ok := fimmMapping[float64(f32)]; ok {
+					p.As = AFLIS
+					break
+				}
+			}
+			p.From.Type = obj.TYPE_MEM
+			p.From.Sym = ctxt.Float32Sym(f32)
+			p.From.Name = obj.NAME_EXTERN
+			p.From.Offset = 0
+		}
+
 	case AMOVD:
 		if p.From.Type == obj.TYPE_FCONST && p.From.Name == obj.NAME_NONE && p.From.Reg == obj.REG_NONE {
 			f64 := p.From.Val.(float64)
+			if math.Float64bits(f64) == 0 {
+				p.From.Type = obj.TYPE_REG
+				p.From.Reg = REG_ZERO
+				break
+			}
+			if buildcfg.GORISCV64 >= 23 && p.To.Type == obj.TYPE_REG {
+				if math.IsNaN(f64) {
+					p.As = AFLID
+					break
+				}
+				if _, ok := fimmMapping[f64]; ok {
+					p.As = AFLID
+					break
+				}
+			}
 			p.From.Type = obj.TYPE_MEM
 			p.From.Sym = ctxt.Float64Sym(f64)
 			p.From.Name = obj.NAME_EXTERN
 			p.From.Offset = 0
 		}
+
+	case APREFETCHI, APREFETCHR, APREFETCHW:
+		p.From.Offset = p.From.Offset &^ 0b11111
+		switch p.As {
+		case APREFETCHI:
+			p.From.Offset |= 0b00000
+		case APREFETCHR:
+			p.From.Offset |= 0b00001
+		case APREFETCHW:
+			p.From.Offset |= 0b00011
+		}
+		p.From.Offset = signExtend(p.From.Offset, 12)
+		p.As = AORI
+		p.To.Reg = REG_ZERO
+		// AORI used instructionsForOpImmediate to encode. so p.Reg will used by rs1 and rs2 will be REG_NONE
+		p.Reg = p.From.Reg
 	}
 
 	if ctxt.Flag_dynlink {
@@ -396,6 +505,10 @@ func InvertBranch(as obj.As) obj.As {
 		return ABEQ
 	case ABNEZ:
 		return ABEQZ
+	case ACBEQZ:
+		return ACBNEZ
+	case ACBNEZ:
+		return ACBEQZ
 	default:
 		panic("InvertBranch: not a branch")
 	}
@@ -409,7 +522,7 @@ func containsCall(sym *obj.LSym) bool {
 		switch p.As {
 		case obj.ACALL, obj.ADUFFZERO, obj.ADUFFCOPY:
 			return true
-		case AJAL, AJALR:
+		case ACJALR, AJAL, AJALR:
 			if p.From.Type == obj.TYPE_REG && p.From.Reg == REG_LR {
 				return true
 			}
@@ -421,10 +534,10 @@ func containsCall(sym *obj.LSym) bool {
 
 // setPCs sets the Pc field in all instructions reachable from p.
 // It uses pc as the initial value and returns the next available pc.
-func setPCs(p *obj.Prog, pc int64) int64 {
+func setPCs(p *obj.Prog, pc int64, compress bool) int64 {
 	for ; p != nil; p = p.Link {
 		p.Pc = pc
-		for _, ins := range instructionsForProg(p) {
+		for _, ins := range instructionsForProg(p, compress) {
 			pc += int64(ins.length())
 		}
 
@@ -483,6 +596,13 @@ func stackOffset(a *obj.Addr, stacksize int64) {
 func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	if cursym.Func().Text == nil || cursym.Func().Text.Link == nil {
 		return
+	}
+
+	// Disable compression for DUFF functions since they rely on fixed instruction sizes
+	// for computed jumps into the middle of the function.
+	compress := ctxt.CompressInstructions
+	if cursym.Name == "runtime.duffzero" || cursym.Name == "runtime.duffcopy" {
+		compress = false
 	}
 
 	// Generate the prologue.
@@ -757,14 +877,14 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	// a fixed point will be reached).  No attempt to handle functions > 2GiB.
 	for {
 		big, rescan := false, false
-		maxPC := setPCs(cursym.Func().Text, 0)
+		maxPC := setPCs(cursym.Func().Text, 0, compress)
 		if maxPC+maxTrampSize > (1 << 20) {
 			big = true
 		}
 
 		for p := cursym.Func().Text; p != nil; p = p.Link {
 			switch p.As {
-			case ABEQ, ABEQZ, ABGE, ABGEU, ABGEZ, ABGT, ABGTU, ABGTZ, ABLE, ABLEU, ABLEZ, ABLT, ABLTU, ABLTZ, ABNE, ABNEZ:
+			case ABEQ, ABEQZ, ABGE, ABGEU, ABGEZ, ABGT, ABGTU, ABGTZ, ABLE, ABLEU, ABLEZ, ABLT, ABLTU, ABLTZ, ABNE, ABNEZ, ACBEQZ, ACBNEZ, ACJ:
 				if p.To.Type != obj.TYPE_BRANCH {
 					ctxt.Diag("%v: instruction with branch-like opcode lacks destination", p)
 					break
@@ -846,7 +966,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	// instructions will break everything--don't do it!
 	for p := cursym.Func().Text; p != nil; p = p.Link {
 		switch p.As {
-		case ABEQ, ABEQZ, ABGE, ABGEU, ABGEZ, ABGT, ABGTU, ABGTZ, ABLE, ABLEU, ABLEZ, ABLT, ABLTU, ABLTZ, ABNE, ABNEZ:
+		case ABEQ, ABEQZ, ABGE, ABGEU, ABGEZ, ABGT, ABGTU, ABGTZ, ABLE, ABLEU, ABLEZ, ABLT, ABLTU, ABLTZ, ABNE, ABNEZ, ACBEQZ, ACBNEZ, ACJ:
 			switch p.To.Type {
 			case obj.TYPE_BRANCH:
 				p.To.Type, p.To.Offset = obj.TYPE_CONST, p.To.Target().Pc-p.Pc
@@ -887,7 +1007,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 
 	// Validate all instructions - this provides nice error messages.
 	for p := cursym.Func().Text; p != nil; p = p.Link {
-		for _, ins := range instructionsForProg(p) {
+		for _, ins := range instructionsForProg(p, compress) {
 			ins.validate(ctxt)
 		}
 	}
@@ -1136,6 +1256,16 @@ func regVal(r, min, max uint32) uint32 {
 	return r - min
 }
 
+// regCI returns an integer register for use in a compressed instruction.
+func regCI(r uint32) uint32 {
+	return regVal(r, REG_X8, REG_X15)
+}
+
+// regCF returns a float register for use in a compressed instruction.
+func regCF(r uint32) uint32 {
+	return regVal(r, REG_F8, REG_F15)
+}
+
 // regI returns an integer register.
 func regI(r uint32) uint32 {
 	return regVal(r, REG_X0, REG_X31)
@@ -1235,6 +1365,32 @@ func wantImmU(ctxt *obj.Link, ins *instruction, imm int64, nbits uint) {
 	}
 }
 
+func isScaledImmI(imm int64, nbits uint, scale int64) bool {
+	return immFits(imm, nbits, true) == nil && imm%scale == 0
+}
+
+func isScaledImmU(imm int64, nbits uint, scale int64) bool {
+	return immFits(imm, nbits, false) == nil && imm%scale == 0
+}
+
+func wantScaledImm(ctxt *obj.Link, ins *instruction, imm int64, nbits uint, scale int64, signed bool) {
+	if err := immFits(imm, nbits, signed); err != nil {
+		ctxt.Diag("%v: %v", ins, err)
+		return
+	}
+	if imm%scale != 0 {
+		ctxt.Diag("%v: unsigned immediate %d must be a multiple of %d", ins, imm, scale)
+	}
+}
+
+func wantScaledImmI(ctxt *obj.Link, ins *instruction, imm int64, nbits uint, scale int64) {
+	wantScaledImm(ctxt, ins, imm, nbits, scale, true)
+}
+
+func wantScaledImmU(ctxt *obj.Link, ins *instruction, imm int64, nbits uint, scale int64) {
+	wantScaledImm(ctxt, ins, imm, nbits, scale, false)
+}
+
 func wantReg(ctxt *obj.Link, ins *instruction, pos string, descr string, r, min, max uint32) {
 	if r < min || r > max {
 		var suffix string
@@ -1256,9 +1412,29 @@ func wantIntReg(ctxt *obj.Link, ins *instruction, pos string, r uint32) {
 	wantReg(ctxt, ins, pos, "integer", r, REG_X0, REG_X31)
 }
 
+func isIntPrimeReg(r uint32) bool {
+	return r >= REG_X8 && r <= REG_X15
+}
+
+// wantIntPrimeReg checks that r is an integer register that can be used
+// in a prime register field of a compressed instruction.
+func wantIntPrimeReg(ctxt *obj.Link, ins *instruction, pos string, r uint32) {
+	wantReg(ctxt, ins, pos, "integer prime", r, REG_X8, REG_X15)
+}
+
 // wantFloatReg checks that r is a floating-point register.
 func wantFloatReg(ctxt *obj.Link, ins *instruction, pos string, r uint32) {
 	wantReg(ctxt, ins, pos, "float", r, REG_F0, REG_F31)
+}
+
+func isFloatPrimeReg(r uint32) bool {
+	return r >= REG_F8 && r <= REG_F15
+}
+
+// wantFloatPrimeReg checks that r is an floating-point register that can
+// be used in a prime register field of a compressed instruction.
+func wantFloatPrimeReg(ctxt *obj.Link, ins *instruction, pos string, r uint32) {
+	wantReg(ctxt, ins, pos, "float prime", r, REG_F8, REG_F15)
 }
 
 // wantVectorReg checks that r is a vector register.
@@ -1270,6 +1446,206 @@ func wantVectorReg(ctxt *obj.Link, ins *instruction, pos string, r uint32) {
 func wantEvenOffset(ctxt *obj.Link, ins *instruction, offset int64) {
 	if err := immEven(offset); err != nil {
 		ctxt.Diag("%v: %v", ins, err)
+	}
+}
+
+func validateCA(ctxt *obj.Link, ins *instruction) {
+	wantIntPrimeReg(ctxt, ins, "rd", ins.rd)
+	if ins.rd != ins.rs1 {
+		ctxt.Diag("%v: rd must be the same as rs1", ins)
+	}
+	wantIntPrimeReg(ctxt, ins, "rs2", ins.rs2)
+}
+
+func validateCB(ctxt *obj.Link, ins *instruction) {
+	if (ins.as == ACSRAI || ins.as == ACSRLI) && ins.imm == 0 {
+		ctxt.Diag("%v: immediate cannot be zero", ins)
+	} else if ins.as == ACSRAI || ins.as == ACSRLI {
+		wantImmU(ctxt, ins, ins.imm, 6)
+	} else if ins.as == ACBEQZ || ins.as == ACBNEZ {
+		wantImmI(ctxt, ins, ins.imm, 9)
+	} else {
+		wantImmI(ctxt, ins, ins.imm, 6)
+	}
+	if ins.as == ACBEQZ || ins.as == ACBNEZ {
+		wantNoneReg(ctxt, ins, "rd", ins.rd)
+		wantIntPrimeReg(ctxt, ins, "rs1", ins.rs1)
+	} else {
+		wantIntPrimeReg(ctxt, ins, "rd", ins.rd)
+		if ins.rd != ins.rs1 {
+			ctxt.Diag("%v: rd must be the same as rs1", ins)
+		}
+	}
+	wantNoneReg(ctxt, ins, "rs2", ins.rs2)
+}
+
+func validateCI(ctxt *obj.Link, ins *instruction) {
+	if ins.as != ACNOP && ins.rd == REG_X0 {
+		ctxt.Diag("%v: cannot use register X0 in rd", ins)
+	}
+	if ins.as == ACLUI && ins.rd == REG_X2 {
+		ctxt.Diag("%v: cannot use register SP/X2 in rd", ins)
+	}
+	if ins.as != ACLI && ins.as != ACLUI && ins.as != ACLWSP && ins.as != ACLDSP && ins.as != ACFLDSP && ins.rd != ins.rs1 {
+		ctxt.Diag("%v: rd must be the same as rs1", ins)
+	}
+	if ins.as == ACADDI16SP && ins.rd != REG_SP {
+		ctxt.Diag("%v: rd must be SP/X2", ins)
+	}
+	if (ins.as == ACLWSP || ins.as == ACLDSP || ins.as == ACFLDSP) && ins.rs2 != REG_SP {
+		ctxt.Diag("%v: rs2 must be SP/X2", ins)
+	}
+	if (ins.as == ACADDI || ins.as == ACADDI16SP || ins.as == ACLUI || ins.as == ACSLLI) && ins.imm == 0 {
+		ctxt.Diag("%v: immediate cannot be zero", ins)
+	} else if ins.as == ACSLLI {
+		wantImmU(ctxt, ins, ins.imm, 6)
+	} else if ins.as == ACLWSP {
+		wantScaledImmU(ctxt, ins, ins.imm, 8, 4)
+	} else if ins.as == ACLDSP || ins.as == ACFLDSP {
+		wantScaledImmU(ctxt, ins, ins.imm, 9, 8)
+	} else if ins.as == ACADDI16SP {
+		wantScaledImmI(ctxt, ins, ins.imm, 10, 16)
+	} else {
+		wantImmI(ctxt, ins, ins.imm, 6)
+	}
+	switch ins.as {
+	case ACNOP, ACADDI, ACADDIW, ACSLLI:
+		wantIntReg(ctxt, ins, "rd", ins.rd)
+		wantIntReg(ctxt, ins, "rs1", ins.rs1)
+		wantNoneReg(ctxt, ins, "rs2", ins.rs2)
+	case ACLWSP, ACLDSP:
+		wantIntReg(ctxt, ins, "rd", ins.rd)
+		wantNoneReg(ctxt, ins, "rs1", ins.rs1)
+		wantIntReg(ctxt, ins, "rs2", ins.rs2)
+	case ACFLDSP:
+		wantFloatReg(ctxt, ins, "rd", ins.rd)
+		wantNoneReg(ctxt, ins, "rs1", ins.rs1)
+		wantIntReg(ctxt, ins, "rs2", ins.rs2)
+	case ACADDI16SP:
+		wantIntReg(ctxt, ins, "rd", ins.rd)
+		wantIntReg(ctxt, ins, "rs1", ins.rs1)
+		wantNoneReg(ctxt, ins, "rs2", ins.rs2)
+	default:
+		wantIntReg(ctxt, ins, "rd", ins.rd)
+		wantNoneReg(ctxt, ins, "rs1", ins.rs1)
+		wantNoneReg(ctxt, ins, "rs2", ins.rs2)
+	}
+}
+
+func validateCIW(ctxt *obj.Link, ins *instruction) {
+	wantScaledImmU(ctxt, ins, ins.imm, 10, 4)
+	wantIntPrimeReg(ctxt, ins, "rd", ins.rd)
+	wantIntReg(ctxt, ins, "rs1", ins.rs1)
+	wantNoneReg(ctxt, ins, "rs2", ins.rs2)
+	if ins.imm == 0 {
+		ctxt.Diag("%v: immediate cannot be zero", ins)
+	}
+	if ins.rs1 != REG_SP {
+		ctxt.Diag("%v: SP/X2 must be in rs1", ins)
+	}
+}
+
+func validateCJ(ctxt *obj.Link, ins *instruction) {
+	wantEvenOffset(ctxt, ins, ins.imm)
+	wantImmI(ctxt, ins, ins.imm, 12)
+	if ins.as != ACJ {
+		wantNoneReg(ctxt, ins, "rd", ins.rd)
+		wantIntReg(ctxt, ins, "rs1", ins.rs1)
+		wantIntReg(ctxt, ins, "rs2", ins.rs2)
+		if ins.rs1 == REG_X0 {
+			ctxt.Diag("%v: cannot use register X0 in rs1", ins)
+		}
+	}
+}
+
+func validateCL(ctxt *obj.Link, ins *instruction) {
+	if ins.as == ACLW {
+		wantScaledImmU(ctxt, ins, ins.imm, 7, 4)
+	} else if ins.as == ACLD || ins.as == ACFLD {
+		wantScaledImmU(ctxt, ins, ins.imm, 8, 8)
+	} else {
+		wantImmI(ctxt, ins, ins.imm, 5)
+	}
+	if ins.as == ACFLD {
+		wantFloatPrimeReg(ctxt, ins, "rd", ins.rd)
+	} else {
+		wantIntPrimeReg(ctxt, ins, "rd", ins.rd)
+	}
+	wantIntPrimeReg(ctxt, ins, "rs1", ins.rs1)
+	wantNoneReg(ctxt, ins, "rs2", ins.rs2)
+}
+
+func validateCR(ctxt *obj.Link, ins *instruction) {
+	switch ins.as {
+	case ACJR, ACJALR:
+		wantNoneReg(ctxt, ins, "rd", ins.rd)
+		wantIntReg(ctxt, ins, "rs1", ins.rs1)
+		wantNoneReg(ctxt, ins, "rs2", ins.rs2)
+		if ins.rs1 == REG_X0 {
+			ctxt.Diag("%v: cannot use register X0 in rs1", ins)
+		}
+	case ACMV:
+		wantIntReg(ctxt, ins, "rd", ins.rd)
+		wantNoneReg(ctxt, ins, "rs1", ins.rs1)
+		wantIntReg(ctxt, ins, "rs2", ins.rs2)
+		if ins.rd == REG_X0 {
+			ctxt.Diag("%v: cannot use register X0 in rd", ins)
+		}
+		if ins.rs2 == REG_X0 {
+			ctxt.Diag("%v: cannot use register X0 in rs2", ins)
+		}
+	case ACEBREAK:
+		wantNoneReg(ctxt, ins, "rd", ins.rd)
+		wantNoneReg(ctxt, ins, "rs1", ins.rs1)
+		wantNoneReg(ctxt, ins, "rs2", ins.rs2)
+	case ACADD:
+		wantIntReg(ctxt, ins, "rd", ins.rd)
+		if ins.rd == REG_X0 {
+			ctxt.Diag("%v: cannot use register X0 in rd", ins)
+		}
+		if ins.rd != ins.rs1 {
+			ctxt.Diag("%v: rd must be the same as rs1", ins)
+		}
+		wantIntReg(ctxt, ins, "rs2", ins.rs2)
+		if ins.rs2 == REG_X0 {
+			ctxt.Diag("%v: cannot use register X0 in rs2", ins)
+		}
+	}
+}
+
+func validateCS(ctxt *obj.Link, ins *instruction) {
+	if ins.as == ACSW {
+		wantScaledImmU(ctxt, ins, ins.imm, 7, 4)
+	} else if ins.as == ACSD || ins.as == ACFSD {
+		wantScaledImmU(ctxt, ins, ins.imm, 8, 8)
+	} else {
+		wantImmI(ctxt, ins, ins.imm, 5)
+	}
+	wantNoneReg(ctxt, ins, "rd", ins.rd)
+	wantIntPrimeReg(ctxt, ins, "rs1", ins.rs1)
+	if ins.as == ACFSD {
+		wantFloatPrimeReg(ctxt, ins, "rs2", ins.rs2)
+	} else {
+		wantIntPrimeReg(ctxt, ins, "rs2", ins.rs2)
+	}
+}
+
+func validateCSS(ctxt *obj.Link, ins *instruction) {
+	if ins.rd != REG_SP {
+		ctxt.Diag("%v: rd must be SP/X2", ins)
+	}
+	if ins.as == ACSWSP {
+		wantScaledImmU(ctxt, ins, ins.imm, 8, 4)
+	} else if ins.as == ACSDSP || ins.as == ACFSDSP {
+		wantScaledImmU(ctxt, ins, ins.imm, 9, 8)
+	} else {
+		wantImmI(ctxt, ins, ins.imm, 6)
+	}
+	wantNoneReg(ctxt, ins, "rs1", ins.rs1)
+	if ins.as == ACFSDSP {
+		wantFloatReg(ctxt, ins, "rs2", ins.rs2)
+	} else {
+		wantIntReg(ctxt, ins, "rs2", ins.rs2)
 	}
 }
 
@@ -1536,10 +1912,244 @@ func validateRaw(ctxt *obj.Link, ins *instruction) {
 	}
 }
 
-// extractBitAndShift extracts the specified bit from the given immediate,
-// before shifting it to the requested position and returning it.
-func extractBitAndShift(imm uint32, bit, pos int) uint32 {
-	return ((imm >> bit) & 1) << pos
+// compressedEncoding returns the fixed instruction encoding for a compressed
+// instruction.
+func compressedEncoding(as obj.As) uint32 {
+	enc := encode(as)
+	if enc == nil {
+		panic("compressedEncoding: could not encode instruction")
+	}
+
+	// TODO: this can be removed once encode is reworked to return the
+	// necessary bits.
+	op := uint32(0)
+	switch as {
+	case ACSUB:
+		op = 0b100011<<10 | 0b00<<5
+	case ACXOR:
+		op = 0b100011<<10 | 0b01<<5
+	case ACOR:
+		op = 0b100011<<10 | 0b10<<5
+	case ACAND:
+		op = 0b100011<<10 | 0b11<<5
+	case ACSUBW:
+		op = 0b100111<<10 | 0b00<<5
+	case ACADDW:
+		op = 0b100111<<10 | 0b01<<5
+	case ACBEQZ:
+		op = 0b110 << 13
+	case ACBNEZ:
+		op = 0b111 << 13
+	case ACANDI:
+		op = 0b100<<13 | 0b10<<10
+	case ACSRAI:
+		op = 0b100<<13 | 0b01<<10
+	case ACSRLI:
+		op = 0b100<<13 | 0b00<<10
+	case ACLI:
+		op = 0b010 << 13
+	case ACLUI:
+		op = 0b011 << 13
+	case ACLWSP:
+		op = 0b010 << 13
+	case ACLDSP:
+		op = 0b011 << 13
+	case ACFLDSP:
+		op = 0b001 << 13
+	case ACADDIW:
+		op = 0b001 << 13
+	case ACADDI16SP:
+		op = 0b011 << 13
+	case ACADDI4SPN:
+		op = 0b000 << 13
+	case ACJ:
+		op = 0b101 << 13
+	case ACLW:
+		op = 0b010 << 13
+	case ACLD:
+		op = 0b011 << 13
+	case ACFLD:
+		op = 0b001 << 13
+	case ACJR:
+		op = 0b1000 << 12
+	case ACMV:
+		op = 0b1000 << 12
+	case ACEBREAK:
+		op = 0b1001 << 12
+	case ACJALR:
+		op = 0b1001 << 12
+	case ACADD:
+		op = 0b1001 << 12
+	case ACSW:
+		op = 0b110 << 13
+	case ACSD:
+		op = 0b111 << 13
+	case ACFSD:
+		op = 0b101 << 13
+	case ACSWSP:
+		op = 0b110 << 13
+	case ACSDSP:
+		op = 0b111 << 13
+	case ACFSDSP:
+		op = 0b101 << 13
+	}
+
+	return op | enc.opcode
+}
+
+// encodeBitPattern encodes an immediate value by extracting the specified
+// bit pattern from the given immediate. Each value in the pattern specifies
+// the position of the bit to extract from the immediate, which are then
+// encoded in sequence.
+func encodeBitPattern(imm uint32, pattern []int) uint32 {
+	outImm := uint32(0)
+	for _, bit := range pattern {
+		outImm = outImm<<1 | (imm>>bit)&1
+	}
+	return outImm
+}
+
+// encodeCA encodes a compressed arithmetic (CA-type) instruction.
+func encodeCA(ins *instruction) uint32 {
+	return compressedEncoding(ins.as) | regCI(ins.rd)<<7 | regCI(ins.rs2)<<2
+}
+
+// encodeCBImmediate encodes an immediate for a CB-type RISC-V instruction.
+func encodeCBImmediate(imm uint32) uint32 {
+	// Bit order - [8|4:3|7:6|2:1|5]
+	bits := encodeBitPattern(imm, []int{8, 4, 3, 7, 6, 2, 1, 5})
+	return (bits>>5)<<10 | (bits&0x1f)<<2
+}
+
+// encodeCB encodes a compressed branch (CB-type) instruction.
+func encodeCB(ins *instruction) uint32 {
+	imm := uint32(0)
+	if ins.as == ACBEQZ || ins.as == ACBNEZ {
+		imm = immI(ins.as, ins.imm, 9)
+		imm = encodeBitPattern(imm, []int{8, 4, 3, 7, 6, 2, 1, 5})
+	} else if ins.as == ACANDI {
+		imm = immI(ins.as, ins.imm, 6)
+		imm = (imm>>5)<<7 | imm&0x1f
+	} else if ins.as == ACSRAI || ins.as == ACSRLI {
+		imm = immU(ins.as, ins.imm, 6)
+		imm = (imm>>5)<<7 | imm&0x1f
+	}
+	return compressedEncoding(ins.as) | (imm>>5)<<10 | regCI(ins.rs1)<<7 | (imm&0x1f)<<2
+}
+
+// encodeCI encodes a compressed immediate (CI-type) instruction.
+func encodeCI(ins *instruction) uint32 {
+	imm := uint32(ins.imm)
+	if ins.as == ACLWSP {
+		// Bit order [5:2|7:6]
+		imm = encodeBitPattern(imm, []int{5, 4, 3, 2, 7, 6})
+	} else if ins.as == ACLDSP || ins.as == ACFLDSP {
+		// Bit order [5:3|8:6]
+		imm = encodeBitPattern(imm, []int{5, 4, 3, 8, 7, 6})
+	} else if ins.as == ACADDI16SP {
+		// Bit order [9|4|6|8:7|5]
+		imm = encodeBitPattern(imm, []int{9, 4, 6, 8, 7, 5})
+	}
+	rd := uint32(0)
+	if ins.as == ACFLDSP {
+		rd = regF(ins.rd)
+	} else {
+		rd = regI(ins.rd)
+	}
+	return compressedEncoding(ins.as) | ((imm>>5)&0x1)<<12 | rd<<7 | (imm&0x1f)<<2
+}
+
+// encodeCIW encodes a compressed immediate wide (CIW-type) instruction.
+func encodeCIW(ins *instruction) uint32 {
+	imm := uint32(ins.imm)
+	if ins.as == ACADDI4SPN {
+		// Bit order [5:4|9:6|2|3]
+		imm = encodeBitPattern(imm, []int{5, 4, 9, 8, 7, 6, 2, 3})
+	}
+	return compressedEncoding(ins.as) | imm<<5 | regCI(ins.rd)<<2
+}
+
+// encodeCJImmediate encodes an immediate for a CJ-type RISC-V instruction.
+func encodeCJImmediate(imm uint32) uint32 {
+	// Bit order - [11|4|9:8|10|6|7|3:1|5]
+	bits := encodeBitPattern(imm, []int{11, 4, 9, 8, 10, 6, 7, 3, 2, 1, 5})
+	return bits << 2
+}
+
+// encodeCJ encodes a compressed jump (CJ-type) instruction.
+func encodeCJ(ins *instruction) uint32 {
+	return compressedEncoding(ins.as) | encodeCJImmediate(uint32(ins.imm))
+}
+
+// encodeCL encodes a compressed load (CL-type) instruction.
+func encodeCL(ins *instruction) uint32 {
+	imm := uint32(ins.imm)
+	if ins.as == ACLW {
+		// Bit order [5:2|6]
+		imm = encodeBitPattern(imm, []int{5, 4, 3, 2, 6})
+	} else if ins.as == ACLD || ins.as == ACFLD {
+		// Bit order [5:3|7:6]
+		imm = encodeBitPattern(imm, []int{5, 4, 3, 7, 6})
+	}
+	rd := uint32(0)
+	if ins.as == ACFLD {
+		rd = regCF(ins.rd)
+	} else {
+		rd = regCI(ins.rd)
+	}
+	return compressedEncoding(ins.as) | (imm>>2)<<10 | regCI(ins.rs1)<<7 | (imm&0x3)<<5 | rd<<2
+}
+
+// encodeCR encodes a compressed register (CR-type) instruction.
+func encodeCR(ins *instruction) uint32 {
+	rs1, rs2 := uint32(0), uint32(0)
+	switch ins.as {
+	case ACJR, ACJALR:
+		rs1 = regI(ins.rs1)
+	case ACMV:
+		rs1, rs2 = regI(ins.rd), regI(ins.rs2)
+	case ACADD:
+		rs1, rs2 = regI(ins.rs1), regI(ins.rs2)
+	}
+	return compressedEncoding(ins.as) | rs1<<7 | rs2<<2
+}
+
+// encodeCS encodes a compressed store (CS-type) instruction.
+func encodeCS(ins *instruction) uint32 {
+	imm := uint32(ins.imm)
+	if ins.as == ACSW {
+		// Bit order [5:3|2|6]
+		imm = encodeBitPattern(imm, []int{5, 4, 3, 2, 6})
+	} else if ins.as == ACSD || ins.as == ACFSD {
+		// Bit order [5:3|7:6]
+		imm = encodeBitPattern(imm, []int{5, 4, 3, 7, 6})
+	}
+	rs2 := uint32(0)
+	if ins.as == ACFSD {
+		rs2 = regCF(ins.rs2)
+	} else {
+		rs2 = regCI(ins.rs2)
+	}
+	return compressedEncoding(ins.as) | ((imm>>2)&0x7)<<10 | regCI(ins.rs1)<<7 | (imm&3)<<5 | rs2<<2
+}
+
+// encodeCSS encodes a compressed stack-relative store (CSS-type) instruction.
+func encodeCSS(ins *instruction) uint32 {
+	imm := uint32(ins.imm)
+	if ins.as == ACSWSP {
+		// Bit order [5:2|7:6]
+		imm = encodeBitPattern(imm, []int{5, 4, 3, 2, 7, 6})
+	} else if ins.as == ACSDSP || ins.as == ACFSDSP {
+		// Bit order [5:3|8:6]
+		imm = encodeBitPattern(imm, []int{5, 4, 3, 8, 7, 6})
+	}
+	rs2 := uint32(0)
+	if ins.as == ACFSDSP {
+		rs2 = regF(ins.rs2)
+	} else {
+		rs2 = regI(ins.rs2)
+	}
+	return compressedEncoding(ins.as) | imm<<7 | rs2<<2
 }
 
 // encodeR encodes an R-type RISC-V instruction.
@@ -1761,37 +2371,6 @@ func encodeJ(ins *instruction) uint32 {
 	return encodeJImmediate(imm) | rd<<7 | enc.opcode
 }
 
-// encodeCBImmediate encodes an immediate for a CB-type RISC-V instruction.
-func encodeCBImmediate(imm uint32) uint32 {
-	// Bit order - [8|4:3|7:6|2:1|5]
-	bits := extractBitAndShift(imm, 8, 7)
-	bits |= extractBitAndShift(imm, 4, 6)
-	bits |= extractBitAndShift(imm, 3, 5)
-	bits |= extractBitAndShift(imm, 7, 4)
-	bits |= extractBitAndShift(imm, 6, 3)
-	bits |= extractBitAndShift(imm, 2, 2)
-	bits |= extractBitAndShift(imm, 1, 1)
-	bits |= extractBitAndShift(imm, 5, 0)
-	return (bits>>5)<<10 | (bits&0x1f)<<2
-}
-
-// encodeCJImmediate encodes an immediate for a CJ-type RISC-V instruction.
-func encodeCJImmediate(imm uint32) uint32 {
-	// Bit order - [11|4|9:8|10|6|7|3:1|5]
-	bits := extractBitAndShift(imm, 11, 10)
-	bits |= extractBitAndShift(imm, 4, 9)
-	bits |= extractBitAndShift(imm, 9, 8)
-	bits |= extractBitAndShift(imm, 8, 7)
-	bits |= extractBitAndShift(imm, 10, 6)
-	bits |= extractBitAndShift(imm, 6, 5)
-	bits |= extractBitAndShift(imm, 7, 4)
-	bits |= extractBitAndShift(imm, 3, 3)
-	bits |= extractBitAndShift(imm, 2, 2)
-	bits |= extractBitAndShift(imm, 1, 1)
-	bits |= extractBitAndShift(imm, 5, 0)
-	return bits << 2
-}
-
 func encodeVset(as obj.As, rs1, rs2, rd uint32) uint32 {
 	enc := encode(as)
 	if enc == nil {
@@ -1909,7 +2488,7 @@ func EncodeVectorType(vsew, vlmul, vtail, vmask int64) (int64, error) {
 type encoding struct {
 	encode   func(*instruction) uint32     // encode returns the machine code for an instruction
 	validate func(*obj.Link, *instruction) // validate validates an instruction
-	length   int                           // length of encoded instruction; 0 for pseudo-ops, 4 otherwise
+	length   int                           // length of encoded instruction; 0 for pseudo-ops, 2 for compressed instructions, 4 otherwise
 }
 
 var (
@@ -1958,6 +2537,17 @@ var (
 	bEncoding = encoding{encode: encodeB, validate: validateB, length: 4}
 	uEncoding = encoding{encode: encodeU, validate: validateU, length: 4}
 	jEncoding = encoding{encode: encodeJ, validate: validateJ, length: 4}
+
+	// Compressed encodings.
+	caEncoding  = encoding{encode: encodeCA, validate: validateCA, length: 2}
+	cbEncoding  = encoding{encode: encodeCB, validate: validateCB, length: 2}
+	ciEncoding  = encoding{encode: encodeCI, validate: validateCI, length: 2}
+	ciwEncoding = encoding{encode: encodeCIW, validate: validateCIW, length: 2}
+	cjEncoding  = encoding{encode: encodeCJ, validate: validateCJ, length: 2}
+	clEncoding  = encoding{encode: encodeCL, validate: validateCL, length: 2}
+	crEncoding  = encoding{encode: encodeCR, validate: validateCR, length: 2}
+	csEncoding  = encoding{encode: encodeCS, validate: validateCS, length: 2}
+	cssEncoding = encoding{encode: encodeCSS, validate: validateCSS, length: 2}
 
 	// Encodings for vector configuration setting instruction.
 	vsetvliEncoding  = encoding{encode: encodeVsetvli, validate: validateVsetvli, length: 4}
@@ -2053,7 +2643,12 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	ASD & obj.AMask: {enc: sIEncoding},
 
 	// 7.1: CSR Instructions
-	ACSRRS & obj.AMask: {enc: iIIEncoding},
+	ACSRRC & obj.AMask:  {enc: iIIEncoding, immForm: ACSRRCI},
+	ACSRRCI & obj.AMask: {enc: iIIEncoding},
+	ACSRRS & obj.AMask:  {enc: iIIEncoding, immForm: ACSRRSI},
+	ACSRRSI & obj.AMask: {enc: iIIEncoding},
+	ACSRRW & obj.AMask:  {enc: iIIEncoding, immForm: ACSRRWI},
+	ACSRRWI & obj.AMask: {enc: iIIEncoding},
 
 	// 13.1: Multiplication Operations
 	AMUL & obj.AMask:    {enc: rIIIEncoding, ternary: true},
@@ -2095,6 +2690,41 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AAMOMIND & obj.AMask:  {enc: rIIIEncoding},
 	AAMOMINUW & obj.AMask: {enc: rIIIEncoding},
 	AAMOMINUD & obj.AMask: {enc: rIIIEncoding},
+
+	// 16: Extension for Atomic Compare-and-Swap (CAS) Instructions (Zacas)
+	AAMOCASW & obj.AMask: {enc: rIIIEncoding},
+	AAMOCASD & obj.AMask: {enc: rIIIEncoding},
+	AAMOCASQ & obj.AMask: {enc: rIIIEncoding},
+
+	// 16.1: Byte and Halfword Atomic Memory Operation Instructions (Zabha)
+	AAMOSWAPB & obj.AMask: {enc: rIIIEncoding},
+	AAMOSWAPH & obj.AMask: {enc: rIIIEncoding},
+	AAMOADDB & obj.AMask:  {enc: rIIIEncoding},
+	AAMOADDH & obj.AMask:  {enc: rIIIEncoding},
+	AAMOANDB & obj.AMask:  {enc: rIIIEncoding},
+	AAMOANDH & obj.AMask:  {enc: rIIIEncoding},
+	AAMOORB & obj.AMask:   {enc: rIIIEncoding},
+	AAMOORH & obj.AMask:   {enc: rIIIEncoding},
+	AAMOXORB & obj.AMask:  {enc: rIIIEncoding},
+	AAMOXORH & obj.AMask:  {enc: rIIIEncoding},
+	AAMOMAXB & obj.AMask:  {enc: rIIIEncoding},
+	AAMOMAXH & obj.AMask:  {enc: rIIIEncoding},
+	AAMOMAXUB & obj.AMask: {enc: rIIIEncoding},
+	AAMOMAXUH & obj.AMask: {enc: rIIIEncoding},
+	AAMOMINB & obj.AMask:  {enc: rIIIEncoding},
+	AAMOMINH & obj.AMask:  {enc: rIIIEncoding},
+	AAMOMINUB & obj.AMask: {enc: rIIIEncoding},
+	AAMOMINUH & obj.AMask: {enc: rIIIEncoding},
+	AAMOCASB & obj.AMask:  {enc: rIIIEncoding},
+	AAMOCASH & obj.AMask:  {enc: rIIIEncoding},
+
+	// 19.6.1: Cache-Block Management Instructions (Zicbom)
+	ACBOCLEAN & obj.AMask: {enc: iIIEncoding},
+	ACBOFLUSH & obj.AMask: {enc: iIIEncoding},
+	ACBOINVAL & obj.AMask: {enc: iIIEncoding},
+
+	// 19.6.2: Cache-Block Zero Instructions (Zicboz)
+	ACBOZERO & obj.AMask: {enc: iIIEncoding},
 
 	// 20.5: Single-Precision Load and Store Instructions
 	AFLW & obj.AMask: {enc: iFEncoding},
@@ -2140,6 +2770,14 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AFLD & obj.AMask: {enc: iFEncoding},
 	AFSD & obj.AMask: {enc: sFEncoding},
 
+	// 11. "Zicond" Extension for Integer Conditional Operations
+	ACZERONEZ & obj.AMask: {enc: rIIIEncoding, ternary: true},
+	ACZEROEQZ & obj.AMask: {enc: rIIIEncoding, ternary: true},
+
+	// 15: Wait-on-Reservation-Set Instructions (Zawrs)
+	AWRSNTO & obj.AMask: {enc: iIIEncoding},
+	AWRSSTO & obj.AMask: {enc: iIIEncoding},
+
 	// 21.4: Double-Precision Floating-Point Computational Instructions
 	AFADDD & obj.AMask:   {enc: rFFFEncoding},
 	AFSUBD & obj.AMask:   {enc: rFFFEncoding},
@@ -2177,6 +2815,89 @@ var instructions = [ALAST & obj.AMask]instructionData{
 
 	// 21.7: Double-Precision Floating-Point Classify Instruction
 	AFCLASSD & obj.AMask: {enc: rFIEncoding},
+
+	// 24: "Zfa" Extension for Additional Floating-Point Instructions
+	// 24.1: Load-Immediate Instructions
+	AFLIS & obj.AMask: {enc: rIFEncoding},
+	AFLID & obj.AMask: {enc: rIFEncoding},
+
+	// 24.2: Minimum and Maximum Instructions
+	AFMAXMS & obj.AMask: {enc: rFFFEncoding},
+	AFMINMS & obj.AMask: {enc: rFFFEncoding},
+	AFMAXMD & obj.AMask: {enc: rFFFEncoding},
+	AFMINMD & obj.AMask: {enc: rFFFEncoding},
+
+	// 24.3: Round-to-Integer Instructions
+	AFROUNDS & obj.AMask:   {enc: rFFEncoding},
+	AFROUNDNXS & obj.AMask: {enc: rFFEncoding},
+	AFROUNDD & obj.AMask:   {enc: rFFEncoding},
+	AFROUNDNXD & obj.AMask: {enc: rFFEncoding},
+
+	// 24.4: Modular Convert-to-Integer Instruction
+	AFCVTMODWD & obj.AMask: {enc: rFIEncoding},
+
+	// 24.6: Comparison Instructions
+	AFLEQS & obj.AMask: {enc: rFFIEncoding},
+	AFLTQS & obj.AMask: {enc: rFFIEncoding},
+	AFLEQD & obj.AMask: {enc: rFFIEncoding},
+	AFLTQD & obj.AMask: {enc: rFFIEncoding},
+
+	//
+	// "C" Extension for Compressed Instructions, Version 2.0
+	//
+
+	// 26.3.1: Compressed Stack-Pointer-Based Loads and Stores
+	ACLWSP & obj.AMask:  {enc: ciEncoding},
+	ACLDSP & obj.AMask:  {enc: ciEncoding},
+	ACFLDSP & obj.AMask: {enc: ciEncoding},
+	ACSWSP & obj.AMask:  {enc: cssEncoding},
+	ACSDSP & obj.AMask:  {enc: cssEncoding},
+	ACFSDSP & obj.AMask: {enc: cssEncoding},
+
+	// 26.3.2: Compressed Register-Based Loads and Stores
+	ACLW & obj.AMask:  {enc: clEncoding},
+	ACLD & obj.AMask:  {enc: clEncoding},
+	ACFLD & obj.AMask: {enc: clEncoding},
+	ACSW & obj.AMask:  {enc: csEncoding},
+	ACSD & obj.AMask:  {enc: csEncoding},
+	ACFSD & obj.AMask: {enc: csEncoding},
+
+	// 26.4: Compressed Control Transfer Instructions
+	ACJ & obj.AMask:    {enc: cjEncoding},
+	ACJR & obj.AMask:   {enc: crEncoding},
+	ACJALR & obj.AMask: {enc: crEncoding},
+	ACBEQZ & obj.AMask: {enc: cbEncoding},
+	ACBNEZ & obj.AMask: {enc: cbEncoding},
+
+	// 26.5.1: Compressed Integer Constant-Generation Instructions
+	ACLI & obj.AMask:  {enc: ciEncoding},
+	ACLUI & obj.AMask: {enc: ciEncoding},
+
+	// 26.5.2: Compressed Integer Register-Immediate Operations
+	ACADDI & obj.AMask:     {enc: ciEncoding, ternary: true},
+	ACADDIW & obj.AMask:    {enc: ciEncoding, ternary: true},
+	ACADDI16SP & obj.AMask: {enc: ciEncoding, ternary: true},
+	ACADDI4SPN & obj.AMask: {enc: ciwEncoding, ternary: true},
+	ACSLLI & obj.AMask:     {enc: ciEncoding, ternary: true},
+	ACSRLI & obj.AMask:     {enc: cbEncoding, ternary: true},
+	ACSRAI & obj.AMask:     {enc: cbEncoding, ternary: true},
+	ACANDI & obj.AMask:     {enc: cbEncoding, ternary: true},
+
+	// 26.5.3: Compressed Integer Register-Register Operations
+	ACMV & obj.AMask:   {enc: crEncoding},
+	ACADD & obj.AMask:  {enc: crEncoding, immForm: ACADDI, ternary: true},
+	ACAND & obj.AMask:  {enc: caEncoding, immForm: ACANDI, ternary: true},
+	ACOR & obj.AMask:   {enc: caEncoding, ternary: true},
+	ACXOR & obj.AMask:  {enc: caEncoding, ternary: true},
+	ACSUB & obj.AMask:  {enc: caEncoding, ternary: true},
+	ACADDW & obj.AMask: {enc: caEncoding, immForm: ACADDIW, ternary: true},
+	ACSUBW & obj.AMask: {enc: caEncoding, ternary: true},
+
+	// 26.5.5: Compressed NOP Instruction
+	ACNOP & obj.AMask: {enc: ciEncoding},
+
+	// 26.5.6: Compressed Breakpoint Instruction
+	ACEBREAK & obj.AMask: {enc: crEncoding},
 
 	//
 	// "B" Extension for Bit Manipulation, Version 1.0.0
@@ -2219,6 +2940,11 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	ARORW & obj.AMask:  {enc: rIIIEncoding, immForm: ARORIW, ternary: true},
 	AORCB & obj.AMask:  {enc: rIIEncoding},
 	AREV8 & obj.AMask:  {enc: rIIEncoding},
+
+	// 28.4.3: Carry-less Multiplication (Zbc)
+	ACLMUL & obj.AMask:  {enc: rIIIEncoding, ternary: true},
+	ACLMULH & obj.AMask: {enc: rIIIEncoding, ternary: true},
+	ACLMULR & obj.AMask: {enc: rIIIEncoding, ternary: true},
 
 	// 28.4.4: Single-bit Instructions (Zbs)
 	ABCLR & obj.AMask:  {enc: rIIIEncoding, immForm: ABCLRI, ternary: true},
@@ -2278,6 +3004,270 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AVSOXEI16V & obj.AMask: {enc: sVIVEncoding},
 	AVSOXEI32V & obj.AMask: {enc: sVIVEncoding},
 	AVSOXEI64V & obj.AMask: {enc: sVIVEncoding},
+
+	// 31.7.8: Vector Load/Store Segment Instructions
+	AVLSEG2E8V & obj.AMask:  {enc: iVEncoding},
+	AVLSEG3E8V & obj.AMask:  {enc: iVEncoding},
+	AVLSEG4E8V & obj.AMask:  {enc: iVEncoding},
+	AVLSEG5E8V & obj.AMask:  {enc: iVEncoding},
+	AVLSEG6E8V & obj.AMask:  {enc: iVEncoding},
+	AVLSEG7E8V & obj.AMask:  {enc: iVEncoding},
+	AVLSEG8E8V & obj.AMask:  {enc: iVEncoding},
+	AVLSEG2E16V & obj.AMask: {enc: iVEncoding},
+	AVLSEG3E16V & obj.AMask: {enc: iVEncoding},
+	AVLSEG4E16V & obj.AMask: {enc: iVEncoding},
+	AVLSEG5E16V & obj.AMask: {enc: iVEncoding},
+	AVLSEG6E16V & obj.AMask: {enc: iVEncoding},
+	AVLSEG7E16V & obj.AMask: {enc: iVEncoding},
+	AVLSEG8E16V & obj.AMask: {enc: iVEncoding},
+	AVLSEG2E32V & obj.AMask: {enc: iVEncoding},
+	AVLSEG3E32V & obj.AMask: {enc: iVEncoding},
+	AVLSEG4E32V & obj.AMask: {enc: iVEncoding},
+	AVLSEG5E32V & obj.AMask: {enc: iVEncoding},
+	AVLSEG6E32V & obj.AMask: {enc: iVEncoding},
+	AVLSEG7E32V & obj.AMask: {enc: iVEncoding},
+	AVLSEG8E32V & obj.AMask: {enc: iVEncoding},
+	AVLSEG2E64V & obj.AMask: {enc: iVEncoding},
+	AVLSEG3E64V & obj.AMask: {enc: iVEncoding},
+	AVLSEG4E64V & obj.AMask: {enc: iVEncoding},
+	AVLSEG5E64V & obj.AMask: {enc: iVEncoding},
+	AVLSEG6E64V & obj.AMask: {enc: iVEncoding},
+	AVLSEG7E64V & obj.AMask: {enc: iVEncoding},
+	AVLSEG8E64V & obj.AMask: {enc: iVEncoding},
+
+	AVSSEG2E8V & obj.AMask:  {enc: sVEncoding},
+	AVSSEG3E8V & obj.AMask:  {enc: sVEncoding},
+	AVSSEG4E8V & obj.AMask:  {enc: sVEncoding},
+	AVSSEG5E8V & obj.AMask:  {enc: sVEncoding},
+	AVSSEG6E8V & obj.AMask:  {enc: sVEncoding},
+	AVSSEG7E8V & obj.AMask:  {enc: sVEncoding},
+	AVSSEG8E8V & obj.AMask:  {enc: sVEncoding},
+	AVSSEG2E16V & obj.AMask: {enc: sVEncoding},
+	AVSSEG3E16V & obj.AMask: {enc: sVEncoding},
+	AVSSEG4E16V & obj.AMask: {enc: sVEncoding},
+	AVSSEG5E16V & obj.AMask: {enc: sVEncoding},
+	AVSSEG6E16V & obj.AMask: {enc: sVEncoding},
+	AVSSEG7E16V & obj.AMask: {enc: sVEncoding},
+	AVSSEG8E16V & obj.AMask: {enc: sVEncoding},
+	AVSSEG2E32V & obj.AMask: {enc: sVEncoding},
+	AVSSEG3E32V & obj.AMask: {enc: sVEncoding},
+	AVSSEG4E32V & obj.AMask: {enc: sVEncoding},
+	AVSSEG5E32V & obj.AMask: {enc: sVEncoding},
+	AVSSEG6E32V & obj.AMask: {enc: sVEncoding},
+	AVSSEG7E32V & obj.AMask: {enc: sVEncoding},
+	AVSSEG8E32V & obj.AMask: {enc: sVEncoding},
+	AVSSEG2E64V & obj.AMask: {enc: sVEncoding},
+	AVSSEG3E64V & obj.AMask: {enc: sVEncoding},
+	AVSSEG4E64V & obj.AMask: {enc: sVEncoding},
+	AVSSEG5E64V & obj.AMask: {enc: sVEncoding},
+	AVSSEG6E64V & obj.AMask: {enc: sVEncoding},
+	AVSSEG7E64V & obj.AMask: {enc: sVEncoding},
+	AVSSEG8E64V & obj.AMask: {enc: sVEncoding},
+
+	AVLSEG2E8FFV & obj.AMask:  {enc: iVEncoding},
+	AVLSEG3E8FFV & obj.AMask:  {enc: iVEncoding},
+	AVLSEG4E8FFV & obj.AMask:  {enc: iVEncoding},
+	AVLSEG5E8FFV & obj.AMask:  {enc: iVEncoding},
+	AVLSEG6E8FFV & obj.AMask:  {enc: iVEncoding},
+	AVLSEG7E8FFV & obj.AMask:  {enc: iVEncoding},
+	AVLSEG8E8FFV & obj.AMask:  {enc: iVEncoding},
+	AVLSEG2E16FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG3E16FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG4E16FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG5E16FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG6E16FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG7E16FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG8E16FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG2E32FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG3E32FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG4E32FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG5E32FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG6E32FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG7E32FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG8E32FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG2E64FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG3E64FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG4E64FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG5E64FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG6E64FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG7E64FFV & obj.AMask: {enc: iVEncoding},
+	AVLSEG8E64FFV & obj.AMask: {enc: iVEncoding},
+	AVLSSEG2E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG3E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG4E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG5E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG6E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG7E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG8E8V & obj.AMask:   {enc: iIIVEncoding},
+	AVLSSEG2E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG3E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG4E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG5E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG6E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG7E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG8E16V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG2E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG3E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG4E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG5E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG6E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG7E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG8E32V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG2E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG3E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG4E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG5E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG6E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG7E64V & obj.AMask:  {enc: iIIVEncoding},
+	AVLSSEG8E64V & obj.AMask:  {enc: iIIVEncoding},
+
+	AVSSSEG2E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG3E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG4E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG5E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG6E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG7E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG8E8V & obj.AMask:  {enc: sVIIEncoding},
+	AVSSSEG2E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG3E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG4E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG5E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG6E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG7E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG8E16V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG2E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG3E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG4E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG5E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG6E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG7E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG8E32V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG2E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG3E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG4E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG5E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG6E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG7E64V & obj.AMask: {enc: sVIIEncoding},
+	AVSSSEG8E64V & obj.AMask: {enc: sVIIEncoding},
+
+	AVLOXSEG2EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLOXSEG3EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLOXSEG4EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLOXSEG5EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLOXSEG6EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLOXSEG7EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLOXSEG8EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLOXSEG2EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG3EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG4EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG5EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG6EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG7EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG8EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG2EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG3EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG4EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG5EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG6EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG7EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG8EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG2EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG3EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG4EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG5EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG6EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG7EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLOXSEG8EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVSOXSEG2EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSOXSEG3EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSOXSEG4EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSOXSEG5EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSOXSEG6EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSOXSEG7EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSOXSEG8EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSOXSEG2EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG3EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG4EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG5EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG6EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG7EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG8EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG2EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG3EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG4EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG5EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG6EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG7EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG8EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG2EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG3EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG4EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG5EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG6EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG7EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSOXSEG8EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVLUXSEG2EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLUXSEG3EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLUXSEG4EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLUXSEG5EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLUXSEG6EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLUXSEG7EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLUXSEG8EI8V & obj.AMask:  {enc: iVIVEncoding},
+	AVLUXSEG2EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG3EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG4EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG5EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG6EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG7EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG8EI16V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG2EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG3EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG4EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG5EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG6EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG7EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG8EI32V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG2EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG3EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG4EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG5EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG6EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG7EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVLUXSEG8EI64V & obj.AMask: {enc: iVIVEncoding},
+	AVSUXSEG2EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSUXSEG3EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSUXSEG4EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSUXSEG5EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSUXSEG6EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSUXSEG7EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSUXSEG8EI8V & obj.AMask:  {enc: sVIVEncoding},
+	AVSUXSEG2EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG3EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG4EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG5EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG6EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG7EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG8EI16V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG2EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG3EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG4EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG5EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG6EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG7EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG8EI32V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG2EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG3EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG4EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG5EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG6EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG7EI64V & obj.AMask: {enc: sVIVEncoding},
+	AVSUXSEG8EI64V & obj.AMask: {enc: sVIVEncoding},
+
+	// 31.7.7: Unit-stride Fault-Only-First Loads
+	AVLE8FFV & obj.AMask:  {enc: iVEncoding},
+	AVLE16FFV & obj.AMask: {enc: iVEncoding},
+	AVLE32FFV & obj.AMask: {enc: iVEncoding},
+	AVLE64FFV & obj.AMask: {enc: iVEncoding},
 
 	// 31.7.9: Vector Load/Store Whole Register Instructions
 	AVL1RE8V & obj.AMask:  {enc: iVEncoding},
@@ -2715,6 +3705,64 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AVMV4RV & obj.AMask: {enc: rVVEncoding},
 	AVMV8RV & obj.AMask: {enc: rVVEncoding},
 
+	//// 32. Cryptography Extensions: Vector Instructions, Version 1.0
+	// Zvbb - Vector Basic Bit-manipulation
+	AVANDNVV & obj.AMask: {enc: rVVVEncoding},
+	AVANDNVX & obj.AMask: {enc: rVIVEncoding},
+	AVBREVV & obj.AMask:  {enc: rVVEncoding},
+	AVBREV8V & obj.AMask: {enc: rVVEncoding},
+	AVREV8V & obj.AMask:  {enc: rVVEncoding},
+	AVCLZV & obj.AMask:   {enc: rVVEncoding},
+	AVCTZV & obj.AMask:   {enc: rVVEncoding},
+	AVCPOPV & obj.AMask:  {enc: rVVEncoding},
+	AVROLVV & obj.AMask:  {enc: rVVVEncoding},
+	AVROLVX & obj.AMask:  {enc: rVIVEncoding},
+	AVWSLLVV & obj.AMask: {enc: rVVVEncoding},
+	AVWSLLVX & obj.AMask: {enc: rVIVEncoding},
+	AVWSLLVI & obj.AMask: {enc: rVVuEncoding},
+
+	// Zvbc - Vector Carryless Multiplication
+	AVCLMULVV & obj.AMask:  {enc: rVVVEncoding},
+	AVCLMULVX & obj.AMask:  {enc: rVIVEncoding},
+	AVCLMULHVV & obj.AMask: {enc: rVVVEncoding},
+	AVCLMULHVX & obj.AMask: {enc: rVIVEncoding},
+
+	// Zvkb - Vector Cryptography Bit-manipulation
+	AVRORVV & obj.AMask: {enc: rVVVEncoding},
+	AVRORVX & obj.AMask: {enc: rVIVEncoding},
+	AVRORVI & obj.AMask: {enc: rVVuEncoding},
+
+	// Zvkg - Vector GCM/GMAC
+	AVGHSHVV & obj.AMask: {enc: rVVVEncoding},
+	AVGMULVV & obj.AMask: {enc: rVVEncoding},
+
+	// Zvkned - NIST Suite: Vector AES Block Cipher
+	AVAESEFVV & obj.AMask:  {enc: rVVEncoding},
+	AVAESEFVS & obj.AMask:  {enc: rVVEncoding},
+	AVAESEMVV & obj.AMask:  {enc: rVVEncoding},
+	AVAESEMVS & obj.AMask:  {enc: rVVEncoding},
+	AVAESDFVV & obj.AMask:  {enc: rVVEncoding},
+	AVAESDFVS & obj.AMask:  {enc: rVVEncoding},
+	AVAESDMVV & obj.AMask:  {enc: rVVEncoding},
+	AVAESDMVS & obj.AMask:  {enc: rVVEncoding},
+	AVAESKF1VI & obj.AMask: {enc: rVVuEncoding},
+	AVAESKF2VI & obj.AMask: {enc: rVVuEncoding},
+	AVAESZVS & obj.AMask:   {enc: rVVEncoding},
+
+	// Zvknh[ab] - NIST Suite: Vector SHA-2 Secure Hash
+	AVSHA2MSVV & obj.AMask: {enc: rVVVEncoding},
+	AVSHA2CHVV & obj.AMask: {enc: rVVVEncoding},
+	AVSHA2CLVV & obj.AMask: {enc: rVVVEncoding},
+
+	// Zvksed - ShangMi Suite: SM4 Block Cipher
+	AVSM4KVI & obj.AMask: {enc: rVVuEncoding},
+	AVSM4RVV & obj.AMask: {enc: rVVEncoding},
+	AVSM4RVS & obj.AMask: {enc: rVVEncoding},
+
+	// Zvksh - ShangMi Suite: SM3 Secure Hash
+	AVSM3MEVV & obj.AMask: {enc: rVVVEncoding},
+	AVSM3CVI & obj.AMask:  {enc: rVVuEncoding},
+
 	//
 	// Privileged ISA
 	//
@@ -2844,6 +3892,147 @@ func (ins *instruction) validate(ctxt *obj.Link) {
 
 func (ins *instruction) usesRegTmp() bool {
 	return ins.rd == REG_TMP || ins.rs1 == REG_TMP || ins.rs2 == REG_TMP
+}
+
+func (ins *instruction) compress() {
+	switch ins.as {
+	case ALW:
+		if ins.rd != REG_X0 && ins.rs1 == REG_SP && isScaledImmU(ins.imm, 8, 4) {
+			ins.as, ins.rs1, ins.rs2 = ACLWSP, obj.REG_NONE, ins.rs1
+		} else if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 7, 4) {
+			ins.as = ACLW
+		}
+
+	case ALD:
+		if ins.rs1 == REG_SP && ins.rd != REG_X0 && isScaledImmU(ins.imm, 9, 8) {
+			ins.as, ins.rs1, ins.rs2 = ACLDSP, obj.REG_NONE, ins.rs1
+		} else if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 8, 8) {
+			ins.as = ACLD
+		}
+
+	case AFLD:
+		if ins.rs1 == REG_SP && isScaledImmU(ins.imm, 9, 8) {
+			ins.as, ins.rs1, ins.rs2 = ACFLDSP, obj.REG_NONE, ins.rs1
+		} else if isFloatPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 8, 8) {
+			ins.as = ACFLD
+		}
+
+	case ASW:
+		if ins.rd == REG_SP && isScaledImmU(ins.imm, 8, 4) {
+			ins.as, ins.rs1, ins.rs2 = ACSWSP, obj.REG_NONE, ins.rs1
+		} else if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 7, 4) {
+			ins.as, ins.rd, ins.rs1, ins.rs2 = ACSW, obj.REG_NONE, ins.rd, ins.rs1
+		}
+
+	case ASD:
+		if ins.rd == REG_SP && isScaledImmU(ins.imm, 9, 8) {
+			ins.as, ins.rs1, ins.rs2 = ACSDSP, obj.REG_NONE, ins.rs1
+		} else if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 8, 8) {
+			ins.as, ins.rd, ins.rs1, ins.rs2 = ACSD, obj.REG_NONE, ins.rd, ins.rs1
+		}
+
+	case AFSD:
+		if ins.rd == REG_SP && isScaledImmU(ins.imm, 9, 8) {
+			ins.as, ins.rs1, ins.rs2 = ACFSDSP, obj.REG_NONE, ins.rs1
+		} else if isIntPrimeReg(ins.rd) && isFloatPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 8, 8) {
+			ins.as, ins.rd, ins.rs1, ins.rs2 = ACFSD, obj.REG_NONE, ins.rd, ins.rs1
+		}
+
+	case AADDI:
+		if ins.rd == REG_SP && ins.rs1 == REG_SP && ins.imm != 0 && isScaledImmI(ins.imm, 10, 16) {
+			ins.as = ACADDI16SP
+		} else if ins.rd != REG_X0 && ins.rd == ins.rs1 && ins.imm != 0 && immIFits(ins.imm, 6) == nil {
+			ins.as = ACADDI
+		} else if isIntPrimeReg(ins.rd) && ins.rs1 == REG_SP && ins.imm != 0 && isScaledImmU(ins.imm, 10, 4) {
+			ins.as = ACADDI4SPN
+		} else if ins.rd != REG_X0 && ins.rs1 == REG_X0 && immIFits(ins.imm, 6) == nil {
+			ins.as, ins.rs1 = ACLI, obj.REG_NONE
+		} else if ins.rd != REG_X0 && ins.rs1 != REG_X0 && ins.imm == 0 {
+			ins.as, ins.rs1, ins.rs2 = ACMV, obj.REG_NONE, ins.rs1
+		} else if ins.rd == REG_X0 && ins.rs1 == REG_X0 && ins.imm == 0 {
+			ins.as, ins.rs1 = ACNOP, ins.rd
+		}
+
+	case AADDIW:
+		if ins.rd == ins.rs1 && immIFits(ins.imm, 6) == nil {
+			ins.as = ACADDIW
+		}
+
+	case ALUI:
+		if ins.rd != REG_X0 && ins.rd != REG_SP && ins.imm != 0 && immIFits(ins.imm, 6) == nil {
+			ins.as = ACLUI
+		}
+
+	case ASLLI:
+		if ins.rd != REG_X0 && ins.rd == ins.rs1 && ins.imm != 0 {
+			ins.as = ACSLLI
+		}
+
+	case ASRLI:
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.imm != 0 {
+			ins.as = ACSRLI
+		}
+
+	case ASRAI:
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.imm != 0 {
+			ins.as = ACSRAI
+		}
+
+	case AANDI:
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && immIFits(ins.imm, 6) == nil {
+			ins.as = ACANDI
+		}
+
+	case AADD:
+		if ins.rd != REG_X0 && ins.rd == ins.rs1 && ins.rs2 != REG_X0 {
+			ins.as = ACADD
+		} else if ins.rd != REG_X0 && ins.rd == ins.rs2 && ins.rs1 != REG_X0 {
+			ins.as, ins.rs1, ins.rs2 = ACADD, ins.rs2, ins.rs1
+		} else if ins.rd != REG_X0 && ins.rs1 == REG_X0 && ins.rs2 != REG_X0 {
+			ins.as = ACMV
+		}
+
+	case AADDW:
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && isIntPrimeReg(ins.rs2) {
+			ins.as = ACADDW
+		} else if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && ins.rd == ins.rs2 {
+			ins.as, ins.rs1, ins.rs2 = ACADDW, ins.rs2, ins.rs1
+		}
+
+	case ASUB:
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && isIntPrimeReg(ins.rs2) {
+			ins.as = ACSUB
+		}
+
+	case ASUBW:
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && isIntPrimeReg(ins.rs2) {
+			ins.as = ACSUBW
+		}
+
+	case AAND:
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && isIntPrimeReg(ins.rs2) {
+			ins.as = ACAND
+		} else if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && ins.rd == ins.rs2 {
+			ins.as, ins.rs1, ins.rs2 = ACAND, ins.rs2, ins.rs1
+		}
+
+	case AOR:
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && isIntPrimeReg(ins.rs2) {
+			ins.as = ACOR
+		} else if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && ins.rd == ins.rs2 {
+			ins.as, ins.rs1, ins.rs2 = ACOR, ins.rs2, ins.rs1
+		}
+
+	case AXOR:
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && isIntPrimeReg(ins.rs2) {
+			ins.as = ACXOR
+		} else if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && ins.rd == ins.rs2 {
+			ins.as, ins.rs1, ins.rs2 = ACXOR, ins.rs2, ins.rs1
+		}
+
+	case AEBREAK:
+		ins.as, ins.rd, ins.rs1 = ACEBREAK, obj.REG_NONE, obj.REG_NONE
+	}
 }
 
 // instructionForProg returns the default *obj.Prog to instruction mapping.
@@ -3130,16 +4319,37 @@ func instructionsForMOV(p *obj.Prog) []*instruction {
 	case p.From.Type == obj.TYPE_REG && p.To.Type == obj.TYPE_REG:
 		// Handle register to register moves.
 		switch p.As {
-		case AMOV: // MOV Ra, Rb -> ADDI $0, Ra, Rb
+		case AMOV:
+			// MOV Ra, Rb -> ADDI $0, Ra, Rb
 			ins.as, ins.rs1, ins.rs2, ins.imm = AADDI, uint32(p.From.Reg), obj.REG_NONE, 0
-		case AMOVW: // MOVW Ra, Rb -> ADDIW $0, Ra, Rb
+		case AMOVW:
+			// MOVW Ra, Rb -> ADDIW $0, Ra, Rb
 			ins.as, ins.rs1, ins.rs2, ins.imm = AADDIW, uint32(p.From.Reg), obj.REG_NONE, 0
-		case AMOVBU: // MOVBU Ra, Rb -> ANDI $255, Ra, Rb
+		case AMOVBU:
+			// MOVBU Ra, Rb -> ANDI $255, Ra, Rb
 			ins.as, ins.rs1, ins.rs2, ins.imm = AANDI, uint32(p.From.Reg), obj.REG_NONE, 255
-		case AMOVF: // MOVF Ra, Rb -> FSGNJS Ra, Ra, Rb
-			ins.as, ins.rs1 = AFSGNJS, uint32(p.From.Reg)
-		case AMOVD: // MOVD Ra, Rb -> FSGNJD Ra, Ra, Rb
-			ins.as, ins.rs1 = AFSGNJD, uint32(p.From.Reg)
+		case AMOVF:
+			// MOVF Ra, Rb -> FSGNJS Ra, Ra, Rb
+			//          or -> FMVWX  Ra, Rb
+			//          or -> FMVXW  Ra, Rb
+			if ins.rs2 >= REG_X0 && ins.rs2 <= REG_X31 && ins.rd >= REG_F0 && ins.rd <= REG_F31 {
+				ins.as = AFMVWX
+			} else if ins.rs2 >= REG_F0 && ins.rs2 <= REG_F31 && ins.rd >= REG_X0 && ins.rd <= REG_X31 {
+				ins.as = AFMVXW
+			} else {
+				ins.as, ins.rs1 = AFSGNJS, uint32(p.From.Reg)
+			}
+		case AMOVD:
+			// MOVD Ra, Rb -> FSGNJD Ra, Ra, Rb
+			//          or -> FMVDX  Ra, Rb
+			//          or -> FMVXD  Ra, Rb
+			if ins.rs2 >= REG_X0 && ins.rs2 <= REG_X31 && ins.rd >= REG_F0 && ins.rd <= REG_F31 {
+				ins.as = AFMVDX
+			} else if ins.rs2 >= REG_F0 && ins.rs2 <= REG_F31 && ins.rd >= REG_X0 && ins.rd <= REG_X31 {
+				ins.as = AFMVXD
+			} else {
+				ins.as, ins.rs1 = AFSGNJD, uint32(p.From.Reg)
+			}
 		case AMOVB, AMOVH:
 			if buildcfg.GORISCV64 >= 22 {
 				// Use SEXTB or SEXTH to extend.
@@ -3325,6 +4535,40 @@ func instructionsForRotate(p *obj.Prog, ins *instruction) []*instruction {
 	}
 }
 
+var fimmMapping = map[float64]uint32{
+	-1.0:               0,
+	math.Inf(-1):       1,
+	1.52587890625e-05:  2,
+	3.0517578125e-05:   3,
+	0.00390625:         4,
+	0.0078125:          5,
+	0.0625:             6,
+	0.125:              7,
+	0.25:               8,
+	0.3125:             9,
+	0.375:              10,
+	0.4375:             11,
+	0.5:                12,
+	0.625:              13,
+	0.75:               14,
+	0.875:              15,
+	1.0:                16,
+	1.25:               17,
+	1.5:                18,
+	1.75:               19,
+	2.0:                20,
+	2.5:                21,
+	3.0:                22,
+	4.0:                23,
+	8.0:                24,
+	1.6000000000000001: 25,
+	1.28:               26,
+	2.5600000000000001: 27,
+	3.27:               28,
+	6.5499999999999998: 29,
+	math.Inf(1):        30,
+}
+
 // instructionsForMinMax returns the machine instructions for an integer minimum or maximum.
 func instructionsForMinMax(p *obj.Prog, ins *instruction) []*instruction {
 	if buildcfg.GORISCV64 >= 22 {
@@ -3367,7 +4611,7 @@ func instructionsForMinMax(p *obj.Prog, ins *instruction) []*instruction {
 }
 
 // instructionsForProg returns the machine instructions for an *obj.Prog.
-func instructionsForProg(p *obj.Prog) []*instruction {
+func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 	ins := instructionForProg(p)
 	inss := []*instruction{ins}
 
@@ -3382,7 +4626,7 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 	}
 
 	switch ins.as {
-	case AJAL, AJALR:
+	case ACJALR, AJAL, AJALR:
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.From.Reg), uint32(p.To.Reg), obj.REG_NONE
 		ins.imm = p.To.Offset
 
@@ -3434,10 +4678,16 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.RegTo2), uint32(p.To.Reg), uint32(p.From.Reg)
 
 	case AAMOSWAPW, AAMOSWAPD, AAMOADDW, AAMOADDD, AAMOANDW, AAMOANDD, AAMOORW, AAMOORD,
-		AAMOXORW, AAMOXORD, AAMOMINW, AAMOMIND, AAMOMINUW, AAMOMINUD, AAMOMAXW, AAMOMAXD, AAMOMAXUW, AAMOMAXUD:
+		AAMOXORW, AAMOXORD, AAMOMINW, AAMOMIND, AAMOMINUW, AAMOMINUD, AAMOMAXW, AAMOMAXD, AAMOMAXUW, AAMOMAXUD,
+		AAMOSWAPB, AAMOSWAPH, AAMOADDB, AAMOADDH, AAMOANDB, AAMOANDH, AAMOORB, AAMOORH, AAMOXORB, AAMOXORH,
+		AAMOMINB, AAMOMINH, AAMOMINUB, AAMOMINUH, AAMOMAXB, AAMOMAXH, AAMOMAXUB, AAMOMAXUH, AAMOCASB, AAMOCASH,
+		AAMOCASW, AAMOCASD, AAMOCASQ:
 		// Set aqrl to use acquire & release access ordering
 		ins.funct7 = 3
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.RegTo2), uint32(p.To.Reg), uint32(p.From.Reg)
+
+	case AWRSNTO, AWRSSTO:
+		ins.rd, ins.rs1, ins.imm = REG_ZERO, REG_ZERO, encode(p.As).csr
 
 	case AECALL, AEBREAK:
 		insEnc := encode(p.As)
@@ -3462,9 +4712,64 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 			ins.imm = -1022
 		}
 
+	case ACSRRC, ACSRRCI, ACSRRS, ACSRRSI, ACSRRW, ACSRRWI:
+		if len(p.RestArgs) == 0 || p.RestArgs[0].Type != obj.TYPE_SPECIAL {
+			p.Ctxt.Diag("%v: missing CSR name", p)
+			return nil
+		}
+		if p.From.Type == obj.TYPE_CONST {
+			imm := p.From.Offset
+			if imm < 0 || imm >= 32 {
+				p.Ctxt.Diag("%v: immediate out of range 0 to 31", p)
+				return nil
+			}
+			ins.rs1 = uint32(imm) + REG_ZERO
+		} else if p.From.Type == obj.TYPE_REG {
+			ins.rs1 = uint32(p.From.Reg)
+		} else {
+			p.Ctxt.Diag("%v: integer register or immediate expected for 1st operand", p)
+			return nil
+		}
+		if p.To.Type != obj.TYPE_REG {
+			p.Ctxt.Diag("%v: needs an integer register output", p)
+			return nil
+		}
+		csrNum := SpecialOperand(p.RestArgs[0].Offset).encode()
+		if csrNum >= 1<<12 {
+			p.Ctxt.Diag("%v: unknown CSR", p)
+			return nil
+		}
+		if _, ok := CSRs[uint16(csrNum)]; !ok {
+			p.Ctxt.Diag("%v: unknown CSR", p)
+			return nil
+		}
+		ins.imm = int64(csrNum)
+		if ins.imm > 2047 {
+			ins.imm -= 4096
+		}
+		ins.rs2 = obj.REG_NONE
+
+	case AFLIS, AFLID:
+		fimm := p.From.Val.(float64)
+		var index uint32
+		// NaN is special as it can't be used in comparison.
+		if math.IsNaN(fimm) {
+			index = 31
+		} else if idx, ok := fimmMapping[fimm]; ok {
+			index = idx
+		} else {
+			p.Ctxt.Diag("%v: unknown floating point immediate", fimm)
+			return nil
+		}
+		ins.rs2 = REG_ZERO + index
+
 	case AFENCE:
 		ins.rd, ins.rs1, ins.rs2 = REG_ZERO, REG_ZERO, obj.REG_NONE
 		ins.imm = 0x0ff
+
+	case APAUSE:
+		ins.as, ins.rd, ins.rs1, ins.rs2 = AFENCE, REG_ZERO, REG_ZERO, obj.REG_NONE
+		ins.imm = 0x010
 
 	case AFCVTWS, AFCVTLS, AFCVTWUS, AFCVTLUS, AFCVTWD, AFCVTLD, AFCVTWUD, AFCVTLUD:
 		// Set the default rounding mode in funct3 to round to zero.
@@ -3556,6 +4861,32 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		ins.as = AFSGNJND
 		ins.rs1 = uint32(p.From.Reg)
 
+	case ACLW, ACLD, ACFLD:
+		ins.rs1, ins.rs2 = ins.rs2, obj.REG_NONE
+
+	case ACSW, ACSD, ACFSD:
+		ins.rs1, ins.rd = ins.rd, obj.REG_NONE
+		ins.imm = p.To.Offset
+
+	case ACSWSP, ACSDSP, ACFSDSP:
+		ins.imm = p.To.Offset
+
+	case ACANDI, ACSRLI, ACSRAI:
+		ins.rs1, ins.rd = ins.rd, ins.rs1
+
+	case ACBEQZ, ACBNEZ:
+		ins.rd, ins.rs1, ins.rs2 = obj.REG_NONE, uint32(p.From.Reg), obj.REG_NONE
+		ins.imm = p.To.Offset
+
+	case ACJR:
+		ins.rd, ins.rs1 = obj.REG_NONE, uint32(p.To.Reg)
+
+	case ACJ:
+		ins.imm = p.To.Offset
+
+	case ACNOP:
+		ins.rd, ins.rs1 = REG_ZERO, REG_ZERO
+
 	case AROL, AROLW, AROR, ARORW:
 		inss = instructionsForRotate(p, ins)
 
@@ -3580,6 +4911,9 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		if ins.imm < 0 || ins.imm > 31 {
 			p.Ctxt.Diag("%v: immediate out of range 0 to 31", p)
 		}
+
+	case ACBOCLEAN, ACBOFLUSH, ACBOINVAL, ACBOZERO:
+		ins.rd, ins.rs1, ins.rs2, ins.imm = REG_ZERO, uint32(p.From.Reg), obj.REG_NONE, encode(p.As).csr
 
 	case ACLZ, ACLZW, ACTZ, ACTZW, ACPOP, ACPOPW, ASEXTB, ASEXTH, AZEXTH:
 		ins.rs1, ins.rs2 = uint32(p.From.Reg), obj.REG_NONE
@@ -3632,7 +4966,19 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 			ins.rs1 = uint32(p.From.Offset)
 		}
 
-	case AVLE8V, AVLE16V, AVLE32V, AVLE64V, AVSE8V, AVSE16V, AVSE32V, AVSE64V, AVLMV, AVSMV:
+	case AVLE8V, AVLE16V, AVLE32V, AVLE64V, AVSE8V, AVSE16V, AVSE32V, AVSE64V, AVLE8FFV, AVLE16FFV, AVLE32FFV, AVLE64FFV, AVLMV, AVSMV,
+		AVLSEG2E8V, AVLSEG3E8V, AVLSEG4E8V, AVLSEG5E8V, AVLSEG6E8V, AVLSEG7E8V, AVLSEG8E8V,
+		AVLSEG2E16V, AVLSEG3E16V, AVLSEG4E16V, AVLSEG5E16V, AVLSEG6E16V, AVLSEG7E16V, AVLSEG8E16V,
+		AVLSEG2E32V, AVLSEG3E32V, AVLSEG4E32V, AVLSEG5E32V, AVLSEG6E32V, AVLSEG7E32V, AVLSEG8E32V,
+		AVLSEG2E64V, AVLSEG3E64V, AVLSEG4E64V, AVLSEG5E64V, AVLSEG6E64V, AVLSEG7E64V, AVLSEG8E64V,
+		AVSSEG2E8V, AVSSEG3E8V, AVSSEG4E8V, AVSSEG5E8V, AVSSEG6E8V, AVSSEG7E8V, AVSSEG8E8V,
+		AVSSEG2E16V, AVSSEG3E16V, AVSSEG4E16V, AVSSEG5E16V, AVSSEG6E16V, AVSSEG7E16V, AVSSEG8E16V,
+		AVSSEG2E32V, AVSSEG3E32V, AVSSEG4E32V, AVSSEG5E32V, AVSSEG6E32V, AVSSEG7E32V, AVSSEG8E32V,
+		AVSSEG2E64V, AVSSEG3E64V, AVSSEG4E64V, AVSSEG5E64V, AVSSEG6E64V, AVSSEG7E64V, AVSSEG8E64V,
+		AVLSEG2E8FFV, AVLSEG3E8FFV, AVLSEG4E8FFV, AVLSEG5E8FFV, AVLSEG6E8FFV, AVLSEG7E8FFV, AVLSEG8E8FFV,
+		AVLSEG2E16FFV, AVLSEG3E16FFV, AVLSEG4E16FFV, AVLSEG5E16FFV, AVLSEG6E16FFV, AVLSEG7E16FFV, AVLSEG8E16FFV,
+		AVLSEG2E32FFV, AVLSEG3E32FFV, AVLSEG4E32FFV, AVLSEG5E32FFV, AVLSEG6E32FFV, AVLSEG7E32FFV, AVLSEG8E32FFV,
+		AVLSEG2E64FFV, AVLSEG3E64FFV, AVLSEG4E64FFV, AVLSEG5E64FFV, AVLSEG6E64FFV, AVLSEG7E64FFV, AVLSEG8E64FFV:
 		// Set mask bit
 		switch {
 		case ins.rs1 == obj.REG_NONE:
@@ -3643,7 +4989,19 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), uint32(p.From.Reg), obj.REG_NONE
 
 	case AVLSE8V, AVLSE16V, AVLSE32V, AVLSE64V,
-		AVLUXEI8V, AVLUXEI16V, AVLUXEI32V, AVLUXEI64V, AVLOXEI8V, AVLOXEI16V, AVLOXEI32V, AVLOXEI64V:
+		AVLUXEI8V, AVLUXEI16V, AVLUXEI32V, AVLUXEI64V, AVLOXEI8V, AVLOXEI16V, AVLOXEI32V, AVLOXEI64V,
+		AVLSSEG2E8V, AVLSSEG3E8V, AVLSSEG4E8V, AVLSSEG5E8V, AVLSSEG6E8V, AVLSSEG7E8V, AVLSSEG8E8V,
+		AVLSSEG2E16V, AVLSSEG3E16V, AVLSSEG4E16V, AVLSSEG5E16V, AVLSSEG6E16V, AVLSSEG7E16V, AVLSSEG8E16V,
+		AVLSSEG2E32V, AVLSSEG3E32V, AVLSSEG4E32V, AVLSSEG5E32V, AVLSSEG6E32V, AVLSSEG7E32V, AVLSSEG8E32V,
+		AVLSSEG2E64V, AVLSSEG3E64V, AVLSSEG4E64V, AVLSSEG5E64V, AVLSSEG6E64V, AVLSSEG7E64V, AVLSSEG8E64V,
+		AVLOXSEG2EI8V, AVLOXSEG3EI8V, AVLOXSEG4EI8V, AVLOXSEG5EI8V, AVLOXSEG6EI8V, AVLOXSEG7EI8V, AVLOXSEG8EI8V,
+		AVLOXSEG2EI16V, AVLOXSEG3EI16V, AVLOXSEG4EI16V, AVLOXSEG5EI16V, AVLOXSEG6EI16V, AVLOXSEG7EI16V, AVLOXSEG8EI16V,
+		AVLOXSEG2EI32V, AVLOXSEG3EI32V, AVLOXSEG4EI32V, AVLOXSEG5EI32V, AVLOXSEG6EI32V, AVLOXSEG7EI32V, AVLOXSEG8EI32V,
+		AVLOXSEG2EI64V, AVLOXSEG3EI64V, AVLOXSEG4EI64V, AVLOXSEG5EI64V, AVLOXSEG6EI64V, AVLOXSEG7EI64V, AVLOXSEG8EI64V,
+		AVLUXSEG2EI8V, AVLUXSEG3EI8V, AVLUXSEG4EI8V, AVLUXSEG5EI8V, AVLUXSEG6EI8V, AVLUXSEG7EI8V, AVLUXSEG8EI8V,
+		AVLUXSEG2EI16V, AVLUXSEG3EI16V, AVLUXSEG4EI16V, AVLUXSEG5EI16V, AVLUXSEG6EI16V, AVLUXSEG7EI16V, AVLUXSEG8EI16V,
+		AVLUXSEG2EI32V, AVLUXSEG3EI32V, AVLUXSEG4EI32V, AVLUXSEG5EI32V, AVLUXSEG6EI32V, AVLUXSEG7EI32V, AVLUXSEG8EI32V,
+		AVLUXSEG2EI64V, AVLUXSEG3EI64V, AVLUXSEG4EI64V, AVLUXSEG5EI64V, AVLUXSEG6EI64V, AVLUXSEG7EI64V, AVLUXSEG8EI64V:
 		// Set mask bit
 		switch {
 		case ins.rs3 == obj.REG_NONE:
@@ -3654,7 +5012,19 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		ins.rs1, ins.rs2, ins.rs3 = ins.rs2, ins.rs1, obj.REG_NONE
 
 	case AVSSE8V, AVSSE16V, AVSSE32V, AVSSE64V,
-		AVSUXEI8V, AVSUXEI16V, AVSUXEI32V, AVSUXEI64V, AVSOXEI8V, AVSOXEI16V, AVSOXEI32V, AVSOXEI64V:
+		AVSUXEI8V, AVSUXEI16V, AVSUXEI32V, AVSUXEI64V, AVSOXEI8V, AVSOXEI16V, AVSOXEI32V, AVSOXEI64V,
+		AVSSSEG2E8V, AVSSSEG3E8V, AVSSSEG4E8V, AVSSSEG5E8V, AVSSSEG6E8V, AVSSSEG7E8V, AVSSSEG8E8V,
+		AVSSSEG2E16V, AVSSSEG3E16V, AVSSSEG4E16V, AVSSSEG5E16V, AVSSSEG6E16V, AVSSSEG7E16V, AVSSSEG8E16V,
+		AVSSSEG2E32V, AVSSSEG3E32V, AVSSSEG4E32V, AVSSSEG5E32V, AVSSSEG6E32V, AVSSSEG7E32V, AVSSSEG8E32V,
+		AVSSSEG2E64V, AVSSSEG3E64V, AVSSSEG4E64V, AVSSSEG5E64V, AVSSSEG6E64V, AVSSSEG7E64V, AVSSSEG8E64V,
+		AVSOXSEG2EI8V, AVSOXSEG3EI8V, AVSOXSEG4EI8V, AVSOXSEG5EI8V, AVSOXSEG6EI8V, AVSOXSEG7EI8V, AVSOXSEG8EI8V,
+		AVSOXSEG2EI16V, AVSOXSEG3EI16V, AVSOXSEG4EI16V, AVSOXSEG5EI16V, AVSOXSEG6EI16V, AVSOXSEG7EI16V, AVSOXSEG8EI16V,
+		AVSOXSEG2EI32V, AVSOXSEG3EI32V, AVSOXSEG4EI32V, AVSOXSEG5EI32V, AVSOXSEG6EI32V, AVSOXSEG7EI32V, AVSOXSEG8EI32V,
+		AVSOXSEG2EI64V, AVSOXSEG3EI64V, AVSOXSEG4EI64V, AVSOXSEG5EI64V, AVSOXSEG6EI64V, AVSOXSEG7EI64V, AVSOXSEG8EI64V,
+		AVSUXSEG2EI8V, AVSUXSEG3EI8V, AVSUXSEG4EI8V, AVSUXSEG5EI8V, AVSUXSEG6EI8V, AVSUXSEG7EI8V, AVSUXSEG8EI8V,
+		AVSUXSEG2EI16V, AVSUXSEG3EI16V, AVSUXSEG4EI16V, AVSUXSEG5EI16V, AVSUXSEG6EI16V, AVSUXSEG7EI16V, AVSUXSEG8EI16V,
+		AVSUXSEG2EI32V, AVSUXSEG3EI32V, AVSUXSEG4EI32V, AVSUXSEG5EI32V, AVSUXSEG6EI32V, AVSUXSEG7EI32V, AVSUXSEG8EI32V,
+		AVSUXSEG2EI64V, AVSUXSEG3EI64V, AVSUXSEG4EI64V, AVSUXSEG5EI64V, AVSUXSEG6EI64V, AVSUXSEG7EI64V, AVSUXSEG8EI64V:
 		// Set mask bit
 		switch {
 		case ins.rs3 == obj.REG_NONE:
@@ -3710,7 +5080,9 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		AVREDSUMVS, AVREDMAXUVS, AVREDMAXVS, AVREDMINUVS, AVREDMINVS, AVREDANDVS, AVREDORVS, AVREDXORVS,
 		AVWREDSUMUVS, AVWREDSUMVS, AVFREDOSUMVS, AVFREDUSUMVS, AVFREDMAXVS, AVFREDMINVS, AVFWREDOSUMVS, AVFWREDUSUMVS,
 		AVSLIDEUPVX, AVSLIDEDOWNVX, AVSLIDE1UPVX, AVFSLIDE1UPVF, AVSLIDE1DOWNVX, AVFSLIDE1DOWNVF,
-		AVRGATHERVV, AVRGATHEREI16VV, AVRGATHERVX:
+		AVRGATHERVV, AVRGATHEREI16VV, AVRGATHERVX,
+		AVANDNVV, AVANDNVX, AVROLVV, AVROLVX, AVWSLLVV, AVWSLLVX, AVCLMULVV, AVCLMULVX,
+		AVCLMULHVV, AVCLMULHVX, AVRORVV, AVRORVX:
 		// Set mask bit
 		switch {
 		case ins.rs3 == obj.REG_NONE:
@@ -3734,7 +5106,7 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 		ins.rd, ins.rs1, ins.rs2, ins.rs3 = uint32(p.To.Reg), uint32(p.Reg), uint32(p.From.Reg), obj.REG_NONE
 
 	case AVADDVI, AVRSUBVI, AVANDVI, AVORVI, AVXORVI, AVMSEQVI, AVMSNEVI, AVMSLEUVI, AVMSLEVI, AVMSGTUVI, AVMSGTVI,
-		AVSLLVI, AVSRLVI, AVSRAVI, AVNSRLWI, AVNSRAWI, AVRGATHERVI, AVSLIDEUPVI, AVSLIDEDOWNVI:
+		AVSLLVI, AVSRLVI, AVSRAVI, AVNSRLWI, AVNSRAWI, AVRGATHERVI, AVSLIDEUPVI, AVSLIDEDOWNVI, AVWSLLVI, AVRORVI:
 		// Set mask bit
 		switch {
 		case ins.rs3 == obj.REG_NONE:
@@ -3747,7 +5119,8 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 	case AVZEXTVF2, AVSEXTVF2, AVZEXTVF4, AVSEXTVF4, AVZEXTVF8, AVSEXTVF8, AVFSQRTV, AVFRSQRT7V, AVFREC7V, AVFCLASSV,
 		AVFCVTXUFV, AVFCVTXFV, AVFCVTRTZXUFV, AVFCVTRTZXFV, AVFCVTFXUV, AVFCVTFXV,
 		AVFWCVTXUFV, AVFWCVTXFV, AVFWCVTRTZXUFV, AVFWCVTRTZXFV, AVFWCVTFXUV, AVFWCVTFXV, AVFWCVTFFV,
-		AVFNCVTXUFW, AVFNCVTXFW, AVFNCVTRTZXUFW, AVFNCVTRTZXFW, AVFNCVTFXUW, AVFNCVTFXW, AVFNCVTFFW, AVFNCVTRODFFW:
+		AVFNCVTXUFW, AVFNCVTXFW, AVFNCVTRTZXUFW, AVFNCVTRTZXFW, AVFNCVTFXUW, AVFNCVTFXW, AVFNCVTFFW, AVFNCVTRODFFW,
+		AVBREVV, AVBREV8V, AVREV8V, AVCLZV, AVCTZV, AVCPOPV:
 		// Set mask bit
 		switch {
 		case ins.rs1 == obj.REG_NONE:
@@ -3919,6 +5292,34 @@ func instructionsForProg(p *obj.Prog) []*instruction {
 			ins.rd = uint32(p.From.Reg)
 		}
 		ins.rs1, ins.rs2 = obj.REG_NONE, REG_V0
+
+	case AVAESKF1VI, AVAESKF2VI, AVSM4KVI, AVSM3CVI:
+		if ins.rs3 != obj.REG_NONE {
+			p.Ctxt.Diag("%v: too many operands for instruction", p)
+		}
+		ins.rd, ins.rs1, ins.rs2, ins.rs3 = uint32(p.To.Reg), obj.REG_NONE, uint32(p.Reg), obj.REG_NONE
+
+	case AVGMULVV, AVAESEFVV, AVAESEFVS, AVAESEMVV, AVAESEMVS, AVAESDFVV, AVAESDFVS, AVAESDMVV,
+		AVAESDMVS, AVAESZVS, AVSM4RVV, AVSM4RVS:
+		if ins.rs3 != obj.REG_NONE {
+			p.Ctxt.Diag("%v: too many operands for instruction", p)
+		}
+		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), obj.REG_NONE, uint32(p.From.Reg)
+
+	case AVGHSHVV, AVSHA2MSVV, AVSHA2CHVV, AVSHA2CLVV, AVSM3MEVV:
+		if ins.rs3 != obj.REG_NONE {
+			p.Ctxt.Diag("%v: too many operands for instruction", p)
+		}
+		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), uint32(p.From.Reg), uint32(p.Reg)
+	}
+
+	// Only compress instructions when there is no relocation, since
+	// relocation relies on knowledge about the exact instructions that
+	// are in use.
+	if compress && p.Mark&NEED_RELOC == 0 {
+		for _, ins := range inss {
+			ins.compress()
+		}
 	}
 
 	for _, ins := range inss {
@@ -3942,6 +5343,12 @@ func assemble(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		return
 	}
 
+	// Disable compression for DUFF functions since they rely on fixed instruction sizes
+	compress := ctxt.CompressInstructions
+	if cursym.Name == "runtime.duffzero" || cursym.Name == "runtime.duffcopy" {
+		compress = false
+	}
+
 	for p := cursym.Func().Text; p != nil; p = p.Link {
 		switch p.As {
 		case AJAL:
@@ -3954,7 +5361,8 @@ func assemble(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 					Add:  p.To.Offset,
 				})
 			}
-		case AJALR:
+
+		case ACJALR, AJALR:
 			if p.To.Sym != nil {
 				ctxt.Diag("%v: unexpected AJALR with to symbol", p)
 			}
@@ -4009,15 +5417,22 @@ func assemble(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			v := pcAlignPadLength(p.Pc, alignedValue)
 			offset := p.Pc
 			for ; v >= 4; v -= 4 {
-				// NOP
-				cursym.WriteBytes(ctxt, offset, []byte{0x13, 0, 0, 0})
+				// NOP (ADDI $0, X0, X0)
+				cursym.WriteBytes(ctxt, offset, []byte{0x13, 0x00, 0x00, 0x00})
 				offset += 4
+			}
+			if v == 2 {
+				// CNOP
+				cursym.WriteBytes(ctxt, offset, []byte{0x01, 0x00})
+				offset += 2
+			} else if v != 0 {
+				ctxt.Diag("bad PCALIGN pad length")
 			}
 			continue
 		}
 
 		offset := p.Pc
-		for _, ins := range instructionsForProg(p) {
+		for _, ins := range instructionsForProg(p, compress) {
 			if ic, err := ins.encode(); err == nil {
 				cursym.WriteInt(ctxt, offset, ins.length(), int64(ic))
 				offset += int64(ins.length())
@@ -4025,6 +5440,10 @@ func assemble(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			if ins.usesRegTmp() {
 				p.Mark |= USES_REG_TMP
 			}
+		}
+		// Track the final offset after the last instruction
+		if p.Link == nil {
+			cursym.Size = offset
 		}
 	}
 

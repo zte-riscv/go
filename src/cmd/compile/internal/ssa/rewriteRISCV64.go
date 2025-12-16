@@ -848,11 +848,29 @@ func rewriteValueRISCV64_OpAtomicAnd8(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (AtomicAnd8 ptr val mem)
+	// cond: buildcfg.GORISCV64 >= 23
+	// result: (LoweredAtomicAnd8 ptr val mem)
+	for {
+		ptr := v_0
+		val := v_1
+		mem := v_2
+		if !(buildcfg.GORISCV64 >= 23) {
+			break
+		}
+		v.reset(OpRISCV64LoweredAtomicAnd8)
+		v.AddArg3(ptr, val, mem)
+		return true
+	}
+	// match: (AtomicAnd8 ptr val mem)
+	// cond: buildcfg.GORISCV64 < 23
 	// result: (LoweredAtomicAnd32 (ANDI <typ.Uintptr> [^3] ptr) (NOT <typ.UInt32> (SLL <typ.UInt32> (XORI <typ.UInt32> [0xff] (ZeroExt8to32 val)) (SLLI <typ.UInt64> [3] (ANDI <typ.UInt64> [3] ptr)))) mem)
 	for {
 		ptr := v_0
 		val := v_1
 		mem := v_2
+		if !(buildcfg.GORISCV64 < 23) {
+			break
+		}
 		v.reset(OpRISCV64LoweredAtomicAnd32)
 		v0 := b.NewValue0(v.Pos, OpRISCV64ANDI, typ.Uintptr)
 		v0.AuxInt = int64ToAuxInt(^3)
@@ -875,6 +893,7 @@ func rewriteValueRISCV64_OpAtomicAnd8(v *Value) bool {
 		v.AddArg3(v0, v1, mem)
 		return true
 	}
+	return false
 }
 func rewriteValueRISCV64_OpAtomicCompareAndSwap32(v *Value) bool {
 	v_3 := v.Args[3]
@@ -904,11 +923,29 @@ func rewriteValueRISCV64_OpAtomicOr8(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (AtomicOr8 ptr val mem)
+	// cond: buildcfg.GORISCV64 >= 23
+	// result: (LoweredAtomicOr8 ptr val mem)
+	for {
+		ptr := v_0
+		val := v_1
+		mem := v_2
+		if !(buildcfg.GORISCV64 >= 23) {
+			break
+		}
+		v.reset(OpRISCV64LoweredAtomicOr8)
+		v.AddArg3(ptr, val, mem)
+		return true
+	}
+	// match: (AtomicOr8 ptr val mem)
+	// cond: buildcfg.GORISCV64 < 23
 	// result: (LoweredAtomicOr32 (ANDI <typ.Uintptr> [^3] ptr) (SLL <typ.UInt32> (ZeroExt8to32 val) (SLLI <typ.UInt64> [3] (ANDI <typ.UInt64> [3] ptr))) mem)
 	for {
 		ptr := v_0
 		val := v_1
 		mem := v_2
+		if !(buildcfg.GORISCV64 < 23) {
+			break
+		}
 		v.reset(OpRISCV64LoweredAtomicOr32)
 		v0 := b.NewValue0(v.Pos, OpRISCV64ANDI, typ.Uintptr)
 		v0.AuxInt = int64ToAuxInt(^3)
@@ -926,6 +963,7 @@ func rewriteValueRISCV64_OpAtomicOr8(v *Value) bool {
 		v.AddArg3(v0, v1, mem)
 		return true
 	}
+	return false
 }
 func rewriteValueRISCV64_OpAvg64u(v *Value) bool {
 	v_1 := v.Args[1]
@@ -3539,12 +3577,12 @@ func rewriteValueRISCV64_OpRISCV64ADD(v *Value) bool {
 		}
 		break
 	}
-	// match: (ADD (SLLI [1] x) y)
+	// match: (ADD (MOVWUreg x) y)
 	// cond: buildcfg.GORISCV64 >= 22
-	// result: (SH1ADD x y)
+	// result: (ADDUW x y)
 	for {
 		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
-			if v_0.Op != OpRISCV64SLLI || auxIntToInt64(v_0.AuxInt) != 1 {
+			if v_0.Op != OpRISCV64MOVWUreg {
 				continue
 			}
 			x := v_0.Args[0]
@@ -3552,18 +3590,18 @@ func rewriteValueRISCV64_OpRISCV64ADD(v *Value) bool {
 			if !(buildcfg.GORISCV64 >= 22) {
 				continue
 			}
-			v.reset(OpRISCV64SH1ADD)
+			v.reset(OpRISCV64ADDUW)
 			v.AddArg2(x, y)
 			return true
 		}
 		break
 	}
-	// match: (ADD (SLLI [2] x) y)
+	// match: (ADD (SLLIUW [1] x) y)
 	// cond: buildcfg.GORISCV64 >= 22
-	// result: (SH2ADD x y)
+	// result: (SH1ADDUW x y)
 	for {
 		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
-			if v_0.Op != OpRISCV64SLLI || auxIntToInt64(v_0.AuxInt) != 2 {
+			if v_0.Op != OpRISCV64SLLIUW || auxIntToInt64(v_0.AuxInt) != 1 {
 				continue
 			}
 			x := v_0.Args[0]
@@ -3571,18 +3609,18 @@ func rewriteValueRISCV64_OpRISCV64ADD(v *Value) bool {
 			if !(buildcfg.GORISCV64 >= 22) {
 				continue
 			}
-			v.reset(OpRISCV64SH2ADD)
+			v.reset(OpRISCV64SH1ADDUW)
 			v.AddArg2(x, y)
 			return true
 		}
 		break
 	}
-	// match: (ADD (SLLI [3] x) y)
+	// match: (ADD (SLLIUW [2] x) y)
 	// cond: buildcfg.GORISCV64 >= 22
-	// result: (SH3ADD x y)
+	// result: (SH2ADDUW x y)
 	for {
 		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
-			if v_0.Op != OpRISCV64SLLI || auxIntToInt64(v_0.AuxInt) != 3 {
+			if v_0.Op != OpRISCV64SLLIUW || auxIntToInt64(v_0.AuxInt) != 2 {
 				continue
 			}
 			x := v_0.Args[0]
@@ -3590,7 +3628,26 @@ func rewriteValueRISCV64_OpRISCV64ADD(v *Value) bool {
 			if !(buildcfg.GORISCV64 >= 22) {
 				continue
 			}
-			v.reset(OpRISCV64SH3ADD)
+			v.reset(OpRISCV64SH2ADDUW)
+			v.AddArg2(x, y)
+			return true
+		}
+		break
+	}
+	// match: (ADD (SLLIUW [3] x) y)
+	// cond: buildcfg.GORISCV64 >= 22
+	// result: (SH3ADDUW x y)
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			if v_0.Op != OpRISCV64SLLIUW || auxIntToInt64(v_0.AuxInt) != 3 {
+				continue
+			}
+			x := v_0.Args[0]
+			y := v_1
+			if !(buildcfg.GORISCV64 >= 22) {
+				continue
+			}
+			v.reset(OpRISCV64SH3ADDUW)
 			v.AddArg2(x, y)
 			return true
 		}
@@ -6670,6 +6727,23 @@ func rewriteValueRISCV64_OpRISCV64SLLI(v *Value) bool {
 		v.AuxInt = int64ToAuxInt(y << uint32(x))
 		return true
 	}
+	// match: (SLLI [x] (MOVWUreg y))
+	// cond: x < 64 && buildcfg.GORISCV64 >= 22
+	// result: (SLLIUW [x] y)
+	for {
+		x := auxIntToInt64(v.AuxInt)
+		if v_0.Op != OpRISCV64MOVWUreg {
+			break
+		}
+		y := v_0.Args[0]
+		if !(x < 64 && buildcfg.GORISCV64 >= 22) {
+			break
+		}
+		v.reset(OpRISCV64SLLIUW)
+		v.AuxInt = int64ToAuxInt(x)
+		v.AddArg(y)
+		return true
+	}
 	return false
 }
 func rewriteValueRISCV64_OpRISCV64SLLW(v *Value) bool {
@@ -6751,22 +6825,6 @@ func rewriteValueRISCV64_OpRISCV64SLTI(v *Value) bool {
 		}
 		v.reset(OpRISCV64MOVDconst)
 		v.AuxInt = int64ToAuxInt(1)
-		return true
-	}
-	// match: (SLTI [x] (ORI [y] _))
-	// cond: y >= 0 && int64(y) >= int64(x)
-	// result: (MOVDconst [0])
-	for {
-		x := auxIntToInt64(v.AuxInt)
-		if v_0.Op != OpRISCV64ORI {
-			break
-		}
-		y := auxIntToInt64(v_0.AuxInt)
-		if !(y >= 0 && int64(y) >= int64(x)) {
-			break
-		}
-		v.reset(OpRISCV64MOVDconst)
-		v.AuxInt = int64ToAuxInt(0)
 		return true
 	}
 	return false

@@ -660,6 +660,25 @@ func (p *Parser) asmInstruction(op obj.As, cond string, a []obj.Addr) {
 				prog.AddRestSource(a[1])
 				break
 			}
+		} else if p.arch.Family == sys.RISCV64 {
+			// RISCV64 pseudo instructions that reference CSRs with symbolic names.
+			if isImm, specialIndex, ok := arch.IsRISCV64PseudoCSRO(op); ok {
+				if a[0].Type != obj.TYPE_CONST && isImm {
+					p.errorf("invalid value for first operand to %s instruction, must be a 5 bit unsigned immediate", op)
+					return
+				}
+				if a[specialIndex].Type != obj.TYPE_SPECIAL {
+					p.errorf("invalid value for first or second operand to %s instruction, must be a CSR name", op)
+					return
+				}
+				prog.AddRestSourceArgs([]obj.Addr{a[specialIndex]})
+				if specialIndex == 0 {
+					prog.To = a[1]
+				} else {
+					prog.From = a[0]
+				}
+				break
+			}
 		}
 		prog.From = a[0]
 		prog.To = a[1]
@@ -780,6 +799,21 @@ func (p *Parser) asmInstruction(op obj.As, cond string, a []obj.Addr) {
 					return
 				}
 				prog.RegTo2 = a[2].Reg
+				break
+			}
+			// RISCV64 instructions that reference CSRs with symbolic names.
+			if isImm, ok := arch.IsRISCV64CSRO(op); ok {
+				if a[0].Type != obj.TYPE_CONST && isImm {
+					p.errorf("invalid value for first operand to %s instruction, must be a 5 bit unsigned immediate", op)
+					return
+				}
+				if a[1].Type != obj.TYPE_SPECIAL {
+					p.errorf("invalid value for second operand to %s instruction, must be a CSR name", op)
+					return
+				}
+				prog.AddRestSourceArgs([]obj.Addr{a[1]})
+				prog.From = a[0]
+				prog.To = a[2]
 				break
 			}
 			prog.From = a[0]

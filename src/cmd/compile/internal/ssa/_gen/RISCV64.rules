@@ -514,8 +514,11 @@
 (AtomicStore(PtrNoWB|64|32|8) ...) => (LoweredAtomicStore(64|64|32|8) ...)
 (AtomicAdd(64|32) ...) => (LoweredAtomicAdd(64|32) ...)
 
+// RVA23 AtomicAnd8 => LoweredAtomicAnd8
+(AtomicAnd8 ptr val mem) && buildcfg.GORISCV64 >= 23 => (LoweredAtomicAnd8 ptr val mem)
+
 // AtomicAnd8(ptr,val) => LoweredAtomicAnd32(ptr&^3, ^((uint8(val) ^ 0xff) << ((ptr & 3) * 8)))
-(AtomicAnd8 ptr val mem) =>
+(AtomicAnd8 ptr val mem) && buildcfg.GORISCV64 < 23 =>
 	(LoweredAtomicAnd32 (ANDI <typ.Uintptr> [^3] ptr)
 		(NOT <typ.UInt32> (SLL <typ.UInt32> (XORI <typ.UInt32> [0xff] (ZeroExt8to32 val))
 			(SLLI <typ.UInt64> [3] (ANDI <typ.UInt64> [3] ptr)))) mem)
@@ -527,8 +530,11 @@
 
 (AtomicExchange(64|32) ...) => (LoweredAtomicExchange(64|32) ...)
 
+// RVA23 AtomicOr8 => LoweredAtomicOr8
+(AtomicOr8 ptr val mem) && buildcfg.GORISCV64 >= 23 => (LoweredAtomicOr8 ptr val mem)
+
 // AtomicOr8(ptr,val)  => LoweredAtomicOr32(ptr&^3, uint32(val)<<((ptr&3)*8))
-(AtomicOr8 ptr val mem) =>
+(AtomicOr8 ptr val mem) && buildcfg.GORISCV64 < 23 =>
 	(LoweredAtomicOr32 (ANDI <typ.Uintptr> [^3] ptr)
 		(SLL <typ.UInt32> (ZeroExt8to32 val)
 			(SLLI <typ.UInt64> [3] (ANDI <typ.UInt64> [3] ptr))) mem)
@@ -807,7 +813,6 @@
 // SLTI/SLTIU with known outcomes.
 (SLTI  [x] (ANDI [y] _)) && y >= 0 && int64(y) < int64(x) => (MOVDconst [1])
 (SLTIU [x] (ANDI [y] _)) && y >= 0 && uint64(y) < uint64(x) => (MOVDconst [1])
-(SLTI  [x] (ORI  [y] _)) && y >= 0 && int64(y) >= int64(x) => (MOVDconst [0])
 (SLTIU [x] (ORI  [y] _)) && y >= 0 && uint64(y) >= uint64(x) => (MOVDconst [0])
 
 // SLT/SLTU with known outcomes.
@@ -840,14 +845,18 @@
 //
 // Optimisations for rva22u64 and above.
 //
+// Fold left shift least significant word
+(SLLI [x] (MOVWUreg y)) && x < 64 && buildcfg.GORISCV64 >= 22 => (SLLIUW [x] y)
 
-// Combine left shift and addition.
-(ADD (SLLI [1] x) y) && buildcfg.GORISCV64 >= 22 => (SH1ADD x y)
-(ADD (SLLI [2] x) y) && buildcfg.GORISCV64 >= 22 => (SH2ADD x y)
-(ADD (SLLI [3] x) y) && buildcfg.GORISCV64 >= 22 => (SH3ADD x y)
+// Fold the add with (left shift) least significant word
+(ADD (MOVWUreg x) y) && buildcfg.GORISCV64 >= 22 => (ADDUW x y)
+(ADD (SLLIUW [1] x) y) && buildcfg.GORISCV64 >= 22 => (SH1ADDUW x y)
+(ADD (SLLIUW [2] x) y) && buildcfg.GORISCV64 >= 22 => (SH2ADDUW x y)
+(ADD (SLLIUW [3] x) y) && buildcfg.GORISCV64 >= 22 => (SH3ADDUW x y)
 
 // Integer minimum and maximum.
 (Min64  x y) && buildcfg.GORISCV64 >= 22 => (MIN  x y)
 (Max64  x y) && buildcfg.GORISCV64 >= 22 => (MAX  x y)
 (Min64u x y) && buildcfg.GORISCV64 >= 22 => (MINU x y)
 (Max64u x y) && buildcfg.GORISCV64 >= 22 => (MAXU x y)
+

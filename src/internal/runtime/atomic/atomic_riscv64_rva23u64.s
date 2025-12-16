@@ -28,7 +28,7 @@
 // aq is sufficient to guarantee this, so that's what we use here. (This jibes
 // with ARM, which uses dmb ishst.)
 
-//go:build riscv64 && !rva23u64
+//go:build riscv64 && rva23u64
 
 #include "textflag.h"
 
@@ -204,22 +204,9 @@ TEXT ·Xchg(SB), NOSPLIT, $0-20
 // func Xchg8(ptr *uint8, new uint8) uint8
 TEXT ·Xchg8(SB), NOSPLIT, $0-17
 	MOV	ptr+0(FP), A0
-	MOVBU	new+8(FP), A1
-	AND	$3, A0, A2
-	SLL	$3, A2
-	MOV	$255, A4
-	SLL	A2, A4
-	NOT	A4
-	AND	$~3, A0
-	SLL	A2, A1
-xchg8_again:
-	LRW	(A0), A5
-	AND	A4, A5, A3
-	OR	A1, A3
-	SCW	A3, (A0), A6
-	BNEZ	A6, xchg8_again
-	SRL	A2, A5
-	MOVB	A5, ret+16(FP)
+	MOV	new+8(FP), A1
+	AMOSWAPB A1, (A0), A1
+	MOV	A1, ret+16(FP)
 	RET
 
 // func Xchg64(ptr *uint64, new uint64) uint64
@@ -272,24 +259,16 @@ TEXT ·Xchguintptr(SB), NOSPLIT, $0-24
 TEXT ·And8(SB), NOSPLIT, $0-9
 	MOV	ptr+0(FP), A0
 	MOVBU	val+8(FP), A1
-	AND	$3, A0, A2
-	AND	$-4, A0
-	SLL	$3, A2
-	XOR	$255, A1
-	SLL	A2, A1
-	XOR	$-1, A1
-	AMOANDW A1, (A0), ZERO
+    AMOANDB	A1, (A0), A2
+	MOV	A2, ret+16(FP)
 	RET
 
 // func Or8(ptr *uint8, val uint8)
 TEXT ·Or8(SB), NOSPLIT, $0-9
 	MOV	ptr+0(FP), A0
 	MOVBU	val+8(FP), A1
-	AND	$3, A0, A2
-	AND	$-4, A0
-	SLL	$3, A2
-	SLL	A2, A1
-	AMOORW	A1, (A0), ZERO
+	AMOORB	A1, (A0), A2
+	MOV	A2, ret+16(FP)
 	RET
 
 // func And(ptr *uint32, val uint32)

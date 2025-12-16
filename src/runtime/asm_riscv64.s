@@ -271,6 +271,11 @@ TEXT gogo<>(SB), NOSPLIT|NOFRAME, $0
 
 // func procyield(cycles uint32)
 TEXT runtime·procyield(SB),NOSPLIT,$0-0
+	MOVWU	cycles+0(FP), T0
+yieldloop:
+	PAUSE
+	SUBW	$1, T0
+	BNEZ	T0, yieldloop
 	RET
 
 // Switch to m->g0's stack, call fn(g).
@@ -525,14 +530,14 @@ TEXT _cgo_topofstack(SB),NOSPLIT,$8
 	RET
 
 // func goexit(neverCallThisFunction)
-// The top-most function running on a goroutine
-// returns to goexit+PCQuantum.
+// The top-most function running on a goroutine, returns to goexit+PCQuantum*2.
+// Note that the NOPs are written in a manner that will not be compressed,
+// since the offset must be known by the runtime.
 TEXT runtime·goexit(SB),NOSPLIT|NOFRAME|TOPFRAME,$0-0
-	MOV	ZERO, ZERO	// NOP
+	WORD	$0x00000013	// NOP
 	JMP	runtime·goexit1(SB)	// does not return
 	// traceback from goexit1 must hit code range of goexit
-	MOV	ZERO, ZERO	// NOP
-
+	WORD	$0x00000013	// NOP
 
 // This is called from .init_array and follows the platform, not the Go ABI.
 TEXT runtime·addmoduledata(SB),NOSPLIT,$0-0

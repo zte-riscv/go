@@ -477,6 +477,8 @@ var depsRules = `
 
 	io, math/rand/v2 < crypto/internal/randutil;
 
+	NONE < crypto/internal/constanttime;
+
 	STR < crypto/internal/impl;
 
 	OS < crypto/internal/sysrand
@@ -490,6 +492,7 @@ var depsRules = `
 	crypto/internal/impl,
 	crypto/internal/entropy,
 	crypto/internal/randutil,
+	crypto/internal/constanttime,
 	crypto/internal/fips140deps/byteorder,
 	crypto/internal/fips140deps/cpu,
 	crypto/internal/fips140deps/godebug

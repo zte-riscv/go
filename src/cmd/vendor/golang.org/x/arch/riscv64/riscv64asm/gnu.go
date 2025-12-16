@@ -5,6 +5,7 @@
 package riscv64asm
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -12,14 +13,23 @@ import (
 // This form typically matches the syntax defined in the RISC-V Instruction Set Manual. See
 // https://github.com/riscv/riscv-isa-manual/releases/download/Ratified-IMAFDQC/riscv-spec-20191213.pdf
 func GNUSyntax(inst Inst) string {
-	op := strings.ToLower(inst.Op.String())
+	hasVectorArg := false
 	var args []string
 	for _, a := range inst.Args {
 		if a == nil {
 			break
 		}
 		args = append(args, strings.ToLower(a.String()))
+		if r, ok := a.(Reg); ok {
+			hasVectorArg = hasVectorArg || (r >= V0 && r <= V31)
+		}
 	}
+
+	if hasVectorArg {
+		return gnuVectorOp(inst, args)
+	}
+
+	op := strings.ToLower(inst.Op.String())
 
 	switch inst.Op {
 	case ADDI, ADDIW, ANDI, ORI, SLLI, SLLIW, SRAI, SRAIW, SRLI, SRLIW, XORI:
@@ -57,11 +67,48 @@ func GNUSyntax(inst Inst) string {
 			args = args[:len(args)-1]
 		}
 
+		if inst.Op == ORI && inst.Args[0].(Reg) == X0 {
+			imm := inst.Args[2].(Simm).Imm
+			switch imm & ((1 << 5) - 1) {
+			case 0:
+				op = "prefetch.i"
+			case 1:
+				op = "prefetch.r"
+			case 3:
+				op = "prefetch.w"
+			}
+			if imm == 0 {
+				args[0] = fmt.Sprintf("(X%d)", inst.Args[1].(Reg))
+			} else {
+				args[0] = fmt.Sprintf("%s(X%d)", inst.Args[2].(Simm).String(), inst.Args[1].(Reg))
+			}
+			args = args[:len(args)-2]
+		}
+
 	case ADD:
 		if inst.Args[1].(Reg) == X0 {
-			op = "mv"
-			args[1] = args[2]
-			args = args[:len(args)-1]
+			if inst.Args[0].(Reg) == X0 {
+				isZihintntl := true
+				switch inst.Args[2].(Reg) {
+				case X2:
+					op = "ntl.p1"
+				case X3:
+					op = "ntl.pall"
+				case X4:
+					op = "ntl.s1"
+				case X5:
+					op = "ntl.all"
+				default:
+					isZihintntl = false
+				}
+				if isZihintntl {
+					args = args[:0]
+				}
+			} else {
+				op = "mv"
+				args[1] = args[2]
+				args = args[:len(args)-1]
+			}
 		}
 
 	case BEQ:
@@ -324,10 +371,73 @@ func GNUSyntax(inst Inst) string {
 			args[1] = args[2]
 			args = args[:len(args)-1]
 		}
+
+	case VSETVLI, VSETIVLI:
+		args[0], args[2] = args[2], strings.ReplaceAll(args[0], " ", "")
+
+	case VSETVL:
+		args[0], args[2] = args[2], args[0]
 	}
 
 	if args != nil {
 		op += " " + strings.Join(args, ",")
 	}
 	return op
+}
+
+func gnuVectorOp(inst Inst, args []string) string {
+	// Instruction is either a vector load, store or an arithmetic
+	// operation. We can use the inst.Enc to figure out which. Whatever
+	// it is, it has at least one argument.
+
+	rawArgs := inst.Args[:]
+
+	var mask string
+	var op string
+	if inst.Enc&(1<<25) == 0 {
+		if implicitMask(inst.Op) {
+			mask = "v0"
+		} else {
+			mask = "v0.t"
+			args = args[1:]
+			rawArgs = rawArgs[1:]
+		}
+	}
+
+	if len(args) > 1 {
+		if inst.Enc&0x7f == 0x7 || inst.Enc&0x7f == 0x27 {
+			// It's a load or a store
+			if len(args) >= 2 {
+				args[0], args[len(args)-1] = args[len(args)-1], args[0]
+			}
+			op = pseudoRVVLoad(inst.Op)
+		} else {
+			// It's an arithmetic instruction
+
+			op, args = pseudoRVVArith(inst.Op, rawArgs, args)
+
+			if len(args) == 3 {
+				if imaOrFma(inst.Op) {
+					args[0], args[2] = args[2], args[0]
+				} else {
+					args[0], args[1], args[2] = args[2], args[0], args[1]
+				}
+			} else if len(args) == 2 {
+				args[0], args[1] = args[1], args[0]
+			}
+		}
+	}
+
+	// The mask is always the last argument
+
+	if mask != "" {
+		args = append(args, mask)
+	}
+
+	if op == "" {
+		op = inst.Op.String()
+	}
+	op = strings.ToLower(op)
+
+	return op + " " + strings.Join(args, ",")
 }
