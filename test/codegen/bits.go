@@ -116,6 +116,9 @@ func biton64(a, b uint64) (n uint64) {
 	// riscv64/rva23u64:"BSETI\t[$]60"
 	n += a | (1 << 60)
 
+	// riscv64/rva23u64:"BSETI"
+	n += a | 1024
+
 	// amd64:"ORQ\t[$]1"
 	n += a | (1 << 0)
 
@@ -400,6 +403,19 @@ func bitSetPowerOf2Test(x int) bool {
 	// amd64:"BTL\t[$]3"
 	// riscv64/rva23u64:"BEXTI\t[$]3"
 	return x&8 == 8
+}
+
+func bitcheck_eq_zero(a uint64) bool {
+	// riscv64/rva23u64:"BEXTI","SEQZ"
+	return a&(1<<5) == 0
+}
+
+func bit32_srlw(a, b uint32) int {
+	// riscv64/rva23u64:"BEXT"
+	if (a>>b)&1 != 0 {
+		return 1
+	}
+	return 0
 }
 
 func bitSetTest(x int) bool {

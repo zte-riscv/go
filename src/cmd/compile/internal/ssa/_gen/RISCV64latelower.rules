@@ -60,36 +60,68 @@
 (ADD (SLLI [3] x) y) && buildcfg.GORISCV64 >= 22 => (SH3ADD x y)
 
 // Fold bitwise ops in specific situations into bit clear/extract/invert/set
+// Bit Clear (BCLR/BCLRI)
+// Pattern: x &^ (1 << y) - clear bit y
 (ANDN x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 23 => (BCLR x y)
 (ANDN x (SLLW (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 23 => (BCLR x y)
 (AND x (MOVDconst [y])) && isUint64PowerOfTwo(^y) && buildcfg.GORISCV64 >= 23 => (BCLRI [log64(^y)] x)
-// Convert ANDI/ORI/XORI with single-bit immediates to BCLRI/BSETI/BINVI
-// For ANDI: a &^ (1<<n) becomes ANDI with ~(1<<n), so we check if ~c is a power of 2
 (ANDI x [c]) && isUint64PowerOfTwo(^c) && buildcfg.GORISCV64 >= 23 => (BCLRI [log64(^c)] x)
-(ORI x [c]) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BSETI [log64(c)] x)
-(XORI x [c]) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BINVI [log64(c)] x)
+
+// Bit Extract (BEXT/BEXTI)
+// Pattern 1: (x >> y) & 1 - extract bit y via shift-right
 (ANDI (SRL x y) [1]) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
-(ANDI (SRLI x [c]) [1]) && buildcfg.GORISCV64 >= 23 => (BEXTI [c] x)
+(ANDI (SRLI x [c]) [1]) && c < 64 && buildcfg.GORISCV64 >= 23 => (BEXTI [c] x)
 (ANDI (SRLW x y) [1]) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
-(ANDI (SRLIW x [c]) [1]) && buildcfg.GORISCV64 >= 23 => (BEXTI [c] x)
-// Optimize (x>>c)&mask to BEXTI when mask is a power of two
-// (x>>c)&mask extracts bit (c+log2(mask)) when mask is 2^k
+(ANDI (SRLIW x [c]) [1]) && c < 32 && buildcfg.GORISCV64 >= 23 => (BEXTI [c] x)
+
+// Pattern 2: (x >> c) & mask where mask is power of two
+// This extracts bit (c + log2(mask))
 (ANDI (SRLI x [c]) [mask]) && isUint64PowerOfTwo(mask) && c+log64(mask) < 64 && buildcfg.GORISCV64 >= 23 => (BEXTI [c+log64(mask)] x)
 (ANDI (SRLIW x [c]) [mask]) && isUint64PowerOfTwo(mask) && c+log64(mask) < 32 && buildcfg.GORISCV64 >= 23 => (BEXTI [c+log64(mask)] x)
-// Merge BEXTI with SRLI: (BEXTI [c] (SRLI [d] x)) => (BEXTI [c+d] x)
+
+// Pattern 3: Merge cascaded BEXTI with SRLI
 (BEXTI [c] (SRLI [d] x)) && c+d < 64 && buildcfg.GORISCV64 >= 23 => (BEXTI <typ.UInt64> [c+d] x)
 (BEXTI [c] (SRLIW [d] x)) && c+d < 32 && buildcfg.GORISCV64 >= 23 => (BEXTI <typ.UInt64> [c+d] x)
+
+// Pattern 4: x & (1 << y) with SNEZ - test if bit y is set
+// Note: SSA automatically canonicalizes commutative operations, so we only need one pattern
 (SNEZ (ANDI x [c])) && isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23 => (BEXTI [log64(c)] x)
 (SNEZ (AND x (SLL (MOVDconst [1]) y))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
 (SNEZ (AND x (SLLW (MOVDconst [1]) y))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
 (SNEZ (AND x (MOVDconst [c]))) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BEXTI [log64(c)] x)
+
+// Pattern 5: 32-bit wrapped patterns for BEXT
 (SNEZ (MOVWUreg (AND x (SLL (MOVDconst [1]) y)))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
 (SNEZ (MOVWUreg (AND x (SLLW (MOVDconst [1]) y)))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
 (SNEZ (MOVWreg (AND x (SLL (MOVDconst [1]) y)))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
 (SNEZ (MOVWreg (AND x (SLLW (MOVDconst [1]) y)))) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
+
+// Pattern 6: SEQZ for testing if bit is clear
+(SEQZ (ANDI x [c])) && isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23 => (SEQZ (BEXTI <typ.UInt64> [log64(c)] x))
+(SEQZ (AND x (SLL (MOVDconst [1]) y))) && buildcfg.GORISCV64 >= 23 => (SEQZ (BEXT <typ.UInt64> x y))
+(SEQZ (AND x (SLLW (MOVDconst [1]) y))) && buildcfg.GORISCV64 >= 23 => (SEQZ (BEXT <typ.UInt64> x y))
+(SEQZ (AND x (MOVDconst [c]))) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (SEQZ (BEXTI <typ.UInt64> [log64(c)] x))
+
+// Pattern 7: Direct ANDI with shifted value (rare but possible)
+(SNEZ (ANDI (SRL x y) [1])) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
+(SNEZ (ANDI (SRLW x y) [1])) && buildcfg.GORISCV64 >= 23 => (BEXT x y)
+(SNEZ (ANDI (SRLI x [c]) [1])) && c < 64 && buildcfg.GORISCV64 >= 23 => (BEXTI [c] x)
+(SNEZ (ANDI (SRLIW x [c]) [1])) && c < 32 && buildcfg.GORISCV64 >= 23 => (BEXTI [c] x)
+(SEQZ (ANDI (SRL x y) [1])) && buildcfg.GORISCV64 >= 23 => (SEQZ (BEXT <typ.UInt64> x y))
+(SEQZ (ANDI (SRLW x y) [1])) && buildcfg.GORISCV64 >= 23 => (SEQZ (BEXT <typ.UInt64> x y))
+(SEQZ (ANDI (SRLI x [c]) [1])) && c < 64 && buildcfg.GORISCV64 >= 23 => (SEQZ (BEXTI <typ.UInt64> [c] x))
+(SEQZ (ANDI (SRLIW x [c]) [1])) && c < 32 && buildcfg.GORISCV64 >= 23 => (SEQZ (BEXTI <typ.UInt64> [c] x))
+
+// Bit Invert (BINV/BINVI)
+// Pattern: x ^ (1 << y) - flip bit y
 (XOR x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 23 => (BINV x y)
 (XOR x (SLLW (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 23 => (BINV x y)
 (XOR x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 23 => (BINVI [log64(y)] x)
+(XORI x [c]) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BINVI [log64(c)] x)
+
+// Bit Set (BSET/BSETI)
+// Pattern: x | (1 << y) - set bit y
 (OR x (SLL (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 23 => (BSET x y)
 (OR x (SLLW (MOVDconst [1]) y)) && buildcfg.GORISCV64 >= 23 => (BSET x y)
 (OR x (MOVDconst [y])) && oneBit64(y) && buildcfg.GORISCV64 >= 23 => (BSETI [log64(y)] x)
+(ORI x [c]) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BSETI [log64(c)] x)
