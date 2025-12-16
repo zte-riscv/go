@@ -531,25 +531,42 @@
 (BEQZ (SLTIU [x] y) yes no) => (BGEU y (MOVDconst [x]) yes no)
 (BNEZ (SLTIU [x] y) yes no) => (BLTU y (MOVDconst [x]) yes no)
 
-// Optimize bit test patterns: (BEQZ|BNEZ) (AND x (MOVDconst [c])) when c is a single bit
-// This matches patterns like "if x&mask != 0" where mask is a power of two
+// Bit Test Branch Optimizations (BEQZ/BNEZ with Zbs)
+
+// Pattern 1: AND with constant mask (single bit)
+// Matches: if x&mask != 0 where mask is a power of two
+// Note: SSA canonicalizes commutative operations, so we only need one pattern
 (B(EQ|NE)Z (AND x (MOVDconst [c])) yes no) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [log64(c)] x) yes no)
 
-// Optimize bit test with variable shift: if a&(1<<b) != 0
+// Pattern 2: AND with variable shift (x & (1 << y))
+// Matches: if a&(1<<b) != 0
 (B(EQ|NE)Z (AND x (SLL (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 (B(EQ|NE)Z (AND x (SLLW (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 
-// Optimize 32-bit bit test with variable shift wrapped in MOVWUreg: if uint32(a)&(1<<b) != 0
+// Pattern 3: 32-bit bit test with variable shift wrapped in MOVWUreg/MOVWreg
+// Matches: if uint32(a)&(1<<b) != 0 or int32(a)&(1<<b) != 0
 (B(EQ|NE)Z (MOVWUreg (AND x (SLL (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 (B(EQ|NE)Z (MOVWUreg (AND x (SLLW (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
+(B(EQ|NE)Z (MOVWreg (AND x (SLL (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
+(B(EQ|NE)Z (MOVWreg (AND x (SLLW (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 
-// Optimize bit test patterns: (BEQZ|BNEZ) (ANDI [1] (SRLI [c] x)) - check if bit c is set
+// Pattern 5: Shift-right and test bit 0
+// Matches: if (x>>c)&1 != 0 with constant shift
 // This must come before the more general ANDI rules to match (x>>c)&1 patterns correctly
-(B(EQ|NE)Z (ANDI [1] (SRLI [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
-(B(EQ|NE)Z (ANDI [1] (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (ANDI [1] (SRLI [c] x)) yes no) && c < 64 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (ANDI [1] (SRLIW [c] x)) yes no) && c < 32 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
 
-// Optimize 32-bit bit test patterns: (BEQZ|BNEZ) (MOVWUreg (SRLIW [c] x)) - check if bit c is set
-(B(EQ|NE)Z (MOVWUreg (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+// Pattern 6: Variable shift-right and test bit 0
+// Matches: if (x>>y)&1 != 0 with variable shift
+(B(EQ|NE)Z (ANDI [1] (SRL x y)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
+(B(EQ|NE)Z (ANDI [1] (SRLW x y)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
+
+// Pattern 7: 32-bit bit test patterns with MOVWUreg wrapper
+(B(EQ|NE)Z (MOVWUreg (SRLIW [c] x)) yes no) && c < 32 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (MOVWUreg (ANDI [1] (SRLI [c] x))) yes no) && c < 64 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (MOVWUreg (ANDI [1] (SRLIW [c] x))) yes no) && c < 32 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (MOVWUreg (ANDI [1] (SRL x y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
+(B(EQ|NE)Z (MOVWUreg (ANDI [1] (SRLW x y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 
 // Optimize bit test patterns with mask after shift: (BEQZ|BNEZ) (ANDI [mask] (SRLI [c] x))
 // This matches patterns like "if (x>>c)&mask == 0" where mask is a power of two
@@ -871,5 +888,4 @@
 (OR (CZEROEQZ x:(ANDI <t> [c] z) cond) y:(CZERONEZ z cond)) => (OR x y)
 (OR (CZERONEZ <t> ((ADDI|ORI|XORI) [c] x) cond) (CZEROEQZ <t> x cond)) => ((ADD|OR|XOR) x (CZERONEZ <t> (MOVDconst [c]) cond))
 (OR (CZEROEQZ <t> ((ADDI|ORI|XORI) [c] x) cond) (CZERONEZ <t> x cond)) => ((ADD|OR|XOR) x (CZEROEQZ <t> (MOVDconst [c]) cond))
-
 
