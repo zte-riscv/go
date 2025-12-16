@@ -533,43 +533,35 @@
 
 // Optimize bit test patterns: (BEQZ|BNEZ) (AND x (MOVDconst [c])) when c is a single bit
 // This matches patterns like "if x&mask != 0" where mask is a power of two
-(BEQZ (AND x (MOVDconst [c])) yes no) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
-(BNEZ (AND x (MOVDconst [c])) yes no) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
+(B(EQ|NE)Z (AND x (MOVDconst [c])) yes no) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [log64(c)] x) yes no)
 
 // Optimize bit test with variable shift: if a&(1<<b) != 0
-(BEQZ (AND x (SLL (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXT <typ.UInt64> x y) yes no)
-(BNEZ (AND x (SLL (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXT <typ.UInt64> x y) yes no)
-(BEQZ (AND x (SLLW (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXT <typ.UInt64> x y) yes no)
-(BNEZ (AND x (SLLW (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXT <typ.UInt64> x y) yes no)
+(B(EQ|NE)Z (AND x (SLL (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
+(B(EQ|NE)Z (AND x (SLLW (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
+
 // Optimize 32-bit bit test with variable shift wrapped in MOVWUreg: if uint32(a)&(1<<b) != 0
-(BEQZ (MOVWUreg (AND x (SLL (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXT <typ.UInt64> x y) yes no)
-(BNEZ (MOVWUreg (AND x (SLL (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXT <typ.UInt64> x y) yes no)
-(BEQZ (MOVWUreg (AND x (SLLW (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXT <typ.UInt64> x y) yes no)
-(BNEZ (MOVWUreg (AND x (SLLW (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXT <typ.UInt64> x y) yes no)
+(B(EQ|NE)Z (MOVWUreg (AND x (SLL (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
+(B(EQ|NE)Z (MOVWUreg (AND x (SLLW (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 
 // Optimize bit test patterns: (BEQZ|BNEZ) (ANDI [1] (SRLI [c] x)) - check if bit c is set
 // This must come before the more general ANDI rules to match (x>>c)&1 patterns correctly
-(BEQZ (ANDI [1] (SRLI [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [c] x) yes no)
-(BNEZ (ANDI [1] (SRLI [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [c] x) yes no)
-(BEQZ (ANDI [1] (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [c] x) yes no)
-(BNEZ (ANDI [1] (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (ANDI [1] (SRLI [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (ANDI [1] (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
 
 // Optimize 32-bit bit test patterns: (BEQZ|BNEZ) (MOVWUreg (SRLIW [c] x)) - check if bit c is set
-(BEQZ (MOVWUreg (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [c] x) yes no)
-(BNEZ (MOVWUreg (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (MOVWUreg (SRLIW [c] x)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
 
-// Optimize bit test patterns with mask after shift: (BEQZ|BNEZ) (ANDI [mask] (SRLIW [c] x))
-(BEQZ (ANDI [mask] (SRLIW [c] x)) yes no) && isUint64PowerOfTwo(mask) && c+log64(mask) < 32 && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [c+log64(mask)] x) yes no)
-(BNEZ (ANDI [mask] (SRLIW [c] x)) yes no) && isUint64PowerOfTwo(mask) && c+log64(mask) < 32 && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [c+log64(mask)] x) yes no)
+// Optimize bit test patterns with mask after shift: (BEQZ|BNEZ) (ANDI [mask] (SRLI [c] x))
+// This matches patterns like "if (x>>c)&mask == 0" where mask is a power of two
+(B(EQ|NE)Z (ANDI [mask] (SRLI [c] x)) yes no) && isUint64PowerOfTwo(mask) && c+log64(mask) < 64 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c+log64(mask)] x) yes no)
+(B(EQ|NE)Z (ANDI [mask] (SRLIW [c] x)) yes no) && isUint64PowerOfTwo(mask) && c+log64(mask) < 32 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c+log64(mask)] x) yes no)
 
 // Optimize bit test patterns: (BEQZ|BNEZ) (ANDI [c] x) when c is a power of two
-(BEQZ (ANDI [c] x) yes no) && isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
-(BNEZ (ANDI [c] x) yes no) && isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
+(B(EQ|NE)Z (ANDI [c] x) yes no) && isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [log64(c)] x) yes no)
 
 // Optimize bit test patterns: (BEQZ|BNEZ) (SRLI [c] x) - check if bit c is set after shift
 // For c=63, x>>63 is 0 or 1, so we can use BEXTI to extract bit 63
-(BEQZ (SRLI [63] x) yes no) && buildcfg.GORISCV64 >= 23 => (BEQZ (BEXTI <typ.UInt64> [63] x) yes no)
-(BNEZ (SRLI [63] x) yes no) && buildcfg.GORISCV64 >= 23 => (BNEZ (BEXTI <typ.UInt64> [63] x) yes no)
+(B(EQ|NE)Z (SRLI [63] x) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [63] x) yes no)
 
 // Convert branch with zero to more optimal branch zero.
 (BEQ  (MOVDconst [0]) cond yes no) => (BEQZ cond yes no)
@@ -723,6 +715,10 @@
 (SRLI <t> [x] (MOVBUreg y)) && x >=  8 => (MOVDconst <t> [0])
 (SRLI <t> [x] (MOVHUreg y)) && x >= 16 => (MOVDconst <t> [0])
 (SRLI <t> [x] (MOVWUreg y)) && x >= 32 => (MOVDconst <t> [0])
+
+// Zbs bit manipulation: match single-bit constants before general constant folding
+(OR  (MOVDconst [c]) x) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BSETI [log64(c)] x)
+(XOR (MOVDconst [c]) x) && oneBit64(c) && buildcfg.GORISCV64 >= 23 => (BINVI [log64(c)] x)
 
 // Fold constant into immediate instructions where possible.
 (ADD (MOVDconst <t> [val]) x) && is32Bit(val) && !t.IsPtr() => (ADDI [val] x)

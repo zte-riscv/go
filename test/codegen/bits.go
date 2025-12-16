@@ -14,14 +14,17 @@ import "math/bits"
 
 func bitcheck64_constleft(a uint64) (n int) {
 	// amd64:"BTQ\t[$]63"
+	// riscv64/rva23u64:"BEXTI\t[$]63"
 	if a&(1<<63) != 0 {
 		return 1
 	}
 	// amd64:"BTQ\t[$]60"
+	// riscv64/rva23u64:"BEXTI\t[$]60"
 	if a&(1<<60) != 0 {
 		return 1
 	}
 	// amd64:"BTL\t[$]0"
+	// riscv64/rva23u64:"BEXTI\t[$]0"
 	if a&(1<<0) != 0 {
 		return 1
 	}
@@ -264,12 +267,14 @@ func bitcheck32_mask(a uint32) (n int) {
 
 func biton32(a, b uint32) (n uint32) {
 	// amd64:"BTSL"
+	// riscv64/rva23u64:"BSET"
 	n += b | (1 << (a & 31))
 
 	// amd64:"ORL\t[$]-2147483648"
 	n += a | (1 << 31)
 
 	// amd64:"ORL\t[$]268435456"
+	// riscv64/rva23u64:"BSETI\t[$]28"
 	n += a | (1 << 28)
 
 	// amd64:"ORL\t[$]1"
@@ -280,12 +285,14 @@ func biton32(a, b uint32) (n uint32) {
 
 func bitoff32(a, b uint32) (n uint32) {
 	// amd64:"BTRL"
+	// riscv64/rva23u64:"BCLR"
 	n += b &^ (1 << (a & 31))
 
 	// amd64:"ANDL\t[$]2147483647"
 	n += a &^ (1 << 31)
 
 	// amd64:"ANDL\t[$]-268435457"
+	// riscv64/rva23u64:"BCLRI\t[$]28"
 	n += a &^ (1 << 28)
 
 	// amd64:"ANDL\t[$]-2"
@@ -296,12 +303,14 @@ func bitoff32(a, b uint32) (n uint32) {
 
 func bitcompl32(a, b uint32) (n uint32) {
 	// amd64:"BTCL"
+	// riscv64/rva23u64:"BINV"
 	n += b ^ (1 << (a & 31))
 
 	// amd64:"XORL\t[$]-2147483648"
 	n += a ^ (1 << 31)
 
 	// amd64:"XORL\t[$]268435456"
+	// riscv64/rva23u64:"BINVI\t[$]28"
 	n += a ^ (1 << 28)
 
 	// amd64:"XORL\t[$]1"
