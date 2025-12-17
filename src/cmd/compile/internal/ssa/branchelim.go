@@ -6,7 +6,6 @@ package ssa
 
 import (
 	"cmd/internal/src"
-	"internal/buildcfg"
 )
 
 // branchelim tries to eliminate branches by
