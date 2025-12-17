@@ -275,3 +275,14 @@ func p256MulDebugGo(arg1, arg2 *p256MontgomeryDomainFieldElement) p256Montgomery
 
 //go:noescape
 func p256MulWithDebug(out, a, b *p256MontgomeryDomainFieldElement, states *[8]DebugState)
+
+func BenchmarkP256Mul(b *testing.B) {
+	arg1 := p256MontgomeryDomainFieldElement{0x123456789abcdef0, 0x0fedcba987654321, 0x1111111111111111, 0x2222222222222222}
+	arg2 := p256MontgomeryDomainFieldElement{0x123456789abcdef0, 0x0fedcba987654321, 0x1111111111111111, 0x2222222222222222}
+	var outAsm p256MontgomeryDomainFieldElement
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		p256Mul(&outAsm, &arg1, &arg2)
+	}
+}
