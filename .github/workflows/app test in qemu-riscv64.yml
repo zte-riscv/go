@@ -31,6 +31,13 @@ jobs:
           make -j"$(nproc)"
           sudo make install
           qemu-riscv64 -version
+      - name: Test atomic
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          echo "========== Atomic old Tests ============"
+          qemu-riscv64 -cpu max ./atmoic -test.run=^Test -test.Bench=^$
+          echo "========== Atomic new Tests ============"
+          qemu-riscv64 -cpu max ./atmoic_zabha -test.run=^Test -test.Bench=^$
       - name: Build toolchain (host amd64) and run rv64 tests via qemu-user
         run: |
           set -euxo pipefail
