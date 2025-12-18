@@ -36,13 +36,13 @@ jobs:
           set -ex
           cd "$GITHUB_WORKSPACE"
           echo "========== Atomic old Tests ============"
-          qemu-riscv64 -cpu max ./atmoic -test.run=^Test -test.bench=^$
+          qemu-riscv64 -cpu max ./atomic -test.run=^Test -test.bench=^$
           echo "========== Atomic new Tests ============"
-          qemu-riscv64 -cpu max ./atmoic_zabha -test.run=^Test -test.bench=^$
+          qemu-riscv64 -cpu max ./atomic_zabha -test.run=^Test -test.bench=^$
           echo "========== Atomic old Benchmarks ============"
-          qemu-riscv64 -cpu max ./atmoic -test.run=^$ -test.bench=^Bench
+          qemu-riscv64 -cpu max ./atomic -test.run=^$ -test.bench=^Bench
           echo "========== Atomic new Benchmarks ============"
-          qemu-riscv64 -cpu max ./atmoic_zabha -test.run=^$ -test.bench=^Bench
+          qemu-riscv64 -cpu max ./atomic_zabha -test.run=^$ -test.bench=^Bench
       - name: Build toolchain (host amd64) and run rv64 tests via qemu-user
         run: |
           set -euxo pipefail
