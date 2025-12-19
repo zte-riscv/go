@@ -515,10 +515,10 @@
 (AtomicAdd(64|32) ...) => (LoweredAtomicAdd(64|32) ...)
 
 // RVA23 AtomicAnd8 => LoweredAtomicAnd8
-(AtomicAnd8 ptr val mem) && buildcfg.GORISCV64 >= 23 => (LoweredAtomicAnd8 ptr val mem)
+(AtomicAnd8 ptr val mem) && buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha] => (LoweredAtomicAnd8 ptr val mem)
 
 // AtomicAnd8(ptr,val) => LoweredAtomicAnd32(ptr&^3, ^((uint8(val) ^ 0xff) << ((ptr & 3) * 8)))
-(AtomicAnd8 ptr val mem) && buildcfg.GORISCV64 < 23 =>
+(AtomicAnd8 ptr val mem) && !buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha] =>
 	(LoweredAtomicAnd32 (ANDI <typ.Uintptr> [^3] ptr)
 		(NOT <typ.UInt32> (SLL <typ.UInt32> (XORI <typ.UInt32> [0xff] (ZeroExt8to32 val))
 			(SLLI <typ.UInt64> [3] (ANDI <typ.UInt64> [3] ptr)))) mem)
@@ -531,10 +531,10 @@
 (AtomicExchange(64|32) ...) => (LoweredAtomicExchange(64|32) ...)
 
 // RVA23 AtomicOr8 => LoweredAtomicOr8
-(AtomicOr8 ptr val mem) && buildcfg.GORISCV64 >= 23 => (LoweredAtomicOr8 ptr val mem)
+(AtomicOr8 ptr val mem) && buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha] => (LoweredAtomicOr8 ptr val mem)
 
 // AtomicOr8(ptr,val)  => LoweredAtomicOr32(ptr&^3, uint32(val)<<((ptr&3)*8))
-(AtomicOr8 ptr val mem) && buildcfg.GORISCV64 < 23 =>
+(AtomicOr8 ptr val mem) && !buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha] =>
 	(LoweredAtomicOr32 (ANDI <typ.Uintptr> [^3] ptr)
 		(SLL <typ.UInt32> (ZeroExt8to32 val)
 			(SLLI <typ.UInt64> [3] (ANDI <typ.UInt64> [3] ptr))) mem)

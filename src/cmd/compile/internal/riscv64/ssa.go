@@ -577,6 +577,15 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p2.To.Type = obj.TYPE_REG
 		p2.To.Reg = v.Reg0()
 
+	case ssa.OpRISCV64LoweredAtomicExchange8:
+		as := riscv.AAMOSWAPB
+		p := s.Prog(as)
+		p.From.Type = obj.TYPE_REG
+		p.From.Reg = v.Args[1].Reg()
+		p.To.Type = obj.TYPE_MEM
+		p.To.Reg = v.Args[0].Reg()
+		p.RegTo2 = v.Reg0()
+
 	case ssa.OpRISCV64LoweredAtomicExchange32, ssa.OpRISCV64LoweredAtomicExchange64:
 		as := riscv.AAMOSWAPW
 		if v.Op == ssa.OpRISCV64LoweredAtomicExchange64 {

@@ -848,13 +848,13 @@ func rewriteValueRISCV64_OpAtomicAnd8(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (AtomicAnd8 ptr val mem)
-	// cond: buildcfg.GORISCV64 >= 23
+	// cond: buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha]
 	// result: (LoweredAtomicAnd8 ptr val mem)
 	for {
 		ptr := v_0
 		val := v_1
 		mem := v_2
-		if !(buildcfg.GORISCV64 >= 23) {
+		if !(buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha]) {
 			break
 		}
 		v.reset(OpRISCV64LoweredAtomicAnd8)
@@ -862,13 +862,13 @@ func rewriteValueRISCV64_OpAtomicAnd8(v *Value) bool {
 		return true
 	}
 	// match: (AtomicAnd8 ptr val mem)
-	// cond: buildcfg.GORISCV64 < 23
+	// cond: !buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha]
 	// result: (LoweredAtomicAnd32 (ANDI <typ.Uintptr> [^3] ptr) (NOT <typ.UInt32> (SLL <typ.UInt32> (XORI <typ.UInt32> [0xff] (ZeroExt8to32 val)) (SLLI <typ.UInt64> [3] (ANDI <typ.UInt64> [3] ptr)))) mem)
 	for {
 		ptr := v_0
 		val := v_1
 		mem := v_2
-		if !(buildcfg.GORISCV64 < 23) {
+		if !(!buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha]) {
 			break
 		}
 		v.reset(OpRISCV64LoweredAtomicAnd32)
@@ -923,13 +923,13 @@ func rewriteValueRISCV64_OpAtomicOr8(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (AtomicOr8 ptr val mem)
-	// cond: buildcfg.GORISCV64 >= 23
+	// cond: buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha]
 	// result: (LoweredAtomicOr8 ptr val mem)
 	for {
 		ptr := v_0
 		val := v_1
 		mem := v_2
-		if !(buildcfg.GORISCV64 >= 23) {
+		if !(buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha]) {
 			break
 		}
 		v.reset(OpRISCV64LoweredAtomicOr8)
@@ -937,13 +937,13 @@ func rewriteValueRISCV64_OpAtomicOr8(v *Value) bool {
 		return true
 	}
 	// match: (AtomicOr8 ptr val mem)
-	// cond: buildcfg.GORISCV64 < 23
+	// cond: !buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha]
 	// result: (LoweredAtomicOr32 (ANDI <typ.Uintptr> [^3] ptr) (SLL <typ.UInt32> (ZeroExt8to32 val) (SLLI <typ.UInt64> [3] (ANDI <typ.UInt64> [3] ptr))) mem)
 	for {
 		ptr := v_0
 		val := v_1
 		mem := v_2
-		if !(buildcfg.GORISCV64 < 23) {
+		if !(!buildcfg.GORISCV64EXT[buildcfg.Riscv64ExtZabha]) {
 			break
 		}
 		v.reset(OpRISCV64LoweredAtomicOr32)
