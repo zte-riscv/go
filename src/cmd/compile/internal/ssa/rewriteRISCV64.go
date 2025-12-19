@@ -3667,61 +3667,47 @@ func rewriteValueRISCV64_OpRISCV64ANDI(v *Value) bool {
 	// match: (ANDI [0] x)
 	// result: (MOVDconst [0])
 	for {
-		if v_0.Op != OpRISCV64MOVDconst || auxIntToInt64(v_0.AuxInt) != 0 {
+		if auxIntToInt64(v.AuxInt) != 0 {
 			break
 		}
 		v.reset(OpRISCV64MOVDconst)
 		v.AuxInt = int64ToAuxInt(0)
 		return true
 	}
-	return false
-}
-func rewriteValueRISCV64_OpRISCV64CZERONEZ(v *Value) bool {
-	v_1 := v.Args[1]
-	v_0 := v.Args[0]
-	// match: (CZERONEZ x (SNEZ y))
-	// result: (CZERONEZ x y)
+	// match: (ANDI [-1] x)
+	// result: x
 	for {
-		x := v_0
-		if v_1.Op != OpRISCV64SNEZ {
+		if auxIntToInt64(v.AuxInt) != -1 {
 			break
 		}
-		y := v_1.Args[0]
-		v.reset(OpRISCV64CZERONEZ)
-		v.AddArg2(x, y)
+		x := v_0
+		v.copyOf(x)
 		return true
 	}
-	// match: (CZERONEZ x (SEQZ y))
-	// result: (CZEROEQZ x y)
+	// match: (ANDI [x] (MOVDconst [y]))
+	// result: (MOVDconst [x & y])
 	for {
-		x := v_0
-		if v_1.Op != OpRISCV64SEQZ {
+		x := auxIntToInt64(v.AuxInt)
+		if v_0.Op != OpRISCV64MOVDconst {
 			break
 		}
-		y := v_1.Args[0]
-		v.reset(OpRISCV64CZEROEQZ)
-		v.AddArg2(x, y)
-		return true
-	}
-	// match: (CZERONEZ x x)
-	// result: (MOVDconst [0])
-	for {
-		x := v_0
-		if x != v_1 {
-			break
-		}
+		y := auxIntToInt64(v_0.AuxInt)
 		v.reset(OpRISCV64MOVDconst)
-		v.AuxInt = int64ToAuxInt(0)
+		v.AuxInt = int64ToAuxInt(x & y)
 		return true
 	}
-	// match: (CZERONEZ (MOVDconst [0]) _)
-	// result: (MOVDconst [0])
+	// match: (ANDI [x] (ANDI [y] z))
+	// result: (ANDI [x & y] z)
 	for {
-		if v_0.Op != OpRISCV64MOVDconst || auxIntToInt64(v_0.AuxInt) != 0 {
+		x := auxIntToInt64(v.AuxInt)
+		if v_0.Op != OpRISCV64ANDI {
 			break
 		}
-		v.reset(OpRISCV64MOVDconst)
-		v.AuxInt = int64ToAuxInt(0)
+		y := auxIntToInt64(v_0.AuxInt)
+		z := v_0.Args[0]
+		v.reset(OpRISCV64ANDI)
+		v.AuxInt = int64ToAuxInt(x & y)
+		v.AddArg(z)
 		return true
 	}
 	return false
@@ -6477,6 +6463,8 @@ func rewriteValueRISCV64_OpRISCV64NEGW(v *Value) bool {
 func rewriteValueRISCV64_OpRISCV64OR(v *Value) bool {
 	v_1 := v.Args[1]
 	v_0 := v.Args[0]
+	b := v.Block
+	typ := &b.Func.Config.Types
 	// match: (OR (MOVDconst [c]) x)
 	// cond: oneBit64(c) && buildcfg.GORISCV64 >= 23
 	// result: (BSETI [log64(c)] x)
