@@ -67,10 +67,7 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	SLTU	X5, X24, X6
 	ADD	X25, X6, X25
 
-	// 初始化 acc5, acc6, acc7 为 0
-	MOV	X0, X26
-	MOV	X0, X28
-	MOV	X0, X29
+	// {x25 x24 x23 x22 x21}
 
 	// =====================================
 	// First reduction step
@@ -149,9 +146,6 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 
 	ADD	X26, X29, X26		// acc5 = hi(y1*x3) + carry_lo
 	ADD	X26, X6, X26		// acc5 += carry_hi
-
-	MOV	X0, X28			// acc6 = 0
-	MOV	X0, X29			// acc7 = 0
 
 	// =====================================
 	// Second reduction step
