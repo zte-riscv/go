@@ -543,12 +543,23 @@
 (B(EQ|NE)Z (AND x (SLL (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 (B(EQ|NE)Z (AND x (SLLW (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 
+// Pattern 2a: AND with constant left shift (x & (1 << c))
+// Matches: if a&(1<<c) != 0 where c is a constant
+(B(EQ|NE)Z (AND x (SLLI [c] (MOVDconst [1]))) yes no) && c < 64 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (AND x (SLLIW [c] (MOVDconst [1]))) yes no) && c < 32 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+
 // Pattern 3: 32-bit bit test with variable shift wrapped in MOVWUreg/MOVWreg
 // Matches: if uint32(a)&(1<<b) != 0 or int32(a)&(1<<b) != 0
 (B(EQ|NE)Z (MOVWUreg (AND x (SLL (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 (B(EQ|NE)Z (MOVWUreg (AND x (SLLW (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 (B(EQ|NE)Z (MOVWreg (AND x (SLL (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 (B(EQ|NE)Z (MOVWreg (AND x (SLLW (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
+
+// Pattern 3a: 32-bit bit test with constant left shift wrapped in MOVWUreg/MOVWreg
+(B(EQ|NE)Z (MOVWUreg (AND x (SLLI [c] (MOVDconst [1])))) yes no) && c < 64 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (MOVWUreg (AND x (SLLIW [c] (MOVDconst [1])))) yes no) && c < 32 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (MOVWreg (AND x (SLLI [c] (MOVDconst [1])))) yes no) && c < 64 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+(B(EQ|NE)Z (MOVWreg (AND x (SLLIW [c] (MOVDconst [1])))) yes no) && c < 32 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
 
 // Pattern 5: Shift-right and test bit 0
 // Matches: if (x>>c)&1 != 0 with constant shift
@@ -567,6 +578,12 @@
 (B(EQ|NE)Z (MOVWUreg (ANDI [1] (SRLIW [c] x))) yes no) && c < 32 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
 (B(EQ|NE)Z (MOVWUreg (ANDI [1] (SRL x y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
 (B(EQ|NE)Z (MOVWUreg (ANDI [1] (SRLW x y))) yes no) && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
+
+// Pattern 7a: Left shift and test bit 0 (less common but possible)
+// Matches: if ((x<<c)&1) != 0, which tests if bit (64-c) is set (for 64-bit) or (32-c) for 32-bit
+// Note: This is less common than right shift patterns
+(B(EQ|NE)Z (ANDI [1] (SLLI [c] x)) yes no) && c > 0 && c < 64 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [64-c] x) yes no)
+(B(EQ|NE)Z (ANDI [1] (SLLIW [c] x)) yes no) && c > 0 && c < 32 && buildcfg.GORISCV64 >= 23 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [32-c] x) yes no)
 
 // Optimize bit test patterns with mask after shift: (BEQZ|BNEZ) (ANDI [mask] (SRLI [c] x))
 // This matches patterns like "if (x>>c)&mask == 0" where mask is a power of two
