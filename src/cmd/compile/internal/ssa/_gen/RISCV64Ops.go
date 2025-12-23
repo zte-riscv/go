@@ -220,12 +220,12 @@ func init() {
 		{name: "SRAIW", argLength: 1, reg: gp11, asm: "SRAIW", aux: "Int64"}, // arg0 >> auxint, shift amount 0-31, arithmetic right shift of 32 bit value, sign extended to 64 bits
 		{name: "SRLI", argLength: 1, reg: gp11, asm: "SRLI", aux: "Int64"},   // arg0 >> auxint, shift amount 0-63, logical right shift
 		{name: "SRLIW", argLength: 1, reg: gp11, asm: "SRLIW", aux: "Int64"}, // arg0 >> auxint, shift amount 0-31, logical right shift of 32 bit value, sign extended to 64 bits
-		
+
 		//B extension (Zba)
 		// Shift and add
-		{name: "SH1ADD", argLength: 2, reg: gp21, asm: "SH1ADD"}, // arg0 << 1 + arg1
-		{name: "SH2ADD", argLength: 2, reg: gp21, asm: "SH2ADD"}, // arg0 << 2 + arg1
-		{name: "SH3ADD", argLength: 2, reg: gp21, asm: "SH3ADD"}, // arg0 << 3 + arg1
+		{name: "SH1ADD", argLength: 2, reg: gp21, asm: "SH1ADD"},               // arg0 << 1 + arg1
+		{name: "SH2ADD", argLength: 2, reg: gp21, asm: "SH2ADD"},               // arg0 << 2 + arg1
+		{name: "SH3ADD", argLength: 2, reg: gp21, asm: "SH3ADD"},               // arg0 << 3 + arg1
 		{name: "ADDUW", argLength: 2, reg: gp21, asm: "ADDUW"},                 // ZeroExt32to64(Trunc64to32(arg0)) + arg1
 		{name: "SH1ADDUW", argLength: 2, reg: gp21, asm: "SH1ADDUW"},           // ZeroExt32to64(Trunc64to32(arg0))<<1 + arg1
 		{name: "SH2ADDUW", argLength: 2, reg: gp21, asm: "SH2ADDUW"},           // ZeroExt32to64(Trunc64to32(arg0))<<2 + arg1
@@ -384,6 +384,7 @@ func init() {
 
 		// Atomic exchange.
 		// store arg1 to *arg0. arg2=mem. returns <old content of *arg0, memory>.
+		{name: "LoweredAtomicExchange8", argLength: 3, reg: gpxchg, resultNotInArgs: true, faultOnNilArg0: true, hasSideEffects: true},
 		{name: "LoweredAtomicExchange32", argLength: 3, reg: gpxchg, resultNotInArgs: true, faultOnNilArg0: true, hasSideEffects: true},
 		{name: "LoweredAtomicExchange64", argLength: 3, reg: gpxchg, resultNotInArgs: true, faultOnNilArg0: true, hasSideEffects: true},
 
@@ -408,6 +409,11 @@ func init() {
 		// MOV  $1, Rout
 		{name: "LoweredAtomicCas32", argLength: 4, reg: gpcas, resultNotInArgs: true, faultOnNilArg0: true, hasSideEffects: true, unsafePoint: true},
 		{name: "LoweredAtomicCas64", argLength: 4, reg: gpcas, resultNotInArgs: true, faultOnNilArg0: true, hasSideEffects: true, unsafePoint: true},
+
+		// Atomic 8 bit AND/OR.
+		// *arg0 &= (|=) arg1. arg2=mem. returns nil.
+		{name: "LoweredAtomicAnd8", argLength: 3, reg: gpatomic, asm: "AMOANDB", faultOnNilArg0: true, hasSideEffects: true},
+		{name: "LoweredAtomicOr8", argLength: 3, reg: gpatomic, asm: "AMOORB", faultOnNilArg0: true, hasSideEffects: true},
 
 		// Atomic 32 bit AND/OR.
 		// *arg0 &= (|=) arg1. arg2=mem. returns nil.
@@ -497,16 +503,15 @@ func init() {
 		{name: "FLED", argLength: 2, reg: fp2gp, asm: "FLED"},                                                                               // arg0 <= arg1
 		{name: "LoweredFMIND", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMIND", commutative: true, typ: "Float64"},             // min(arg0, arg1)
 		{name: "LoweredFMAXD", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMAXD", commutative: true, typ: "Float64"},             // max(arg0, arg1)
+		{name: "BCLR", argLength: 2, reg: gp21, asm: "BCLR"},                                                                                // clear the arg1-th bit of arg0
+		{name: "BCLRI", argLength: 1, reg: gp11, asm: "BCLRI", aux: "Int64"},                                                                // clear the auxint-th bit of arg0
+		{name: "BEXT", argLength: 2, reg: gp21, asm: "BEXT"},                                                                                // extract the arg1-th bit of arg0
+		{name: "BEXTI", argLength: 1, reg: gp11, asm: "BEXTI", aux: "Int64"},                                                                // extract the auxint-th bit of arg0
+		{name: "BINV", argLength: 2, reg: gp21, asm: "BINV"},                                                                                // invert the arg1-th bit of arg0
+		{name: "BINVI", argLength: 1, reg: gp11, asm: "BINVI", aux: "Int64"},                                                                // invert the auxint-th bit of arg0
+		{name: "BSET", argLength: 2, reg: gp21, asm: "BSET"},                                                                                // set the arg1-th bit of arg0
+		{name: "BSETI", argLength: 1, reg: gp11, asm: "BSETI", aux: "Int64"},                                                                // set the auxint-th bit of arg0
 
-		{name: "BCLR", argLength: 2, reg: gp21, asm: "BCLR"},                 // clear the arg1-th bit of arg0
-		{name: "BCLRI", argLength: 1, reg: gp11, asm: "BCLRI", aux: "Int64"}, // clear the auxint-th bit of arg0
-		{name: "BEXT", argLength: 2, reg: gp21, asm: "BEXT"},                 // extract the arg1-th bit of arg0
-		{name: "BEXTI", argLength: 1, reg: gp11, asm: "BEXTI", aux: "Int64"}, // extract the auxint-th bit of arg0
-		{name: "BINV", argLength: 2, reg: gp21, asm: "BINV"},                 // invert the arg1-th bit of arg0
-		{name: "BINVI", argLength: 1, reg: gp11, asm: "BINVI", aux: "Int64"}, // invert the auxint-th bit of arg0
-		{name: "BSET", argLength: 2, reg: gp21, asm: "BSET"},                 // set the arg1-th bit of arg0
-		{name: "BSETI", argLength: 1, reg: gp11, asm: "BSETI", aux: "Int64"}, // set the auxint-th bit of arg0
-		
 		// RISC-V Integer Conditional (Zicond) operations extension
 		{name: "CZEROEQZ", argLength: 2, reg: gp21, asm: "CZEROEQZ"},
 		{name: "CZERONEZ", argLength: 2, reg: gp21, asm: "CZERONEZ"},
