@@ -85,13 +85,14 @@ func p256CmovznzU64(out1 *uint64, arg1 p256Uint1, arg2 uint64, arg3 uint64) {
 //
 //	eval (from_montgomery out1) mod m = (eval (from_montgomery arg1) * eval (from_montgomery arg2)) mod m
 //	0 ≤ eval out1 < m
-func p256Mul(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement, arg2 *p256MontgomeryDomainFieldElement) {
+func p256MulGeneric(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement, arg2 *p256MontgomeryDomainFieldElement) {
 	x1 := arg1[1]
 	x2 := arg1[2]
 	x3 := arg1[3]
 	x4 := arg1[0]
 	var x5 uint64
 	var x6 uint64
+	// 分块乘
 	x6, x5 = bits.Mul64(x4, arg2[3])
 	var x7 uint64
 	var x8 uint64
@@ -104,6 +105,8 @@ func p256Mul(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainF
 	x12, x11 = bits.Mul64(x4, arg2[0])
 	var x13 uint64
 	var x14 uint64
+
+	// 加进位
 	x13, x14 = bits.Add64(x12, x9, uint64(0x0))
 	var x15 uint64
 	var x16 uint64
@@ -112,6 +115,14 @@ func p256Mul(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainF
 	var x18 uint64
 	x17, x18 = bits.Add64(x8, x5, uint64(p256Uint1(x16)))
 	x19 := (uint64(p256Uint1(x18)) + x6)
+	// 到此得到第一块，{x19, x17, x15, x13 ,x11} acc，最右边为最低，最左边高
+
+	// 第一块约减
+	// x11 * p  + acc：
+	// 1. x11 * p = {x21, x20, x28, x26, x24}
+
+	// p = 2^256 - 2^224 + 2^192 + 2^96 - 1
+	// p 表示为 {0xffffffff00000001,0x0, 0xffffffff,0xffffffffffffffff}
 	var x20 uint64
 	var x21 uint64
 	x21, x20 = bits.Mul64(x11, 0xffffffff00000001)
@@ -125,8 +136,11 @@ func p256Mul(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainF
 	var x27 uint64
 	x26, x27 = bits.Add64(x25, x22, uint64(0x0))
 	x28 := (uint64(p256Uint1(x27)) + x23)
+	// 左边为高，乘完得到{x21, x20, x28, x26, x24}
+
+	// 2.{x21, x20, x28, x26, x24} + acc {x19, x17, x15, x13 ,x11}
 	var x30 uint64
-	_, x30 = bits.Add64(x11, x24, uint64(0x0))
+	_, x30 = bits.Add64(x11, x24, uint64(0x0)) // 这里直接把最低64位丢掉了，相当于右移64位
 	var x31 uint64
 	var x32 uint64
 	x31, x32 = bits.Add64(x13, x26, uint64(p256Uint1(x30)))
@@ -139,6 +153,8 @@ func p256Mul(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainF
 	var x37 uint64
 	var x38 uint64
 	x37, x38 = bits.Add64(x19, x21, uint64(p256Uint1(x36)))
+	// 得到{x37, x35, x33, x31}，成为新的acc，而且又变回了256位
+
 	var x39 uint64
 	var x40 uint64
 	x40, x39 = bits.Mul64(x1, arg2[3])
