@@ -3630,6 +3630,26 @@ func rewriteValueRISCV64_OpRISCV64ADDI(v *Value) bool {
 func rewriteValueRISCV64_OpRISCV64AND(v *Value) bool {
 	v_1 := v.Args[1]
 	v_0 := v.Args[0]
+	// match: (AND (MOVDconst [c]) x)
+	// cond: isUint64PowerOfTwo(^c) && log64(^c) >= 10 && buildcfg.GORISCV64 >= 23
+	// result: (BCLRI [log64(^c)] x)
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			if v_0.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_0.AuxInt)
+			x := v_1
+			if !(isUint64PowerOfTwo(^c) && log64(^c) >= 10 && buildcfg.GORISCV64 >= 23) {
+				continue
+			}
+			v.reset(OpRISCV64BCLRI)
+			v.AuxInt = int64ToAuxInt(log64(^c))
+			v.AddArg(x)
+			return true
+		}
+		break
+	}
 	// match: (AND (MOVDconst [val]) x)
 	// cond: is32Bit(val)
 	// result: (ANDI [val] x)
@@ -6466,7 +6486,7 @@ func rewriteValueRISCV64_OpRISCV64OR(v *Value) bool {
 	b := v.Block
 	typ := &b.Func.Config.Types
 	// match: (OR (MOVDconst [c]) x)
-	// cond: oneBit64(c) && buildcfg.GORISCV64 >= 23
+	// cond: oneBit64(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23
 	// result: (BSETI [log64(c)] x)
 	for {
 		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
@@ -6475,7 +6495,7 @@ func rewriteValueRISCV64_OpRISCV64OR(v *Value) bool {
 			}
 			c := auxIntToInt64(v_0.AuxInt)
 			x := v_1
-			if !(oneBit64(c) && buildcfg.GORISCV64 >= 23) {
+			if !(oneBit64(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23) {
 				continue
 			}
 			v.reset(OpRISCV64BSETI)
@@ -7982,7 +8002,7 @@ func rewriteValueRISCV64_OpRISCV64XOR(v *Value) bool {
 	v_1 := v.Args[1]
 	v_0 := v.Args[0]
 	// match: (XOR (MOVDconst [c]) x)
-	// cond: oneBit64(c) && buildcfg.GORISCV64 >= 23
+	// cond: oneBit64(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23
 	// result: (BINVI [log64(c)] x)
 	for {
 		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
@@ -7991,7 +8011,7 @@ func rewriteValueRISCV64_OpRISCV64XOR(v *Value) bool {
 			}
 			c := auxIntToInt64(v_0.AuxInt)
 			x := v_1
-			if !(oneBit64(c) && buildcfg.GORISCV64 >= 23) {
+			if !(oneBit64(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23) {
 				continue
 			}
 			v.reset(OpRISCV64BINVI)
@@ -10189,7 +10209,7 @@ func rewriteBlockRISCV64(b *Block) bool {
 			return true
 		}
 		// match: (BEQZ (AND x (MOVDconst [c])) yes no)
-		// cond: oneBit64(c) && buildcfg.GORISCV64 >= 23
+		// cond: oneBit64(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23
 		// result: (BEQZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
 		for b.Controls[0].Op == OpRISCV64AND {
 			v_0 := b.Controls[0]
@@ -10202,7 +10222,7 @@ func rewriteBlockRISCV64(b *Block) bool {
 					continue
 				}
 				c := auxIntToInt64(v_0_1.AuxInt)
-				if !(oneBit64(c) && buildcfg.GORISCV64 >= 23) {
+				if !(oneBit64(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23) {
 					continue
 				}
 				v0 := b.NewValue0(v_0.Pos, OpRISCV64BEXTI, typ.UInt64)
@@ -10844,13 +10864,13 @@ func rewriteBlockRISCV64(b *Block) bool {
 			return true
 		}
 		// match: (BEQZ (ANDI [c] x) yes no)
-		// cond: isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23
+		// cond: isUint64PowerOfTwo(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23
 		// result: (BEQZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
 		for b.Controls[0].Op == OpRISCV64ANDI {
 			v_0 := b.Controls[0]
 			c := auxIntToInt64(v_0.AuxInt)
 			x := v_0.Args[0]
-			if !(isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23) {
+			if !(isUint64PowerOfTwo(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23) {
 				break
 			}
 			v0 := b.NewValue0(v_0.Pos, OpRISCV64BEXTI, typ.UInt64)
@@ -11079,7 +11099,7 @@ func rewriteBlockRISCV64(b *Block) bool {
 			return true
 		}
 		// match: (BNEZ (AND x (MOVDconst [c])) yes no)
-		// cond: oneBit64(c) && buildcfg.GORISCV64 >= 23
+		// cond: oneBit64(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23
 		// result: (BNEZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
 		for b.Controls[0].Op == OpRISCV64AND {
 			v_0 := b.Controls[0]
@@ -11092,7 +11112,7 @@ func rewriteBlockRISCV64(b *Block) bool {
 					continue
 				}
 				c := auxIntToInt64(v_0_1.AuxInt)
-				if !(oneBit64(c) && buildcfg.GORISCV64 >= 23) {
+				if !(oneBit64(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23) {
 					continue
 				}
 				v0 := b.NewValue0(v_0.Pos, OpRISCV64BEXTI, typ.UInt64)
@@ -11734,13 +11754,13 @@ func rewriteBlockRISCV64(b *Block) bool {
 			return true
 		}
 		// match: (BNEZ (ANDI [c] x) yes no)
-		// cond: isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23
+		// cond: isUint64PowerOfTwo(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23
 		// result: (BNEZ (BEXTI <typ.UInt64> [log64(c)] x) yes no)
 		for b.Controls[0].Op == OpRISCV64ANDI {
 			v_0 := b.Controls[0]
 			c := auxIntToInt64(v_0.AuxInt)
 			x := v_0.Args[0]
-			if !(isUint64PowerOfTwo(c) && buildcfg.GORISCV64 >= 23) {
+			if !(isUint64PowerOfTwo(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 23) {
 				break
 			}
 			v0 := b.NewValue0(v_0.Pos, OpRISCV64BEXTI, typ.UInt64)
