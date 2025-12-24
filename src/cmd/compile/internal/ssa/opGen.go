@@ -2561,10 +2561,10 @@ const (
 	OpRISCV64CALLtail
 	OpRISCV64CALLclosure
 	OpRISCV64CALLinter
-	OpRISCV64DUFFZERO
-	OpRISCV64DUFFCOPY
 	OpRISCV64LoweredZero
+	OpRISCV64LoweredZeroLoop
 	OpRISCV64LoweredMove
+	OpRISCV64LoweredMoveLoop
 	OpRISCV64LoweredAtomicLoad8
 	OpRISCV64LoweredAtomicLoad32
 	OpRISCV64LoweredAtomicLoad64
@@ -34539,57 +34539,59 @@ var opcodeTable = [...]opInfo{
 		},
 	},
 	{
-		name:           "DUFFZERO",
-		auxType:        auxInt64,
+		name:           "LoweredZero",
+		auxType:        auxSymValAndOff,
 		argLen:         2,
 		faultOnNilArg0: true,
+		symEffect:      SymWrite,
 		reg: regInfo{
 			inputs: []inputInfo{
-				{0, 16777216}, // X25
+				{0, 1006632944}, // X5 X6 X7 X8 X9 X10 X11 X12 X13 X14 X15 X16 X17 X18 X19 X20 X21 X22 X23 X24 X25 X26 X28 X29 X30
 			},
-			clobbers: 16777216, // X25
 		},
 	},
 	{
-		name:           "DUFFCOPY",
-		auxType:        auxInt64,
-		argLen:         3,
+		name:           "LoweredZeroLoop",
+		auxType:        auxSymValAndOff,
+		argLen:         2,
+		needIntTemp:    true,
 		faultOnNilArg0: true,
-		faultOnNilArg1: true,
+		symEffect:      SymWrite,
 		reg: regInfo{
 			inputs: []inputInfo{
-				{0, 16777216}, // X25
-				{1, 8388608},  // X24
-			},
-			clobbers: 25165824, // X24 X25
-		},
-	},
-	{
-		name:           "LoweredZero",
-		auxType:        auxInt64,
-		argLen:         3,
-		faultOnNilArg0: true,
-		reg: regInfo{
-			inputs: []inputInfo{
-				{0, 16},         // X5
-				{1, 1006632944}, // X5 X6 X7 X8 X9 X10 X11 X12 X13 X14 X15 X16 X17 X18 X19 X20 X21 X22 X23 X24 X25 X26 X28 X29 X30
+				{0, 16}, // X5
 			},
 			clobbers: 16, // X5
 		},
 	},
 	{
 		name:           "LoweredMove",
-		auxType:        auxInt64,
-		argLen:         4,
+		auxType:        auxSymValAndOff,
+		argLen:         3,
 		faultOnNilArg0: true,
 		faultOnNilArg1: true,
+		symEffect:      SymWrite,
 		reg: regInfo{
 			inputs: []inputInfo{
-				{0, 16},         // X5
-				{1, 32},         // X6
-				{2, 1006632880}, // X5 X6 X8 X9 X10 X11 X12 X13 X14 X15 X16 X17 X18 X19 X20 X21 X22 X23 X24 X25 X26 X28 X29 X30
+				{0, 32}, // X6
+				{1, 64}, // X7
 			},
 			clobbers: 112, // X5 X6 X7
+		},
+	},
+	{
+		name:           "LoweredMoveLoop",
+		auxType:        auxSymValAndOff,
+		argLen:         3,
+		faultOnNilArg0: true,
+		faultOnNilArg1: true,
+		symEffect:      SymWrite,
+		reg: regInfo{
+			inputs: []inputInfo{
+				{0, 64},  // X7
+				{1, 128}, // X8
+			},
+			clobbers: 240, // X5 X6 X7 X8
 		},
 	},
 	{
