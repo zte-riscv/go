@@ -318,7 +318,10 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 			case 3:
 				op = "PREFETCHW"
 			}
-			args[0] = plan9Arg(&inst, pc, symname, RegOffset{inst.Args[1].(Reg), inst.Args[2].(Simm)})
+			// compared to ORI, the lowest 5 bits of imm in PREFETCH should be zeros
+			simm := inst.Args[2].(Simm)
+			simm.Imm = simm.Imm & 0b111111100000
+			args[0] = plan9Arg(&inst, pc, symname, RegOffset{inst.Args[1].(Reg), simm})
 			args = args[:len(args)-2]
 		}
 
