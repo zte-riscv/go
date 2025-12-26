@@ -69,7 +69,7 @@ func GNUSyntax(inst Inst) string {
 
 		if inst.Op == ORI && inst.Args[0].(Reg) == X0 {
 			imm := inst.Args[2].(Simm).Imm
-			switch imm & ((1 << 5) - 1) {
+			switch imm & 0b11111 {
 			case 0:
 				op = "prefetch.i"
 			case 1:
@@ -77,10 +77,13 @@ func GNUSyntax(inst Inst) string {
 			case 3:
 				op = "prefetch.w"
 			}
+			// compared to ORI, the lowest 5 bits of imm in PREFETCH should be zeros
+			simm := inst.Args[2].(Simm)
+			simm.Imm = simm.Imm &^ 0b11111
 			if imm == 0 {
 				args[0] = fmt.Sprintf("(X%d)", inst.Args[1].(Reg))
 			} else {
-				args[0] = fmt.Sprintf("%s(X%d)", inst.Args[2].(Simm).String(), inst.Args[1].(Reg))
+				args[0] = fmt.Sprintf("%s(X%d)", simm.String(), inst.Args[1].(Reg))
 			}
 			args = args[:len(args)-2]
 		}
