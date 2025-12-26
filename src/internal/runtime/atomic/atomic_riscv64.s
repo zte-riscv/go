@@ -203,6 +203,10 @@ TEXT ·Xchg(SB), NOSPLIT, $0-20
 TEXT ·Xchg8(SB), NOSPLIT, $0-17
 	MOV	ptr+0(FP), A0
 	MOVBU	new+8(FP), A1
+#ifdef GORISCV64EXT_ZABHA
+	AMOSWAPB A1, (A0), A1
+	MOV	A1, ret+16(FP)
+#else
 	AND	$3, A0, A2
 	SLL	$3, A2
 	MOV	$255, A4
@@ -218,6 +222,7 @@ xchg8_again:
 	BNEZ	A6, xchg8_again
 	SRL	A2, A5
 	MOVB	A5, ret+16(FP)
+#endif
 	RET
 
 // func Xchg64(ptr *uint64, new uint64) uint64
@@ -270,6 +275,9 @@ TEXT ·Xchguintptr(SB), NOSPLIT, $0-24
 TEXT ·And8(SB), NOSPLIT, $0-9
 	MOV	ptr+0(FP), A0
 	MOVBU	val+8(FP), A1
+#ifdef GORISCV64EXT_ZABHA
+	AMOANDB	A1, (A0), ZERO
+#else
 	AND	$3, A0, A2
 	AND	$-4, A0
 	SLL	$3, A2
@@ -277,17 +285,22 @@ TEXT ·And8(SB), NOSPLIT, $0-9
 	SLL	A2, A1
 	XOR	$-1, A1
 	AMOANDW A1, (A0), ZERO
+#endif
 	RET
 
 // func Or8(ptr *uint8, val uint8)
 TEXT ·Or8(SB), NOSPLIT, $0-9
 	MOV	ptr+0(FP), A0
 	MOVBU	val+8(FP), A1
+#ifdef GORISCV64EXT_ZABHA
+	AMOORB	A1, (A0), ZERO
+#else
 	AND	$3, A0, A2
 	AND	$-4, A0
 	SLL	$3, A2
 	SLL	A2, A1
 	AMOORW	A1, (A0), ZERO
+#endif
 	RET
 
 // func And(ptr *uint32, val uint32)
