@@ -219,12 +219,12 @@ func init() {
 		{name: "SRAIW", argLength: 1, reg: gp11, asm: "SRAIW", aux: "Int64"}, // arg0 >> auxint, shift amount 0-31, arithmetic right shift of 32 bit value, sign extended to 64 bits
 		{name: "SRLI", argLength: 1, reg: gp11, asm: "SRLI", aux: "Int64"},   // arg0 >> auxint, shift amount 0-63, logical right shift
 		{name: "SRLIW", argLength: 1, reg: gp11, asm: "SRLIW", aux: "Int64"}, // arg0 >> auxint, shift amount 0-31, logical right shift of 32 bit value, sign extended to 64 bits
-		
+
 		//B extension (Zba)
 		// Shift and add
-		{name: "SH1ADD", argLength: 2, reg: gp21, asm: "SH1ADD"}, // arg0 << 1 + arg1
-		{name: "SH2ADD", argLength: 2, reg: gp21, asm: "SH2ADD"}, // arg0 << 2 + arg1
-		{name: "SH3ADD", argLength: 2, reg: gp21, asm: "SH3ADD"}, // arg0 << 3 + arg1
+		{name: "SH1ADD", argLength: 2, reg: gp21, asm: "SH1ADD"},               // arg0 << 1 + arg1
+		{name: "SH2ADD", argLength: 2, reg: gp21, asm: "SH2ADD"},               // arg0 << 2 + arg1
+		{name: "SH3ADD", argLength: 2, reg: gp21, asm: "SH3ADD"},               // arg0 << 3 + arg1
 		{name: "ADDUW", argLength: 2, reg: gp21, asm: "ADDUW"},                 // ZeroExt32to64(Trunc64to32(arg0)) + arg1
 		{name: "SH1ADDUW", argLength: 2, reg: gp21, asm: "SH1ADDUW"},           // ZeroExt32to64(Trunc64to32(arg0))<<1 + arg1
 		{name: "SH2ADDUW", argLength: 2, reg: gp21, asm: "SH2ADDUW"},           // ZeroExt32to64(Trunc64to32(arg0))<<2 + arg1
@@ -280,89 +280,91 @@ func init() {
 		{name: "CALLclosure", argLength: -1, reg: callClosure, aux: "CallOff", call: true},       // call function via closure. arg0=codeptr, arg1=closure, last arg=mem, auxint=argsize, returns mem
 		{name: "CALLinter", argLength: -1, reg: callInter, aux: "CallOff", call: true},           // call fn by pointer. arg0=codeptr, last arg=mem, auxint=argsize, returns mem
 
-		// duffzero
-		// arg0 = address of memory to zero (in X25, changed as side effect)
+		// Generic moves and zeros
+
+		// general unrolled zeroing
+		// arg0 = address of memory to zero
 		// arg1 = mem
-		// auxint = offset into duffzero code to start executing
-		// X1 (link register) changed because of function call
+		// auxint = element size and type alignment
+		// returns mem
+		//	mov	ZERO, (OFFSET)(Rarg0)
+		{
+			name:           "LoweredZero",
+			aux:            "SymValAndOff",
+			typ:            "Mem",
+			argLength:      2,
+			symEffect:      "Write",
+			faultOnNilArg0: true,
+			reg: regInfo{
+				inputs: []regMask{gpMask},
+			},
+		},
+		// general unaligned zeroing
+		// arg0 = address of memory to zero (clobber)
+		// arg1 = mem
+		// auxint = element size and type alignment
 		// returns mem
 		{
-			name:      "DUFFZERO",
-			aux:       "Int64",
-			argLength: 2,
-			reg: regInfo{
-				inputs:   []regMask{regNamed["X25"]},
-				clobbers: regNamed["X1"] | regNamed["X25"],
-			},
+			name:           "LoweredZeroLoop",
+			aux:            "SymValAndOff",
 			typ:            "Mem",
+			argLength:      2,
+			symEffect:      "Write",
+			needIntTemp:    true,
 			faultOnNilArg0: true,
+			reg: regInfo{
+				inputs:   []regMask{regNamed["X5"]},
+				clobbers: regNamed["X5"],
+			},
 		},
 
-		// duffcopy
-		// arg0 = address of dst memory (in X25, changed as side effect)
-		// arg1 = address of src memory (in X24, changed as side effect)
+		// general unaligned move
+		// arg0 = address of dst memory (clobber)
+		// arg1 = address of src memory (clobber)
 		// arg2 = mem
-		// auxint = offset into duffcopy code to start executing
-		// X1 (link register) changed because of function call
+		// auxint = size and type alignment
 		// returns mem
+		//	mov	(offset)(Rarg1), TMP
+		//	mov	TMP, (offset)(Rarg0)
+
 		{
-			name:      "DUFFCOPY",
-			aux:       "Int64",
+			name:      "LoweredMove",
+			aux:       "SymValAndOff",
 			argLength: 3,
 			reg: regInfo{
-				inputs:   []regMask{regNamed["X25"], regNamed["X24"]},
-				clobbers: regNamed["X1"] | regNamed["X24"] | regNamed["X25"],
+				inputs:   []regMask{regNamed["X6"], regNamed["X7"]},
+				clobbers: regNamed["X5"] | regNamed["X6"] | regNamed["X7"],
 			},
 			typ:            "Mem",
+			symEffect:      "Write",
 			faultOnNilArg0: true,
 			faultOnNilArg1: true,
 		},
 
-		// Generic moves and zeros
-
-		// general unaligned zeroing
-		// arg0 = address of memory to zero (in X5, changed as side effect)
-		// arg1 = address of the last element to zero (inclusive)
-		// arg2 = mem
-		// auxint = element size
+		// general unaligned move
+		// arg0 = address of dst memory (clobber)
+		// arg1 = address of src memory (clobber)
+		// arg3 = mem
+		// auxint = size and type alignment
 		// returns mem
-		//	mov	ZERO, (X5)
-		//	ADD	$sz, X5
-		//	BGEU	Rarg1, X5, -2(PC)
+		//	ADD	$sz, X6
+		//loop:
+		//	mov	(Rarg1), X5
+		//	mov	X5, (Rarg0)
+		//	...rest 7 mov...
+		//	ADD	$sz, Rarg0
+		//	ADD	$sz, Rarg1
+		//	BNE	X6, Rarg1, loop
 		{
-			name:      "LoweredZero",
-			aux:       "Int64",
+			name:      "LoweredMoveLoop",
+			aux:       "SymValAndOff",
 			argLength: 3,
 			reg: regInfo{
-				inputs:   []regMask{regNamed["X5"], gpMask},
-				clobbers: regNamed["X5"],
+				inputs:   []regMask{regNamed["X7"], regNamed["X8"]},
+				clobbers: regNamed["X5"] | regNamed["X6"] | regNamed["X7"] | regNamed["X8"],
 			},
 			typ:            "Mem",
-			faultOnNilArg0: true,
-		},
-
-		// general unaligned move
-		// arg0 = address of dst memory (in X5, changed as side effect)
-		// arg1 = address of src memory (in X6, changed as side effect)
-		// arg2 = address of the last element of src (can't be X7 as we clobber it before using arg2)
-		// arg3 = mem
-		// auxint = alignment
-		// clobbers X7 as a tmp register.
-		// returns mem
-		//	mov	(X6), X7
-		//	mov	X7, (X5)
-		//	ADD	$sz, X5
-		//	ADD	$sz, X6
-		//	BGEU	Rarg2, X5, -4(PC)
-		{
-			name:      "LoweredMove",
-			aux:       "Int64",
-			argLength: 4,
-			reg: regInfo{
-				inputs:   []regMask{regNamed["X5"], regNamed["X6"], gpMask &^ regNamed["X7"]},
-				clobbers: regNamed["X5"] | regNamed["X6"] | regNamed["X7"],
-			},
-			typ:            "Mem",
+			symEffect:      "Write",
 			faultOnNilArg0: true,
 			faultOnNilArg1: true,
 		},
@@ -495,7 +497,7 @@ func init() {
 		{name: "FLED", argLength: 2, reg: fp2gp, asm: "FLED"},                                                                               // arg0 <= arg1
 		{name: "LoweredFMIND", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMIND", commutative: true, typ: "Float64"},             // min(arg0, arg1)
 		{name: "LoweredFMAXD", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMAXD", commutative: true, typ: "Float64"},             // max(arg0, arg1)
-		
+
 		// RISC-V Integer Conditional (Zicond) operations extension
 		{name: "CZEROEQZ", argLength: 2, reg: gp21, asm: "CZEROEQZ"},
 		{name: "CZERONEZ", argLength: 2, reg: gp21, asm: "CZERONEZ"},
