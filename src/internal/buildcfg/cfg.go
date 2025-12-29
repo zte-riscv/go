@@ -362,6 +362,36 @@ func goriscv64() int {
 	return year
 }
 
+const (
+	Riscv64OptZACAS = "ZACAS"
+	Riscv64OptZABHA = "ZABHA"
+)
+
+var allowedRiscv64Opt = map[string]bool{
+	Riscv64OptZACAS: true,
+	Riscv64OptZABHA: true,
+}
+
+func allowedRiscv64OptList() string {
+	keys := make([]string, 0, len(allowedRiscv64Opt))
+	for k := range allowedRiscv64Opt {
+		keys = append(keys, strings.ToLower(k))
+	}
+	return strings.Join(keys, ", ")
+}
+
+// goriscv64Extensions extracts extensions from GORISCV64 environment variable.
+// Format: GORISCV64="rva23u64,zacas,zabha" -> returns map with ZACAS and ZABHA set to true.
+func goriscv64Extensions() map[string]bool {
+	v := envOr("GORISCV64", DefaultGORISCV64)
+	_, extensions, err := ParseGORISCV64(v)
+	if err != nil {
+		// Error already set in ParseGORISCV64, return empty map
+		return make(map[string]bool)
+	}
+	return extensions
+}
+
 type gowasmFeatures struct {
 	SatConv bool
 	SignExt bool

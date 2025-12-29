@@ -14,7 +14,13 @@ import (
 	"cmd/compile/internal/types"
 	"cmd/internal/obj"
 	"cmd/internal/obj/riscv"
+	"internal/buildcfg"
 )
+
+// just to take place, remove it after optional flag is supported
+var supportZacas = true
+
+// var supportZacas = false
 
 // ssaRegToReg maps ssa register numbers to obj register numbers.
 var ssaRegToReg = []int16{
@@ -601,6 +607,52 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.RegTo2 = v.Reg0()
 
 	case ssa.OpRISCV64LoweredAtomicCas32, ssa.OpRISCV64LoweredAtomicCas64:
+		if buildcfg.GORISCV64EXT[buildcfg.Riscv64OptZACAS] {
+			// MOV  Rarg1, Rtmp              // move expected value to Rtmp
+			// AMOCAS.W/D Rarg2, (Rarg0), Rtmp  // whether succeed or not, will move (Rarg0) to Rtmp
+			// XOR  Rtmp, Rarg1, Rtmp        // if expected values equals old memory value, Rtmp is zero
+			// SLTIU Rout, Rtmp, 1           // set Rout to 1 if Rtmp is zero else 0
+
+			amocas := riscv.AAMOCASW
+			if v.Op == ssa.OpRISCV64LoweredAtomicCas64 {
+				amocas = riscv.AAMOCASD
+			}
+
+			r0 := v.Args[0].Reg() // address
+			r1 := v.Args[1].Reg() // expected value
+			r2 := v.Args[2].Reg() // new value
+			out := v.Reg0()
+
+			p := s.Prog(riscv.AMOV)
+			p.From.Type = obj.TYPE_REG
+			p.From.Reg = r1
+			p.To.Type = obj.TYPE_REG
+			p.To.Reg = riscv.REG_TMP
+
+			p1 := s.Prog(amocas)
+			p1.From.Type = obj.TYPE_REG
+			p1.From.Reg = r2
+			p1.To.Type = obj.TYPE_MEM
+			p1.To.Reg = r0
+			p1.RegTo2 = riscv.REG_TMP
+
+			p2 := s.Prog(riscv.AXOR)
+			p2.From.Type = obj.TYPE_REG
+			p2.From.Reg = r1
+			p2.Reg = riscv.REG_TMP
+			p2.To.Type = obj.TYPE_REG
+			p2.To.Reg = riscv.REG_TMP
+
+			p3 := s.Prog(riscv.ASLTIU)
+			p3.From.Type = obj.TYPE_CONST
+			p3.From.Offset = 1
+			p3.Reg = riscv.REG_TMP
+			p3.To.Type = obj.TYPE_REG
+			p3.To.Reg = out
+
+			break
+		}
+
 		// MOV  ZERO, Rout
 		// LR	(Rarg0), Rtmp
 		// BNE	Rtmp, Rarg1, 3(PC)
