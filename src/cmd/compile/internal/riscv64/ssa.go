@@ -17,11 +17,6 @@ import (
 	"internal/buildcfg"
 )
 
-// just to take place, remove it after optional flag is supported
-var supportZacas = true
-
-// var supportZacas = false
-
 // ssaRegToReg maps ssa register numbers to obj register numbers.
 var ssaRegToReg = []int16{
 	riscv.REG_X0,
@@ -607,7 +602,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.RegTo2 = v.Reg0()
 
 	case ssa.OpRISCV64LoweredAtomicCas32, ssa.OpRISCV64LoweredAtomicCas64:
-		if buildcfg.GORISCV64EXT[buildcfg.Riscv64OptZACAS] {
+		if buildcfg.GORISCV64EXT.Zacas {
 			// MOV  Rarg1, Rtmp              // move expected value to Rtmp
 			// AMOCAS.W/D Rarg2, (Rarg0), Rtmp  // whether succeed or not, will move (Rarg0) to Rtmp
 			// XOR  Rtmp, Rarg1, Rtmp        // if expected values equals old memory value, Rtmp is zero

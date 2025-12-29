@@ -44,7 +44,7 @@ TEXT ·Cas(SB), NOSPLIT, $0-17
 	MOV	ptr+0(FP), A0
 	MOVW	old+8(FP), A1
 	MOVW	new+12(FP), A2
-#ifdef GORISCV64EXT_ZACAS
+#ifdef GORISCV64EXT_zacas
 	// Use AMOCAS instruction (Zacas extension)
 	MOV	A1, A3
 	AMOCASW	A2, (A0), A3
@@ -73,7 +73,7 @@ TEXT ·Cas64(SB), NOSPLIT, $0-25
 	MOV	ptr+0(FP), A0
 	MOV	old+8(FP), A1
 	MOV	new+16(FP), A2
-#ifdef GORISCV64EXT_ZACAS
+#ifdef GORISCV64EXT_zacas
 	// Use AMOCAS instruction (Zacas extension)
 	MOV	A1, A3
 	AMOCASD	A2, (A0), A3
