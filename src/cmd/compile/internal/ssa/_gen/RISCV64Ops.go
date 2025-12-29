@@ -503,7 +503,7 @@ func init() {
 		{name: "FLED", argLength: 2, reg: fp2gp, asm: "FLED"},                                                                               // arg0 <= arg1
 		{name: "LoweredFMIND", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMIND", commutative: true, typ: "Float64"},             // min(arg0, arg1)
 		{name: "LoweredFMAXD", argLength: 2, reg: fp21, resultNotInArgs: true, asm: "FMAXD", commutative: true, typ: "Float64"},             // max(arg0, arg1)
-
+		// Single-bit instructions (Zbs)
 		{name: "BCLR", argLength: 2, reg: gp21, asm: "BCLR"},                 // clear the arg1-th bit of arg0
 		{name: "BCLRI", argLength: 1, reg: gp11, asm: "BCLRI", aux: "Int64"}, // clear the auxint-th bit of arg0
 		{name: "BEXT", argLength: 2, reg: gp21, asm: "BEXT"},                 // extract the arg1-th bit of arg0
