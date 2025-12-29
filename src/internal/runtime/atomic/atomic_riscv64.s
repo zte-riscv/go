@@ -30,8 +30,6 @@
 
 #include "textflag.h"
 
-// just to take place, remove it after optional flag is supported
-
 // func Cas(ptr *uint64, old, new uint64) bool
 // Atomically:
 //	if *ptr == old {
