@@ -274,11 +274,13 @@ TEXT gogo<>(SB), NOSPLIT|NOFRAME, $0
 TEXT runtime·procyieldAsm(SB),NOSPLIT,$0-0
 #ifdef EnableRISCV64RuntimeSpinlock
 	MOVWU	cycles+0(FP), T0
-yieldloop:
+	BEQZ	T0, done
+again:
 	PAUSE
 	SUBW	$1, T0
-	BNEZ	T0, yieldloop
+	BNEZ	T0, again
 #endif
+done:
 	RET
 
 // Switch to m->g0's stack, call fn(g).
