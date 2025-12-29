@@ -270,9 +270,9 @@ TEXT gogo<>(SB), NOSPLIT|NOFRAME, $0
 	JALR	ZERO, T0
 
 // func procyield(cycles uint32)
-TEXT runtime·procyield<ABIInternal>(SB),NOSPLIT,$0-0
-#ifdef EnableRuntimeSpinlock
-	MOVW	X10, T0
+TEXT runtime·procyield(SB),NOSPLIT,$0-0
+#ifdef EnableRISCV64RuntimeSpinlock
+	MOVWU	cycles+0(FP), T0
 yieldloop:
 	PAUSE
 	SUBW	$1, T0
