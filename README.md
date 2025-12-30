@@ -15,8 +15,7 @@ To ensure efficient collaboration, please review the following guidelines before
 ### 2.1 Download Version
 Download the corresponding version from the [GitHub Releases page](https://github.com/zte-riscv/go/releases), selecting the version suitable for your system architecture (e.g., `linux-riscv64.tar.gz`).
 
-The naming rules for versions are：**todo by ctk**
-The release note includes：**todo by ctk**
+The naming rules for versions are：go version number+version release date "YYYYMM", separated by '.', for example: 1.25.3.202512. The version release cycle is one month.
 
 ### 2.2 Extract and Install
 Extract the downloaded archive to the target directory:

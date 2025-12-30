@@ -13,8 +13,7 @@
 ### 2.1 下载版本
 从 [GitHub Releases 页面](https://github.com/zte-riscv/go/releases) 下载对应版本的压缩包，选择适合您系统架构的版本（如 `linux-riscv64.tar.gz`）。
 
-版本号的命名规则为：**todo by ctk**
-版本声明规范中包含了：**todo by ctk**
+版本号的命名规则为：go版本号+版本发布日期“YYYYMM”，以‘.’分隔，例如：1.25.3.202512。版本发布周期为一个月。
 
 ### 2.2 解压安装
 将下载的压缩包解压到目标目录：
