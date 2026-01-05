@@ -603,10 +603,10 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 
 	case ssa.OpRISCV64LoweredAtomicCas32, ssa.OpRISCV64LoweredAtomicCas64:
 		if buildcfg.GORISCV64EXT.Zacas {
-			// MOV  Rarg1, Rtmp              // move expected value to Rtmp
+			// MOV  Rarg1, Rtmp					// move expected value to Rtmp
 			// AMOCAS.W/D Rarg2, (Rarg0), Rtmp  // whether succeed or not, will move (Rarg0) to Rtmp
-			// XOR  Rtmp, Rarg1, Rtmp        // if expected values equals old memory value, Rtmp is zero
-			// SLTIU Rout, Rtmp, 1           // set Rout to 1 if Rtmp is zero else 0
+			// XOR  Rtmp, Rarg1, Rtmp			// if expected values equals old memory value, Rtmp is zero
+			// SLTIU 1, Rtmp, Rout				// set Rout to 1 if Rtmp is zero else 0
 
 			amocas := riscv.AAMOCASW
 			if v.Op == ssa.OpRISCV64LoweredAtomicCas64 {
