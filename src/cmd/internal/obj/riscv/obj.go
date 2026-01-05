@@ -3021,12 +3021,12 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	ACLH & obj.AMask:   {enc: clhEncoding},
 	ACSB & obj.AMask:   {enc: csbEncoding},
 	ACSH & obj.AMask:   {enc: cshEncoding},
-	ACZEXTB & obj.AMask:   {enc: cuEncoding, ternary: true},
-	ACSEXTB & obj.AMask:   {enc: cuEncoding, ternary: true},
-	ACZEXTH & obj.AMask:   {enc: cuEncoding, ternary: true},
-	ACSEXTH & obj.AMask:   {enc: cuEncoding, ternary: true},
-	ACZEXTW & obj.AMask:   {enc: cuEncoding, ternary: true},
-	ACNOT & obj.AMask:   {enc: cuEncoding, ternary: true},
+	ACZEXTB & obj.AMask:   {enc: cuEncoding},
+	ACSEXTB & obj.AMask:   {enc: cuEncoding},
+	ACZEXTH & obj.AMask:   {enc: cuEncoding},
+	ACSEXTH & obj.AMask:   {enc: cuEncoding},
+	ACZEXTW & obj.AMask:   {enc: cuEncoding},
+	ACNOT & obj.AMask:   {enc: cuEncoding},
 	ACMUL & obj.AMask:   {enc: caEncoding, ternary: true},
 
 	//
