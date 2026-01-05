@@ -650,10 +650,11 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 
 		// MOV  ZERO, Rout
 		// LR	(Rarg0), Rtmp
-		// BNE	Rtmp, Rarg1, 3(PC)
+		// BNE	Rtmp, Rarg1, 4(PC)
 		// SC	Rarg2, (Rarg0), Rtmp
 		// BNE	Rtmp, ZERO, -3(PC)
 		// MOV	$1, Rout
+		// ANOP
 
 		lr := riscv.ALRW
 		sc := riscv.ASCW
