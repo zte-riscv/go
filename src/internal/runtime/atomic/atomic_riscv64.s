@@ -46,8 +46,8 @@ TEXT ·Cas(SB), NOSPLIT, $0-17
 	// Use AMOCAS instruction (Zacas extension)
 	MOV	A1, A3
 	AMOCASW	A2, (A0), A3
-	XOR	A3, A1, A3
-	SLTIU	$1, A3, A0
+	SUB	A3, A1, A3
+	SEQZ	A3, A0
 	MOVB	A0, ret+16(FP)
 	RET
 #else
@@ -75,8 +75,8 @@ TEXT ·Cas64(SB), NOSPLIT, $0-25
 	// Use AMOCAS instruction (Zacas extension)
 	MOV	A1, A3
 	AMOCASD	A2, (A0), A3
-	XOR	A3, A1, A3
-	SLTIU	$1, A3, A0
+	SUB	A3, A1, A3
+	SEQZ	A3, A0
 	MOVB	A0, ret+24(FP)
 	RET
 #else

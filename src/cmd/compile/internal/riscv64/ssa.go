@@ -603,10 +603,10 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 
 	case ssa.OpRISCV64LoweredAtomicCas32, ssa.OpRISCV64LoweredAtomicCas64:
 		if buildcfg.GORISCV64EXT.Zacas {
-			// MOV  Rarg1, Rtmp					// move expected value to Rtmp
-			// AMOCAS.W/D Rarg2, (Rarg0), Rtmp  // whether succeed or not, will move (Rarg0) to Rtmp
-			// XOR  Rtmp, Rarg1, Rtmp			// if expected values equals old memory value, Rtmp is zero
-			// SLTIU 1, Rtmp, Rout				// set Rout to 1 if Rtmp is zero else 0
+			// MOV  Rarg1, Rtmp					// Move expected value to Rtmp
+			// AMOCAS.W/D Rarg2, (Rarg0), Rtmp  // AMOCAS writes (Rarg0) to Rtmp, regardless of success
+			// SUB  Rtmp, Rarg1, Rtmp			// If the expected value equals the old memory value, Rtmp becomes zero
+			// SEQZ Rtmp, Rout					// Set Rout to 1 if Rtmp is zero, otherwise 0
 
 			amocas := riscv.AAMOCASW
 			if v.Op == ssa.OpRISCV64LoweredAtomicCas64 {
@@ -631,17 +631,16 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			p1.To.Reg = r0
 			p1.RegTo2 = riscv.REG_TMP
 
-			p2 := s.Prog(riscv.AXOR)
+			p2 := s.Prog(riscv.ASUB)
 			p2.From.Type = obj.TYPE_REG
 			p2.From.Reg = r1
 			p2.Reg = riscv.REG_TMP
 			p2.To.Type = obj.TYPE_REG
 			p2.To.Reg = riscv.REG_TMP
 
-			p3 := s.Prog(riscv.ASLTIU)
-			p3.From.Type = obj.TYPE_CONST
-			p3.From.Offset = 1
-			p3.Reg = riscv.REG_TMP
+			p3 := s.Prog(riscv.ASEQZ)
+			p3.From.Type = obj.TYPE_REG
+			p3.From.Reg = riscv.REG_TMP
 			p3.To.Type = obj.TYPE_REG
 			p3.To.Reg = out
 
