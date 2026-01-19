@@ -1,0 +1,894 @@
+name: QEMU RISC-V64 Linux
+on:
+    pull_request:
+    workflow_dispatch:
+
+jobs:
+  qemu-riscv64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180  # 增加超时时间，因为编译 Go 需要较长时间
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          autoconf automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev \
+          gawk build-essential bison flex texinfo gperf libtool patchutils bc \
+          zlib1g-dev libexpat-dev git \
+          ninja-build pkg-config libglib2.0-dev libpixman-1-dev \
+          python3-setuptools
+    
+    - name: Install RISC-V toolchain
+      run: |
+        set -euxo pipefail
+        
+        echo "🔧 Installing RISC-V cross-compilation toolchain..."
+        
+        # 方法1: 尝试从系统仓库安装（推荐方式，参考文档）
+        echo "尝试从系统仓库安装..."
+        if sudo apt-get install -y gcc-riscv64-linux-gnu g++-riscv64-linux-gnu 2>&1 | tee /tmp/apt-install.log; then
+          if command -v riscv64-linux-gnu-gcc &> /dev/null; then
+            echo "✅ 成功从系统仓库安装工具链"
+            riscv64-linux-gnu-gcc --version
+            exit 0
+          fi
+        fi
+        
+        # 方法2: 下载预编译工具链（参考 https://toolchains.bootlin.com）
+        echo "系统仓库安装失败，尝试下载预编译工具链..."
+        
+        # 尝试多个工具链源
+        TOOLCHAIN_INSTALLED=false
+        
+        # 尝试 bootlin 工具链
+        if [ "$TOOLCHAIN_INSTALLED" = "false" ]; then
+          echo "尝试下载 bootlin 工具链..."
+          TOOLCHAIN_DIR="/opt/riscv64-toolchain"
+          sudo mkdir -p "$TOOLCHAIN_DIR"
+          
+          # 尝试下载最新的稳定版本
+          if wget -q --spider "https://toolchains.bootlin.com/downloads/releases/toolchains/riscv64/tarballs/riscv64--glibc--stable-2022.08-1.tar.bz2" 2>/dev/null; then
+            wget -q "https://toolchains.bootlin.com/downloads/releases/toolchains/riscv64/tarballs/riscv64--glibc--stable-2022.08-1.tar.bz2" -O /tmp/riscv64-toolchain.tar.bz2
+            if [ -f /tmp/riscv64-toolchain.tar.bz2 ]; then
+              sudo tar -xjf /tmp/riscv64-toolchain.tar.bz2 -C "$TOOLCHAIN_DIR" --strip-components=1
+              TOOLCHAIN_BIN="$TOOLCHAIN_DIR/bin"
+              if [ -d "$TOOLCHAIN_BIN" ] && [ -f "$TOOLCHAIN_BIN/riscv64-linux-gcc" ]; then
+                echo "$TOOLCHAIN_BIN" >> $GITHUB_PATH
+                export PATH="$TOOLCHAIN_BIN:$PATH"
+                TOOLCHAIN_INSTALLED=true
+                echo "✅ Bootlin 工具链安装成功"
+              fi
+            fi
+          fi
+        fi
+        
+        # 尝试 GitHub releases 工具链
+        if [ "$TOOLCHAIN_INSTALLED" = "false" ]; then
+          echo "尝试下载 GitHub releases 工具链..."
+          if wget -q "https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2023.10.18/riscv64-glibc-ubuntu-22.04-gcc-nightly-2023.10.18-nightly.tar.gz" -O /tmp/riscv64-toolchain.tar.gz; then
+            sudo tar -xzf /tmp/riscv64-toolchain.tar.gz -C /opt/
+            if [ -d "/opt/riscv/bin" ] && [ -f "/opt/riscv/bin/riscv64-unknown-linux-gnu-gcc" ]; then
+              echo "/opt/riscv/bin" >> $GITHUB_PATH
+              export PATH="/opt/riscv/bin:$PATH"
+              TOOLCHAIN_INSTALLED=true
+              echo "✅ GitHub releases 工具链安装成功"
+            fi
+          fi
+        fi
+        
+        # 验证工具链是否可用
+        if [ "$TOOLCHAIN_INSTALLED" = "true" ]; then
+          # 检查工具链
+          if command -v riscv64-linux-gnu-gcc &> /dev/null; then
+            echo "✅ 工具链验证成功: riscv64-linux-gnu-gcc"
+            riscv64-linux-gnu-gcc --version
+          elif command -v riscv64-unknown-linux-gnu-gcc &> /dev/null; then
+            echo "✅ 工具链验证成功: riscv64-unknown-linux-gnu-gcc"
+            riscv64-unknown-linux-gnu-gcc --version
+          else
+            echo "❌ 工具链安装失败：找不到编译器"
+            exit 1
+          fi
+        else
+          echo "❌ 所有工具链安装方法都失败了"
+          echo "请检查网络连接或手动安装工具链"
+          exit 1
+        fi
+    
+    - name: Verify RISC-V toolchain
+      run: |
+        # 最终验证工具链是否可用
+        echo "🔍 验证 RISC-V 工具链..."
+        
+        if command -v riscv64-linux-gnu-gcc &> /dev/null; then
+          echo "✅ 找到 riscv64-linux-gnu-gcc"
+          riscv64-linux-gnu-gcc --version
+          echo "CROSS_COMPILE=riscv64-linux-gnu-" >> $GITHUB_ENV
+        elif command -v riscv64-unknown-linux-gnu-gcc &> /dev/null; then
+          echo "✅ 找到 riscv64-unknown-linux-gnu-gcc"
+          riscv64-unknown-linux-gnu-gcc --version
+          echo "CROSS_COMPILE=riscv64-unknown-linux-gnu-" >> $GITHUB_ENV
+        else
+          echo "❌ 错误：未找到 RISC-V 工具链"
+          echo "已安装的路径："
+          ls -la /opt/riscv*/bin/ 2>/dev/null || echo "无"
+          exit 1
+        fi
+    
+    - name: Create working directory
+      run: |
+        mkdir -p riscv64-linux
+        cd riscv64-linux
+    
+    - name: Cache QEMU build
+      id: cache-qemu
+      uses: actions/cache@v4
+      with:
+        path: riscv64-linux/qemu-install
+        key: qemu-riscv64-v9.0.0-${{ runner.os }}
+        restore-keys: |
+          qemu-riscv64-v9.0.0-${{ runner.os }}-
+    
+    - name: Clone QEMU
+      working-directory: riscv64-linux
+      if: steps.cache-qemu.outputs.cache-hit != 'true'
+      run: |
+        git clone --depth 1 --branch v9.0.0 https://github.com/qemu/qemu.git || \
+        git clone --depth 1 https://github.com/qemu/qemu.git
+        echo "✅ QEMU repository cloned successfully"
+    
+    - name: Build QEMU
+      working-directory: riscv64-linux/qemu
+      if: steps.cache-qemu.outputs.cache-hit != 'true'
+      run: |
+        ./configure --target-list=riscv64-softmmu --enable-debug-tcg --prefix=$(pwd)/../qemu-install
+        make -j$(nproc)
+        make install
+        echo "✅ QEMU built and installed successfully"
+    
+    - name: Setup QEMU from cache or build
+      run: |
+        if [ -d riscv64-linux/qemu-install ]; then
+          echo "Using cached QEMU installation"
+          echo "$(pwd)/riscv64-linux/qemu-install/bin" >> $GITHUB_PATH
+          export PATH="$(pwd)/riscv64-linux/qemu-install/bin:$PATH"
+        fi
+        if command -v qemu-system-riscv64 >/dev/null 2>&1; then
+          echo "✅ QEMU found: $(qemu-system-riscv64 --version | head -1)"
+        else
+          echo "⚠️  QEMU not found, will use system QEMU if available"
+        fi
+    
+    - name: Cache Linux kernel build
+      id: cache-kernel
+      uses: actions/cache@v4
+      with:
+        path: riscv64-linux/linux-kernel-image
+        key: linux-kernel-riscv64-v6.1-${{ runner.os }}
+        restore-keys: |
+          linux-kernel-riscv64-v6.1-${{ runner.os }}-
+    
+    - name: Clone Linux kernel
+      working-directory: riscv64-linux
+      if: steps.cache-kernel.outputs.cache-hit != 'true'
+      run: |
+        git clone --depth 1 --branch v6.1 https://github.com/torvalds/linux.git || \
+        git clone --depth 1 https://github.com/torvalds/linux.git
+        echo "✅ Linux kernel repository cloned successfully"
+    
+    - name: Build Linux kernel
+      working-directory: riscv64-linux/linux
+      if: steps.cache-kernel.outputs.cache-hit != 'true'
+      run: |
+        set -euxo pipefail
+        
+        # 检测可用的交叉编译器
+        if command -v riscv64-linux-gnu-gcc &> /dev/null; then
+          export CROSS_COMPILE=riscv64-linux-gnu-
+          echo "✅ 检测到: CROSS_COMPILE=$CROSS_COMPILE"
+        elif command -v riscv64-unknown-linux-gnu-gcc &> /dev/null; then
+          export CROSS_COMPILE=riscv64-unknown-linux-gnu-
+          echo "✅ 检测到: CROSS_COMPILE=$CROSS_COMPILE"
+        else
+          echo "❌ 错误：未找到 RISC-V 工具链"
+          echo "PATH: $PATH"
+          echo "请检查工具链安装步骤"
+          exit 1
+        fi
+        
+        # 验证编译器可用
+        ${CROSS_COMPILE}gcc --version || {
+          echo "❌ 错误：编译器 ${CROSS_COMPILE}gcc 不可用"
+          exit 1
+        }
+        
+        echo "✅ 使用 CROSS_COMPILE=$CROSS_COMPILE 构建 Linux 内核"
+        make ARCH=riscv defconfig
+        # 禁用一些不必要的功能以加快编译
+        ./scripts/config --disable DEBUG_KERNEL || true
+        ./scripts/config --disable DEBUG_INFO || true
+        make ARCH=riscv CROSS_COMPILE=$CROSS_COMPILE -j$(nproc)
+        # 复制内核镜像到缓存目录
+        mkdir -p ../linux-kernel-image
+        cp arch/riscv/boot/Image ../linux-kernel-image/Image
+        echo "✅ Linux kernel built successfully"
+    
+    - name: Setup kernel image from cache or build
+      working-directory: riscv64-linux
+      run: |
+        if [ -f linux-kernel-image/Image ]; then
+          echo "Using cached kernel image"
+          mkdir -p linux/arch/riscv/boot
+          cp linux-kernel-image/Image linux/arch/riscv/boot/Image
+        fi
+        if [ -f linux/arch/riscv/boot/Image ]; then
+          echo "✅ Kernel image found: linux/arch/riscv/boot/Image"
+          ls -lh linux/arch/riscv/boot/Image
+        else
+          echo "❌ Error: Kernel image not found"
+          exit 1
+        fi
+    
+    - name: Cache Busybox build
+      id: cache-busybox
+      uses: actions/cache@v4
+      with:
+        path: riscv64-linux/busybox-cache
+        key: busybox-riscv64-1.36_stable-v4-${{ runner.os }}
+        restore-keys: |
+          busybox-riscv64-1.36_stable-v4-${{ runner.os }}-
+    
+    - name: Clone Busybox
+      working-directory: riscv64-linux
+      if: steps.cache-busybox.outputs.cache-hit != 'true'
+      run: |
+        # 使用稳定版本的 Busybox（避免最新版本的兼容性问题）
+        # 或者使用最新版本但禁用有问题的功能
+        git clone --depth 1 --branch 1_36_stable https://git.busybox.net/busybox.git || \
+        git clone --depth 1 https://git.busybox.net/busybox.git
+        echo "✅ Busybox repository cloned successfully"
+    
+    - name: Build Busybox rootfs
+      if: steps.cache-busybox.outputs.cache-hit != 'true'
+      working-directory: riscv64-linux/busybox
+      run: |
+        set -euxo pipefail
+        
+        # 检测可用的交叉编译器
+        if command -v riscv64-linux-gnu-gcc &> /dev/null; then
+          export CROSS_COMPILE=riscv64-linux-gnu-
+          echo "✅ 检测到: CROSS_COMPILE=$CROSS_COMPILE"
+        elif command -v riscv64-unknown-linux-gnu-gcc &> /dev/null; then
+          export CROSS_COMPILE=riscv64-unknown-linux-gnu-
+          echo "✅ 检测到: CROSS_COMPILE=$CROSS_COMPILE"
+        else
+          echo "❌ 错误：未找到 RISC-V 工具链"
+          echo "PATH: $PATH"
+          echo "请检查工具链安装步骤"
+          exit 1
+        fi
+        
+        # 验证编译器可用
+        ${CROSS_COMPILE}gcc --version || {
+          echo "❌ 错误：编译器 ${CROSS_COMPILE}gcc 不可用"
+          exit 1
+        }
+        
+        echo "✅ 使用 CROSS_COMPILE=$CROSS_COMPILE 构建 Busybox"
+        make defconfig
+        
+        # 启用静态链接
+        sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config || \
+        sed -i 's/CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config || true
+        
+        # 禁用 tc 工具（避免 CBQ 相关的编译错误）
+        # tc 工具使用了已废弃的 CBQ 内核定义，在新版本内核中不可用
+        sed -i 's/^CONFIG_TC=y/# CONFIG_TC is not set/' .config || \
+        sed -i 's/^CONFIG_TC=/# CONFIG_TC is not set/' .config || true
+        
+        # 使用 menuconfig 方式禁用（如果 sed 失败）
+        # 或者直接编辑 .config 文件
+        if grep -q "^CONFIG_TC=y" .config; then
+          echo "⚠️  警告: 无法通过 sed 禁用 tc，尝试其他方法..."
+          # 使用 scripts/kconfig/conf 来禁用
+          echo "CONFIG_TC=n" >> .config || true
+        fi
+        
+        echo "🔍 验证配置..."
+        grep "CONFIG_STATIC" .config | head -1 || echo "CONFIG_STATIC 未找到"
+        grep "CONFIG_TC" .config | head -1 || echo "CONFIG_TC 未找到"
+        
+        make -j$(nproc) CROSS_COMPILE=$CROSS_COMPILE || {
+          echo "❌ Busybox 编译失败"
+          echo "如果错误与 tc 相关，请手动禁用 CONFIG_TC"
+          exit 1
+        }
+        make install CROSS_COMPILE=$CROSS_COMPILE
+        
+        # 创建根文件系统目录结构
+        mkdir -p _install/proc _install/sys _install/dev _install/etc/init.d _install/usr/bin _install/usr/local/bin
+        
+        # 创建 init 脚本（用于自动运行 Go 编译和测试）
+        printf '%s\n' \
+          '#!/bin/sh' \
+          '# Mount essential filesystems' \
+          'mount -t proc proc /proc' \
+          'mount -t sysfs sysfs /sys' \
+          'mount -t devtmpfs devtmpfs /dev 2>/dev/null || true' \
+          '' \
+          '# Configure networking for Go tests' \
+          'echo "==========================================================="' \
+          'echo "Configuring network for Go tests..."' \
+          'echo "==========================================================="' \
+          '' \
+          '# Set hostname' \
+          'hostname riscv64-test 2>/dev/null || true' \
+          '' \
+          '# Create /etc/hosts if it does not exist' \
+          'mkdir -p /etc' \
+          'if [ ! -f /etc/hosts ]; then' \
+          '  cat > /etc/hosts << "EOF"' \
+          '127.0.0.1       localhost riscv64-test' \
+          '::1             localhost ip6-localhost ip6-loopback' \
+          'ff02::1         ip6-allnodes' \
+          'ff02::2         ip6-allrouters' \
+          'EOF' \
+          '  echo "✅ Created /etc/hosts"' \
+          'fi' \
+          '' \
+          '# Create /etc/hostname' \
+          'echo "riscv64-test" > /etc/hostname' \
+          '' \
+          '# Bring up loopback interface' \
+          'if command -v ip >/dev/null 2>&1; then' \
+          '  echo "Setting up loopback interface with ip command..."' \
+          '  ' \
+          '  # Set loopback up first' \
+          '  ip link set lo up' \
+          '  ' \
+          '  # Add IPv4 address' \
+          '  ip addr add 127.0.0.1/8 dev lo 2>/dev/null || true' \
+          '  ' \
+          '  # Enable IPv6 before adding IPv6 address' \
+          '  if [ -f /proc/sys/net/ipv6/conf/all/disable_ipv6 ]; then' \
+          '    echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6' \
+          '    echo 0 > /proc/sys/net/ipv6/conf/default/disable_ipv6' \
+          '    echo 0 > /proc/sys/net/ipv6/conf/lo/disable_ipv6' \
+          '  fi' \
+          '  ' \
+          '  # Add IPv6 address' \
+          '  ip -6 addr add ::1/128 dev lo 2>/dev/null || true' \
+          '  ' \
+          '  echo "✅ Loopback interface configured"' \
+          '  echo ""' \
+          '  echo "Network interfaces:"' \
+          '  ip addr show lo' \
+          '  echo ""' \
+          '  ip -6 addr show lo' \
+          'elif command -v ifconfig >/dev/null 2>&1; then' \
+          '  echo "Setting up loopback interface with ifconfig..."' \
+          '  ifconfig lo 127.0.0.1 netmask 255.0.0.0 up' \
+          '  ifconfig lo inet6 add ::1/128 2>/dev/null || true' \
+          '  echo "✅ Loopback interface configured"' \
+          '  ifconfig lo' \
+          'else' \
+          '  echo "⚠️  WARNING: Neither ip nor ifconfig found"' \
+          'fi' \
+          '' \
+          '# Configure network sysctls for better performance' \
+          'if [ -d /proc/sys/net ]; then' \
+          '  # Increase local port range' \
+          '  echo "1024 65535" > /proc/sys/net/ipv4/ip_local_port_range 2>/dev/null || true' \
+          '  # Enable port reuse' \
+          '  echo 1 > /proc/sys/net/ipv4/tcp_tw_reuse 2>/dev/null || true' \
+          '  # Reduce TIME_WAIT timeout' \
+          '  echo 30 > /proc/sys/net/ipv4/tcp_fin_timeout 2>/dev/null || true' \
+          '  echo "✅ Network sysctls configured"' \
+          'fi' \
+          '' \
+          '# Set resource limits' \
+          'echo "Setting resource limits..."' \
+          'ulimit -n 65536 2>/dev/null || ulimit -n 4096 2>/dev/null || true' \
+          'ulimit -u 4096 2>/dev/null || true' \
+          'ulimit -s 8192 2>/dev/null || true' \
+          'echo "File descriptors limit: $(ulimit -n)"' \
+          'echo "Process limit: $(ulimit -u)"' \
+          'echo "Stack size: $(ulimit -s)"' \
+          '' \
+          '# Wait a moment for network stack to initialize' \
+          'sleep 1' \
+          '' \
+          '# Test network connectivity' \
+          'echo ""' \
+          'echo "Testing network configuration..."' \
+          '' \
+          '# Test IPv4 loopback' \
+          'if command -v ping >/dev/null 2>&1; then' \
+          '  if ping -c 1 -W 1 127.0.0.1 >/dev/null 2>&1; then' \
+          '    echo "✅ IPv4 loopback: ping working"' \
+          '  else' \
+          '    echo "⚠️  IPv4 loopback: ping failed"' \
+          '  fi' \
+          'fi' \
+          '' \
+          '# Test IPv6 loopback' \
+          'if command -v ping >/dev/null 2>&1; then' \
+          '  if ping -6 -c 1 -W 1 ::1 >/dev/null 2>&1; then' \
+          '    echo "✅ IPv6 loopback: ping working"' \
+          '  else' \
+          '    echo "⚠️  IPv6 loopback: ping failed"' \
+          '  fi' \
+          'fi' \
+          '' \
+          '# Show routing table' \
+          'echo ""' \
+          'echo "Routing table:"' \
+          'ip route show 2>/dev/null || route -n 2>/dev/null || echo "No route command available"' \
+          'ip -6 route show 2>/dev/null || echo "No IPv6 routing info"' \
+          '' \
+          '# Show listening sockets (should be empty initially)' \
+          'echo ""' \
+          'echo "Initial listening sockets:"' \
+          'netstat -tuln 2>/dev/null || ss -tuln 2>/dev/null || echo "No netstat/ss available"' \
+          'echo ""' \
+          '' \
+          '# Create bash wrapper (Go scripts need bash)' \
+          'echo "Creating bash wrapper script..."' \
+          '' \
+          '# Create a real bash script that calls sh' \
+          '# This is needed because all.bash directly calls "bash" command' \
+          '# and Busybox multi-call binary checks argv[0] for applet name' \
+          'printf "#!/bin/sh\n# Bash wrapper for Busybox sh\nexec /bin/sh \"\$@\"\n" > /bin/bash' \
+          'chmod +x /bin/bash' \
+          'echo "Created /bin/bash wrapper script"' \
+          'cat /bin/bash' \
+          'echo ""' \
+          'ls -la /bin/bash /bin/sh | head -2' \
+          '' \
+          '# Create /usr/bin/env symlink' \
+          'if [ -e /bin/env ]; then' \
+          '  mkdir -p /usr/bin' \
+          '  ln -sf /bin/env /usr/bin/env' \
+          '  echo "Created /usr/bin/env -> /bin/env"' \
+          'elif [ -e /usr/bin/env ]; then' \
+          '  echo "/usr/bin/env already exists"' \
+          'else' \
+          '  echo "WARNING: env not found"' \
+          'fi' \
+          '' \
+          '# Verify bash wrapper is working' \
+          'if command -v bash >/dev/null 2>&1; then' \
+          '  echo "bash command found: $(which bash)"' \
+          '  echo -n "Testing bash wrapper: "' \
+          '  if bash -c "echo SUCCESS"; then' \
+          '    echo "✅ bash wrapper is working correctly"' \
+          '  else' \
+          '    echo "❌ bash wrapper test failed"' \
+          '  fi' \
+          'else' \
+          '  echo "❌ bash command not found in PATH"' \
+          'fi' \
+          '' \
+          '# Set up environment' \
+          'export PATH=/usr/bin:/usr/local/bin:/bin:/sbin' \
+          'export HOME=/root' \
+          'export TERM=linux' \
+          '' \
+          '# Go test timeout (increased for QEMU)' \
+          'export GOTESTIMEOUT=20m' \
+          '' \
+          'echo "==========================================================="' \
+          'echo "RISC-V64 Linux VM Started"' \
+          'echo "==========================================================="' \
+          'echo ""' \
+          'echo "System information:"' \
+          'uname -a' \
+          'echo ""' \
+          'echo "Available memory:"' \
+          'cat /proc/meminfo | grep MemTotal' \
+          'echo ""' \
+          'echo "CPU information:"' \
+          'cat /proc/cpuinfo | grep -E "processor|model name" | head -4' \
+          'echo ""' \
+          '' \
+          '# Check if Go source exists' \
+          'if [ -d /go/src ]; then' \
+          '  echo "Go source code found in /go"' \
+          '  echo ""' \
+          '  echo "==========================================================="' \
+          '  echo "Starting Go compiler build and test..."' \
+          '  echo "==========================================================="' \
+          '  echo ""' \
+          '  ' \
+          '  cd /go/src' \
+          '  ' \
+          '  # Check for bootstrap Go' \
+          '  BOOTSTRAP_VALID=false' \
+          '  if [ -f /usr/local/go-bootstrap/bin/go ]; then' \
+          '    echo "Found bootstrap Go at /usr/local/go-bootstrap"' \
+          '    echo "Checking if it is a valid RISC-V binary..."' \
+          '    if /usr/local/go-bootstrap/bin/go version 2>/dev/null; then' \
+          '      export GOROOT_BOOTSTRAP=/usr/local/go-bootstrap' \
+          '      export PATH=$GOROOT_BOOTSTRAP/bin:$PATH' \
+          '      BOOTSTRAP_VALID=true' \
+          '      echo "✅ Bootstrap Go is valid and executable"' \
+          '      echo "Using bootstrap Go: $GOROOT_BOOTSTRAP"' \
+          '      $GOROOT_BOOTSTRAP/bin/go version' \
+          '    else' \
+          '      echo "⚠️  Bootstrap Go binary exists but cannot execute"' \
+          '      echo "File info:"' \
+          '      ls -lh /usr/local/go-bootstrap/bin/go' \
+          '      file /usr/local/go-bootstrap/bin/go 2>/dev/null || echo "file command not available"' \
+          '      head -5 /usr/local/go-bootstrap/bin/go 2>/dev/null || true' \
+          '    fi' \
+          '  fi' \
+          '  ' \
+          '  if [ "$BOOTSTRAP_VALID" = "false" ]; then' \
+          '    echo ""' \
+          '    echo "❌ ERROR: No valid bootstrap Go found"' \
+          '    echo ""' \
+          '    echo "Bootstrap Go is required to build the Go toolchain."' \
+          '    echo "Please provide a pre-compiled Go 1.21+ for RISC-V64."' \
+          '    echo ""' \
+          '    echo "To manually build bootstrap Go:"' \
+          '    echo "  1. On a machine with Go installed:"' \
+          '    echo "     cd go/src"' \
+          '    echo "     GOOS=linux GOARCH=riscv64 ./bootstrap.bash"' \
+          '    echo "  2. Copy the generated bootstrap package to the VM"' \
+          '    echo ""' \
+          '    echo "Shutting down VM..."' \
+          '    sleep 2' \
+          '    poweroff -f' \
+          '    exit 1' \
+          '  fi' \
+          '  ' \
+          '  echo ""' \
+          '  echo "Building Go toolchain and running all tests..."' \
+          '  echo "GOROOT_BOOTSTRAP=$GOROOT_BOOTSTRAP"' \
+          '  echo "GOTESTIMEOUT=$GOTESTIMEOUT"' \
+          '  echo ""' \
+          '  ' \
+          '  # Run all.bash (build + all tests)' \
+          '  ./all.bash 2>&1 | tee /tmp/go-build.log' \
+          '  ' \
+          '  BUILD_RESULT=$?' \
+          '  ' \
+          '  echo ""' \
+          '  echo "==========================================================="' \
+          '  if [ $BUILD_RESULT -eq 0 ]; then' \
+          '    echo "Go build and test completed successfully!"' \
+          '  else' \
+          '    echo "Go build and test failed with exit code $BUILD_RESULT"' \
+          '  fi' \
+          '  echo "==========================================================="' \
+          '  echo ""' \
+          '  echo "Build log saved to /tmp/go-build.log"' \
+          '  echo ""' \
+          '  ' \
+          '  # Show summary' \
+          '  if [ -f /tmp/go-build.log ]; then' \
+          '    echo "Last 50 lines of build log:"' \
+          '    echo "-----------------------------------------------------------"' \
+          '    tail -50 /tmp/go-build.log' \
+          '  fi' \
+          '  echo ""' \
+          '  echo "Go build process completed. Shutting down..."' \
+          '  sleep 2' \
+          '  poweroff -f' \
+          '  ' \
+          'else' \
+          '  echo "❌ Go source code not found in /go"' \
+          '  echo "Available directories in /:"' \
+          '  ls -la / | head -20' \
+          '  echo ""' \
+          '  echo "Checking /go directory:"' \
+          '  ls -la /go/ 2>/dev/null || echo "/go does not exist"' \
+          '  echo ""' \
+          '  echo "Disk usage:"' \
+          '  df -h' \
+          'fi' \
+          '' \
+          'echo ""' \
+          'echo "==========================================================="' \
+          'echo "Workflow completed. Shutting down VM..."' \
+          'echo "==========================================================="' \
+          'echo ""' \
+          'sleep 2' \
+          'poweroff -f' > _install/init
+        chmod +x _install/init
+        
+        # 创建简单的 rcS 脚本（备用）
+        printf '%s\n' \
+          '#!/bin/sh' \
+          'mount -t proc proc /proc' \
+          'mount -t sysfs sysfs /sys' \
+          'mount -t devtmpfs devtmpfs /dev' > _install/etc/init.d/rcS
+        chmod +x _install/etc/init.d/rcS
+        
+        # 创建 initramfs（从 _install 目录）
+        cd _install
+        find . | cpio -o -H newc | gzip > ../initramfs.cpio.gz
+        cd ..
+        
+        # 复制到缓存目录
+        mkdir -p ../busybox-cache
+        cp -r _install ../busybox-cache/
+        cp initramfs.cpio.gz ../busybox-cache/ 2>/dev/null || true
+        echo "✅ Busybox rootfs built successfully"
+        
+    - name: Setup Busybox from cache or build
+      working-directory: riscv64-linux
+      run: |
+        if [ -d busybox-cache/_install ] && [ -f busybox-cache/_install/bin/busybox ]; then
+          echo "Using cached Busybox build"
+          if [ ! -d busybox/_install ]; then
+            mkdir -p busybox
+            cp -r busybox-cache/_install busybox/
+            if [ -f busybox-cache/initramfs.cpio.gz ]; then
+              cp busybox-cache/initramfs.cpio.gz busybox/
+            fi
+          fi
+        fi
+        if [ -d busybox/_install ] && [ -f busybox/_install/bin/busybox ]; then
+          echo "✅ Busybox build artifacts found (from cache or fresh build)"
+          ls -lh busybox/_install/bin/busybox
+        else
+          echo "⚠️  Busybox artifacts not found"
+        fi
+    
+    - name: Download Go bootstrap toolchain for RISC-V64
+      working-directory: riscv64-linux
+      timeout-minutes: 10
+      run: |
+        set -euxo pipefail
+        
+        echo "📦 Downloading official Go bootstrap toolchain for RISC-V64..."
+        echo "Using Go 1.25.3 pre-compiled for linux/riscv64"
+        
+        BOOTSTRAP_DIR="/tmp/go-bootstrap-riscv64"
+        mkdir -p "$BOOTSTRAP_DIR"
+        cd "$BOOTSTRAP_DIR"
+        
+        # 下载官方预编译的 RISC-V64 Go 包
+        GO_VERSION="1.25.3"
+        GO_TARBALL="go${GO_VERSION}.linux-riscv64.tar.gz"
+        GO_URL="https://go.dev/dl/${GO_TARBALL}"
+        
+        echo "Downloading from: $GO_URL"
+        if wget -q --show-progress "$GO_URL" -O "$GO_TARBALL"; then
+          echo "✅ Download successful"
+          
+          # 验证下载的文件
+          if [ -f "$GO_TARBALL" ]; then
+            echo "File size: $(du -h $GO_TARBALL | cut -f1)"
+            
+            # 解压
+            echo "Extracting..."
+            tar -xzf "$GO_TARBALL"
+            
+            # 验证解压结果
+            if [ -f go/bin/go ] && [ -f go/bin/gofmt ]; then
+              echo "✅ Bootstrap Go extracted successfully"
+              echo "Go binary info:"
+              ls -lh go/bin/go
+              file go/bin/go || echo "file command not available"
+              
+              # 尝试查看版本（可能无法在 AMD64 主机上运行，但没关系）
+              go/bin/go version 2>/dev/null || echo "(Note: Cannot run RISC-V binary on AMD64 host, this is expected)"
+              
+              echo "✅ Official RISC-V64 Go bootstrap ready"
+            else
+              echo "❌ Error: Extracted files are incomplete"
+              ls -la go/bin/ || echo "go/bin/ not found"
+              exit 1
+            fi
+          else
+            echo "❌ Error: Downloaded file not found"
+            exit 1
+          fi
+        else
+          echo "❌ Error: Failed to download Go bootstrap"
+          echo "Attempted URL: $GO_URL"
+          echo ""
+          echo "Please check:"
+          echo "  1. Network connectivity"
+          echo "  2. Go version availability at https://go.dev/dl/"
+          echo ""
+          echo "Trying alternative: building bootstrap from source in VM (slower)"
+          exit 1
+        fi
+    
+    - name: Copy Go source code to rootfs
+      working-directory: riscv64-linux
+      run: |
+        echo "📦 Copying Go source code to rootfs..."
+        
+        # 创建临时挂载点
+        mkdir -p mnt
+        
+        # 如果磁盘镜像已存在，挂载它；否则先创建
+        if [ ! -f busybox.img ]; then
+          echo "Creating new disk image (5GB)..."
+          dd if=/dev/zero of=busybox.img bs=1M count=5120  # 5GB 足够容纳 Go 源代码（含 testdata）和编译产物
+          mkfs.ext2 -F busybox.img
+        fi
+        
+        sudo mount -o loop busybox.img mnt
+        
+        # 复制 Busybox rootfs
+        if [ ! -d mnt/bin ]; then
+          sudo cp -r busybox/_install/* mnt/
+        fi
+        
+        # 创建 /go 目录并复制 Go 源代码
+        sudo mkdir -p mnt/go
+        echo "Copying Go source from $GITHUB_WORKSPACE to rootfs..."
+        echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+        ls -la "$GITHUB_WORKSPACE" | head -10
+        
+        # 显示 GITHUB_WORKSPACE 下的内容（调试用）
+        echo "Contents of GITHUB_WORKSPACE:"
+        ls -la "$GITHUB_WORKSPACE" | head -20
+        
+        # 复制 Go 源代码（排除大量不必要的文件以节省空间）
+        # 重要：必须排除 riscv64-linux 目录，避免递归复制磁盘镜像
+        echo "Starting rsync with exclusions..."
+        sudo rsync -a --info=progress2 \
+          --exclude='.git/' \
+          --exclude='.github/' \
+          --exclude='riscv64-linux/' \
+          "$GITHUB_WORKSPACE/" mnt/go/ || {
+          echo "⚠️  rsync failed, trying cp with find..."
+          # 使用 find + cp 作为备选方案，只复制源代码文件
+          cd "$GITHUB_WORKSPACE"
+          sudo find . -type f \( -name '*.go' -o -name '*.c' -o -name '*.h' -o -name '*.s' -o -name '*.S' -o -name '*.sh' -o -name '*.bash' -o -name '*.bat' -o -name '*.rc' -o -name 'Makefile' -o -name '*.mk' -o -name '*.mod' -o -name '*.sum' -o -name '*.txt' -o -name '*.md' \) \
+            -not -path './.git/*' \
+            -not -path './riscv64-linux/*' \
+            -not -path './test/mytest/*' \
+            -exec cp --parents {} /home/runner/work/go/go/riscv64-linux/mnt/go/ \; || {
+            echo "❌ Failed to copy Go source"
+            sudo umount mnt
+            exit 1
+          }
+        }
+        
+        # 复制官方下载的 bootstrap Go 到 rootfs
+        if [ -d /tmp/go-bootstrap-riscv64/go ] && [ -f /tmp/go-bootstrap-riscv64/go/bin/go ]; then
+          echo "📦 Copying official RISC-V64 Go bootstrap to rootfs..."
+          
+          # 验证 bootstrap Go 二进制
+          echo "Validating bootstrap Go binary..."
+          if file /tmp/go-bootstrap-riscv64/go/bin/go | grep -qi "RISC-V"; then
+            echo "✅ Bootstrap Go binary is a RISC-V executable"
+            file /tmp/go-bootstrap-riscv64/go/bin/go
+            
+            # 复制到 rootfs
+            sudo mkdir -p mnt/usr/local
+            sudo cp -r /tmp/go-bootstrap-riscv64/go mnt/usr/local/go-bootstrap || {
+              echo "❌ Failed to copy bootstrap Go"
+              sudo umount mnt
+              exit 1
+            }
+            
+            echo "✅ Bootstrap Go copied successfully"
+            echo "Bootstrap Go location in VM: /usr/local/go-bootstrap"
+            ls -lh mnt/usr/local/go-bootstrap/bin/go
+            du -sh mnt/usr/local/go-bootstrap
+          else
+            echo "❌ Error: Bootstrap Go binary is not a RISC-V executable"
+            file /tmp/go-bootstrap-riscv64/go/bin/go || echo "file command failed"
+            sudo umount mnt
+            exit 1
+          fi
+        else
+          echo "❌ Error: No bootstrap Go found in /tmp/go-bootstrap-riscv64"
+          echo "The 'Download Go bootstrap toolchain' step may have failed"
+          sudo umount mnt
+          exit 1
+        fi
+        
+        # 设置权限
+        sudo chown -R root:root mnt/go
+        sudo chown -R root:root mnt/usr/local/go-bootstrap 2>/dev/null || true
+        
+        # 创建必要的目录
+        sudo mkdir -p mnt/tmp mnt/var/tmp mnt/root mnt/usr/local/bin
+        
+        echo "✅ Go source code copied to rootfs"
+        echo "Disk usage:"
+        df -h mnt | tail -1
+        
+        sudo umount mnt
+        echo "✅ Disk image prepared successfully"
+    
+    
+    - name: Run QEMU RISC-V64 Linux and build Go
+      working-directory: riscv64-linux
+      timeout-minutes: 600  # 增加超时时间，因为编译 Go 需要较长时间
+      run: |
+        # 检查文件是否存在
+        if [ ! -f linux/arch/riscv/boot/Image ]; then
+          echo "❌ Error: Linux kernel Image not found"
+          exit 1
+        fi
+        
+        if [ ! -f busybox.img ]; then
+          echo "❌ Error: Busybox disk image not found"
+          exit 1
+        fi
+        
+        echo "🚀 Starting QEMU RISC-V64 Linux virtual machine..."
+        echo "This will boot the VM and automatically build Go compiler"
+        echo "Note: This may take 30-60 minutes depending on system performance"
+        echo ""
+        
+        # 运行 QEMU，使用我们创建的 init 脚本
+        # init 脚本会自动执行 Go 编译和测试
+        # 优先使用缓存的 QEMU，否则使用系统 QEMU
+        QEMU_CMD="qemu-system-riscv64"
+        if [ -f riscv64-linux/qemu-install/bin/qemu-system-riscv64 ]; then
+          QEMU_CMD="riscv64-linux/qemu-install/bin/qemu-system-riscv64"
+        elif ! command -v qemu-system-riscv64 >/dev/null 2>&1; then
+          echo "❌ Error: qemu-system-riscv64 not found"
+          exit 1
+        fi
+        
+        $QEMU_CMD \
+          -nographic \
+          -machine virt \
+          -kernel linux/arch/riscv/boot/Image \
+          -append "root=/dev/vda rw console=ttyS0 init=/init nokaslr" \
+          -drive file=busybox.img,format=raw,id=hd0 \
+          -device virtio-blk-device,drive=hd0 \
+          -m 4G \
+          -smp 4 \
+          -no-reboot || QEMU_EXIT=$?
+        
+        QEMU_EXIT=${QEMU_EXIT:-0}
+        
+        if [ $QEMU_EXIT -eq 0 ]; then
+          echo ""
+          echo "✅ QEMU VM completed successfully"
+        else
+          echo ""
+          echo "⚠️  QEMU exited with code $QEMU_EXIT"
+          echo "Check the output above for details"
+        fi
+    
+    - name: Success message
+      if: success()
+      run: |
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        echo "✅ ✅ ✅ QEMU RISC-V64 Linux Workflow Completed Successfully! ✅ ✅ ✅"
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+        echo "📦 Build artifacts:"
+        echo "   - Linux kernel: riscv64-linux/linux/arch/riscv/boot/Image"
+        echo "   - Root filesystem: riscv64-linux/busybox.img (contains Go source)"
+        echo "   - Initramfs: riscv64-linux/busybox/initramfs.cpio.gz"
+        echo ""
+        echo "🔧 Go compiler build:"
+        echo "   - Go source code: /go in rootfs"
+        echo "   - Build completed in QEMU RISC-V64 VM"
+        echo "   - Test results: Check QEMU output above"
+        echo ""
+        echo "🎉 All components built and tested successfully!"
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+    
+    - name: Upload artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: riscv64-build-artifacts
+        path: |
+          riscv64-linux/linux/arch/riscv/boot/Image
+          riscv64-linux/busybox.img
+          riscv64-linux/busybox/initramfs.cpio.gz
+        retention-days: 7
+

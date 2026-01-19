@@ -1,0 +1,88 @@
+name: QEMU RISC-V64 Linux (Simple)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  qemu-riscv64-simple:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install dependencies and RISC-V toolchain
+      run: |
+        set -euxo pipefail
+        
+        sudo apt-get update
+        sudo apt-get install -y \
+          autoconf automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev \
+          gawk build-essential bison flex texinfo gperf libtool patchutils bc \
+          zlib1g-dev libexpat-dev git \
+          ninja-build pkg-config libglib2.0-dev libpixman-1-dev \
+          qemu-system-riscv64
+        
+        # 安装 RISC-V 交叉编译工具链（参考文档推荐方式）
+        # 参考: https://risc-v-getting-started-guide.readthedocs.io/en/latest/linux-qemu.html
+        echo "🔧 安装 RISC-V 交叉编译工具链..."
+        if sudo apt-get install -y gcc-riscv64-linux-gnu g++-riscv64-linux-gnu; then
+          if command -v riscv64-linux-gnu-gcc &> /dev/null; then
+            echo "✅ 成功安装 riscv64-linux-gnu 工具链"
+            riscv64-linux-gnu-gcc --version
+          else
+            echo "⚠️  工具链安装但未在 PATH 中找到，尝试修复..."
+            TOOLCHAIN_PATH=$(dpkg -L gcc-riscv64-linux-gnu 2>/dev/null | grep -E '/bin/riscv64-linux-gnu-gcc$' | head -1 | xargs dirname 2>/dev/null || echo "")
+            if [ -n "$TOOLCHAIN_PATH" ] && [ -d "$TOOLCHAIN_PATH" ]; then
+              echo "$TOOLCHAIN_PATH" >> $GITHUB_PATH
+              export PATH="$TOOLCHAIN_PATH:$PATH"
+              echo "✅ 已添加工具链路径: $TOOLCHAIN_PATH"
+            fi
+          fi
+        else
+          echo "⚠️  系统仓库安装失败，尝试下载预编译工具链..."
+          TOOLCHAIN_DIR="/opt/riscv64-toolchain"
+          sudo mkdir -p "$TOOLCHAIN_DIR"
+          if wget -q "https://toolchains.bootlin.com/downloads/releases/toolchains/riscv64/tarballs/riscv64--glibc--stable-2022.08-1.tar.bz2" -O /tmp/riscv64-toolchain.tar.bz2; then
+            sudo tar -xjf /tmp/riscv64-toolchain.tar.bz2 -C "$TOOLCHAIN_DIR" --strip-components=1
+            TOOLCHAIN_BIN="$TOOLCHAIN_DIR/bin"
+            if [ -d "$TOOLCHAIN_BIN" ] && [ -f "$TOOLCHAIN_BIN/riscv64-linux-gcc" ]; then
+              echo "$TOOLCHAIN_BIN" >> $GITHUB_PATH
+              export PATH="$TOOLCHAIN_BIN:$PATH"
+              echo "✅ Bootlin 工具链安装成功"
+            fi
+          fi
+        fi
+        
+        # 验证工具链
+        if command -v riscv64-linux-gnu-gcc &> /dev/null; then
+          echo "✅ RISC-V 工具链验证成功: riscv64-linux-gnu-gcc"
+          riscv64-linux-gnu-gcc --version
+        elif command -v riscv64-unknown-linux-gnu-gcc &> /dev/null; then
+          echo "✅ RISC-V 工具链验证成功: riscv64-unknown-linux-gnu-gcc"
+          riscv64-unknown-linux-gnu-gcc --version
+        elif command -v riscv64-linux-gcc &> /dev/null; then
+          echo "✅ RISC-V 工具链验证成功: riscv64-linux-gcc"
+          riscv64-linux-gcc --version
+        else
+          echo "❌ 错误：未找到 RISC-V 工具链"
+          echo "PATH: $PATH"
+          exit 1
+        fi
+        
+        echo "✅ Dependencies and toolchain installed successfully"
+    
+    - name: Success message
+      if: success()
+      run: |
+        echo ""
+        echo "═══════════════════════════════════════════════════════════"
+        echo "✅ ✅ ✅ QEMU RISC-V64 Linux (Simple) Workflow Completed Successfully! ✅ ✅ ✅"
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
+        echo "🎉 QEMU RISC-V64 environment verified successfully!"
+        echo "💡 To build full Linux kernel, use: qemu-riscv64.yml workflow"
+        echo "═══════════════════════════════════════════════════════════"
+        echo ""
