@@ -1645,6 +1645,29 @@ func initIntrinsics(cfg *intrinsicBuildConfig) {
 			return s.newValue1(ssa.OpCvtBoolToUint8, types.Types[types.TUINT8], args[0])
 		},
 		all...)
+
+	/******** crypto/internal/fips140/nistec/fiat ********/
+	// p256CmovznzU64 implements conditional move: out1 = (if arg1 == 0 then arg2 else arg3)
+	add("crypto/internal/fips140/nistec/fiat", "p256CmovznzU64",
+		func(s *state, n *ir.CallExpr, args []*ssa.Value) *ssa.Value {
+			out1, arg1, arg2, arg3 := args[0], args[1], args[2], args[3]
+
+			// Generate condition: arg1 == 0
+			// arg1 is p256Uint1 which is uint64, so use 64-bit comparison
+			zero := s.constInt64(types.Types[types.TUINT64], 0)
+			// Convert arg1 to uint64 for comparison (p256Uint1 is a type alias of uint64)
+			arg1Uint64 := s.conv(n, arg1, arg1.Type, types.Types[types.TUINT64])
+			check := s.newValue2(ssa.OpEq64, types.Types[types.TBOOL], arg1Uint64, zero)
+
+			// Select: if arg1 == 0 (check is true), choose arg2, else choose arg3
+			result := s.newValue3(ssa.OpCondSelect, types.Types[types.TUINT64], arg2, arg3, check)
+
+			// Store result to out1 pointer
+			s.store(types.Types[types.TUINT64], out1, result)
+
+			// Return memory state
+			return s.mem()
+		}, hasCMOV...) // all with CMOV support.
 }
 
 // findIntrinsic returns a function which builds the SSA equivalent of the
