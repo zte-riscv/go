@@ -1652,19 +1652,10 @@ func initIntrinsics(cfg *intrinsicBuildConfig) {
 		func(s *state, n *ir.CallExpr, args []*ssa.Value) *ssa.Value {
 			out1, arg1, arg2, arg3 := args[0], args[1], args[2], args[3]
 
-			// Generate condition: arg1 == 0
-			// arg1 is p256Uint1 which is uint64, so use 64-bit comparison
-			// zero := s.constInt64(types.Types[types.TUINT64], 0)
-			// Convert arg1 to uint64 for comparison (p256Uint1 is a type alias of uint64)
 			arg1Uint64 := s.conv(n, arg1, arg1.Type, types.Types[types.TUINT64])
-
-			// Select: if arg1 == 0 (check is true), choose arg2, else choose arg3
 			result := s.newValue3(ssa.OpCondSelect, types.Types[types.TUINT64], arg3, arg2, arg1Uint64)
-
-			// Store result to out1 pointer
 			s.store(types.Types[types.TUINT64], out1, result)
 
-			// Return memory state
 			return s.mem()
 		}, hasCMOV...) // all with CMOV support.
 }
