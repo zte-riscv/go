@@ -51,6 +51,17 @@ go version
 ```
 If configured correctly, it will display output similar to `go version go1.xx.x linux/riscv64`.
 
+### 2.5 Compile
+Unlike Go/Golang, this version of the toolchain provides an **optional extension configuration feature** via the `GORISCV64` environment variable. When specific extensions are specified, the compiler will generate assembly instructions corresponding to these extensions in certain scenarios, to achieve optimal performance.
+
+**Usage:**
+GORISCV64=<riscv-profile>[,<optional-extension>]...
+
+**Example:**
+GORISCV64=rva23u64,zacas,zabha
+
+The currently supported optional extensions are Zacas and Zabha.
+
 ## 3. Pre-Submission Preparation
 ### 3.1 Issue Tracking and Discussion
 **Mandatory**:
@@ -62,9 +73,9 @@ If configured correctly, it will display output similar to `go version go1.xx.x 
 
 ### 3.2 Branch Management
 ```bash
-# Create a feature branch from the current development branch (e.g., go1.25.3-zte-dev):
+# Create a feature branch from the current development branch (e.g., go1.25.6-zte-dev):
 git fetch origin
-git checkout -b your_dev_branch origin/go1.25.3-zte-dev
+git checkout -b your_dev_branch origin/go1.25.6-zte-dev
 ```
 
 ## 4. Code Contribution Process

@@ -49,6 +49,17 @@ go version
 ```
 如果配置正确，将显示类似 `go version go1.xx.x linux/riscv64` 的输出。
 
+### 2.5 编译
+与标准 Go/Golang 不同，本版本工具链通过 GORISCV64 环境变量提供可选扩展配置功能。当指定特定扩展时，编译器会在特定场景下生成对应扩展的汇编指令，以实现更优的性能。
+
+**用法：**
+GORISCV64=<riscv-profile>[,<optional-extension>]...
+
+**示例：**
+GORISCV64=rva23u64,zacas,zabha
+
+当前支持的可选扩展为 Zacas 和 Zabha。
+
 ## 3. 提交前准备
 ### 3.1 问题跟踪与讨论
 **必须**：
@@ -60,9 +71,9 @@ go version
 
 ### 3.2 分支管理
 ```bash
-# 从当前开发分支（如go1.25.3-zte-dev）创建特性分支：
+# 从当前开发分支（如go1.25.6-zte-dev）创建特性分支：
 git fetch origin
-git checkout -b your_dev_branch origin/go1.25.3-zte-dev
+git checkout -b your_dev_branch origin/go1.25.6-zte-dev
 ```
 
 ## 4. 代码贡献流程
