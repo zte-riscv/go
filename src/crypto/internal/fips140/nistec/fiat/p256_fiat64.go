@@ -923,7 +923,7 @@ func p256SquareArm64Style(out1 *p256MontgomeryDomainFieldElement, arg1 *p256Mont
 //
 //	eval (from_montgomery out1) mod m = (eval (from_montgomery arg1) + eval (from_montgomery arg2)) mod m
 //	0 ≤ eval out1 < m
-func p256Add(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement, arg2 *p256MontgomeryDomainFieldElement) {
+func p256AddGeneric(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement, arg2 *p256MontgomeryDomainFieldElement) {
 	var x1 uint64
 	var x2 uint64
 	x1, x2 = bits.Add64(arg1[0], arg2[0], uint64(0x0))
@@ -975,7 +975,7 @@ func p256Add(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainF
 //
 //	eval (from_montgomery out1) mod m = (eval (from_montgomery arg1) - eval (from_montgomery arg2)) mod m
 //	0 ≤ eval out1 < m
-func p256Sub(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement, arg2 *p256MontgomeryDomainFieldElement) {
+func p256SubGeneric(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement, arg2 *p256MontgomeryDomainFieldElement) {
 	var x1 uint64
 	var x2 uint64
 	x1, x2 = bits.Sub64(arg1[0], arg2[0], uint64(0x0))

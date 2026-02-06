@@ -14,3 +14,9 @@ func p256Square(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDoma
 
 //go:noescape
 func p256SquareCDisassemble(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement)
+
+//go:noescape
+func p256Add(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement, arg2 *p256MontgomeryDomainFieldElement)
+
+//go:noescape
+func p256Sub(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement, arg2 *p256MontgomeryDomainFieldElement)
