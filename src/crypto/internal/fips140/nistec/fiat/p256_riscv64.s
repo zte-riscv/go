@@ -1014,4 +1014,91 @@ TEXT ·p256Add(SB),NOSPLIT,$0-24
 	RET
 
 TEXT ·p256Sub(SB),NOSPLIT,$0-24
+	MOV	out1+0(FP), X10
+	MOV	arg1+8(FP), X11
+	MOV	arg2+16(FP), X12
+
+	// Load arg1: X14, X29, X15, X28 = arg1[0-3]
+	MOV	(X11), X14
+	MOV	(X12), X16
+	MOV	8(X11), X29
+	ADDI	$-1, X0, X6
+	MOV	8(X12), X30
+	MOV	16(X12), X31
+	MOV	24(X12), X5
+	SLLI	$32, X6, X6
+	MOV	16(X11), X15
+	MOV	24(X11), X28
+	ADDI	$1, X6, X6
+
+	// Step 1: Subtract arg2 from arg1 with borrow propagation
+	// x1 = arg1[0] - arg2[0], x2 = borrow
+	// borrowOut = ((^x & y) | (^(x ^ y) & diff)) >> 63
+	SUB	X16, X14, X13		// X13 = diff = arg1[0] - arg2[0]
+	XNOR	X16, X14, X17		// X17 = ~(X16 ^ X14) = ~(x ^ y)
+	ANDN	X14, X16, X12		// X12 = X14 & ~X16 (note: should be ~X14 & X16, but order matters)
+	AND	X13, X17, X17		// X17 = diff & ~(x ^ y)
+	OR	X12, X17, X17		// X17 = (~x & y) | (~(x^y) & diff) (approximation)
+	SRLI	$63, X17, X17		// X17 = x2 = borrow (0 or 1)
+
+	// x3 = arg1[1] - arg2[1] - x2, x4 = borrow
+	SUB	X30, X29, X14		// X14 = diff = arg1[1] - arg2[1]
+	XNOR	X30, X29, X16		// X16 = ~(X30 ^ X29)
+	ANDN	X29, X30, X30		// X30 = X29 & ~X30
+	SUB	X17, X14, X14		// X14 = x3 = X14 - borrow
+	AND	X14, X16, X16		// X16 = X14 & X16
+	OR	X30, X16, X16		// X16 = borrow components
+	SRLI	$63, X16, X16		// X16 = x4 = borrow (0 or 1)
+
+	// x5 = arg1[2] - arg2[2] - x4, x6 = borrow
+	SUB	X31, X15, X12		// X12 = diff = arg1[2] - arg2[2]
+	XNOR	X31, X15, X11		// X11 = ~(X31 ^ X15)
+	ANDN	X15, X31, X29		// X29 = X15 & ~X31
+	SUB	X16, X12, X12		// X12 = x5 = X12 - borrow
+	AND	X12, X11, X11		// X11 = X12 & X11
+	OR	X29, X11, X11		// X11 = borrow components
+	SRLI	$63, X11, X11		// X11 = x6 = borrow (0 or 1)
+
+	// x7 = arg1[3] - arg2[3] - x6, x8 = borrow
+	SUB	X5, X28, X31		// X31 = diff = arg1[3] - arg2[3]
+	XNOR	X5, X28, X15		// X15 = ~(X5 ^ X28)
+	ANDN	X28, X5, X28		// X28 = X28 & ~X5
+	SUB	X11, X31, X11		// X11 = x7 = X31 - borrow
+	AND	X11, X15, X15		// X15 = X11 & X15
+	OR	X28, X15, X15		// X15 = borrow components
+	SRAI	$63, X15, X15		// X15 = x8 = final borrow (-1 if borrow, 0 if no borrow)
+
+	// Step 2: If x8 != 0 (borrow occurred, result < 0), add p
+	// x9 = (x8 != 0) ? 0xFFFFFFFFFFFFFFFF : 0
+	// Add p = (p0, p1, 0, p3) where p0=0xFFFFFFFFFFFFFFFF, p1=0xFFFFFFFF, p3=0xFFFFFFFF00000001
+	// x10 = x1 + x9, carry = x11
+	ADD	X15, X13, X17		// X17 = x10 = x1 + x9 (X15 is x8, X13 is x1)
+	SLTU	X13, X17, X13		// X13 = x11 = carry from x10
+
+	// x12 = x3 + (x9 & 0xFFFFFFFF) + x11, carry = x13
+	// X14 is x3, X15 is x9 (x8)
+	ADDUW	X14, X15, X14		// X14 = x3 + (x9 & 0xFFFFFFFF) with zero extension
+	ADDUW	X0, X15, X16		// X16 = (x9 & 0xFFFFFFFF) with zero extension (for carry calculation)
+	SLTU	X16, X14, X16		// X16 = carry from ADDUW
+	ADD	X14, X13, X13		// X13 = x12 = X14 + x11
+	SLTU	X14, X13, X14		// X14 = carry from x12
+	ADD	X16, X14, X14		// X14 = x13 = final carry from x12
+
+	// x14 = x5 + 0 + x13, carry = x15
+	// X12 is x5, X14 is x13
+	ADD	X12, X14, X12		// X12 = x14 = x5 + x13
+	SLTU	X14, X12, X14		// X14 = x15 = carry from x14
+
+	// x16 = x7 + (x9 & 0xFFFFFFFF00000001) + x15
+	// X11 is x7, X15 is x9 (x8), X6 is const1, X14 is x15 (carry)
+	AND	X6, X15, X15		// X15 = x9 & const1 (for p3 component)
+	ADD	X11, X15, X15		// X15 = x7 + (x9 & const1)
+	ADD	X14, X15, X15		// X15 = x16 = X15 + x15 (carry)
+
+	// Store result
+	MOV	X17, (X10)		// out1[0] = x10
+	MOV	X13, 8(X10)		// out1[1] = x12
+	MOV	X12, 16(X10)		// out1[2] = x14
+	MOV	X15, 24(X10)		// out1[3] = x16
+
 	RET
