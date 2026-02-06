@@ -1235,3 +1235,221 @@ func BenchmarkP256SquareCDisassemble(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkP256Add(b *testing.B) {
+	testCases := []struct {
+		name string
+		arg1 p256MontgomeryDomainFieldElement
+		arg2 p256MontgomeryDomainFieldElement
+	}{
+		// Basic cases
+		{
+			name: "zero_plus_zero",
+			arg1: p256MontgomeryDomainFieldElement{0, 0, 0, 0},
+			arg2: p256MontgomeryDomainFieldElement{0, 0, 0, 0},
+		},
+		{
+			name: "one_plus_one",
+			arg1: p256MontgomeryDomainFieldElement{1, 0, 0, 0},
+			arg2: p256MontgomeryDomainFieldElement{1, 0, 0, 0},
+		},
+		{
+			name: "max_plus_max",
+			arg1: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff},
+			arg2: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff},
+		},
+		{
+			name: "random_large_values",
+			arg1: p256MontgomeryDomainFieldElement{0x123456789abcdef0, 0x0fedcba987654321, 0x1111111111111111, 0x2222222222222222},
+			arg2: p256MontgomeryDomainFieldElement{0xaaaaaaaaaaaaaaaa, 0xbbbbbbbbbbbbbbbb, 0xcccccccccccccccc, 0xdddddddddddddddd},
+		},
+		{
+			name: "p256_prime_like_values",
+			arg1: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0x00000000ffffffff, 0x0000000000000000, 0xffffffff00000001},
+			arg2: p256MontgomeryDomainFieldElement{0x0000000000000001, 0xffffffff00000000, 0xffffffffffffffff, 0x00000000fffffffe},
+		},
+		{
+			name: "alternating_bits",
+			arg1: p256MontgomeryDomainFieldElement{0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x5555555555555555, 0xaaaaaaaaaaaaaaaa},
+			arg2: p256MontgomeryDomainFieldElement{0xaaaaaaaaaaaaaaaa, 0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x5555555555555555},
+		},
+		{
+			name: "random_pattern_1",
+			arg1: p256MontgomeryDomainFieldElement{0xdeadbeefcafebabe, 0x1234567890abcdef, 0xfedcba0987654321, 0xabcdef0123456789},
+			arg2: p256MontgomeryDomainFieldElement{0x1122334455667788, 0x99aabbccddeeff00, 0x0011223344556677, 0x8899aabbccddeeff},
+		},
+	}
+	b.ResetTimer()
+	for _, tc := range testCases {
+		var out p256MontgomeryDomainFieldElement
+		for i := 0; i < b.N; i++ {
+			p256Add(&out, &tc.arg1, &tc.arg2)
+		}
+	}
+}
+
+func BenchmarkP256AddGeneric(b *testing.B) {
+	testCases := []struct {
+		name string
+		arg1 p256MontgomeryDomainFieldElement
+		arg2 p256MontgomeryDomainFieldElement
+	}{
+		// Basic cases
+		{
+			name: "zero_plus_zero",
+			arg1: p256MontgomeryDomainFieldElement{0, 0, 0, 0},
+			arg2: p256MontgomeryDomainFieldElement{0, 0, 0, 0},
+		},
+		{
+			name: "one_plus_one",
+			arg1: p256MontgomeryDomainFieldElement{1, 0, 0, 0},
+			arg2: p256MontgomeryDomainFieldElement{1, 0, 0, 0},
+		},
+		{
+			name: "max_plus_max",
+			arg1: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff},
+			arg2: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff},
+		},
+		{
+			name: "random_large_values",
+			arg1: p256MontgomeryDomainFieldElement{0x123456789abcdef0, 0x0fedcba987654321, 0x1111111111111111, 0x2222222222222222},
+			arg2: p256MontgomeryDomainFieldElement{0xaaaaaaaaaaaaaaaa, 0xbbbbbbbbbbbbbbbb, 0xcccccccccccccccc, 0xdddddddddddddddd},
+		},
+		{
+			name: "p256_prime_like_values",
+			arg1: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0x00000000ffffffff, 0x0000000000000000, 0xffffffff00000001},
+			arg2: p256MontgomeryDomainFieldElement{0x0000000000000001, 0xffffffff00000000, 0xffffffffffffffff, 0x00000000fffffffe},
+		},
+		{
+			name: "alternating_bits",
+			arg1: p256MontgomeryDomainFieldElement{0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x5555555555555555, 0xaaaaaaaaaaaaaaaa},
+			arg2: p256MontgomeryDomainFieldElement{0xaaaaaaaaaaaaaaaa, 0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x5555555555555555},
+		},
+		{
+			name: "random_pattern_1",
+			arg1: p256MontgomeryDomainFieldElement{0xdeadbeefcafebabe, 0x1234567890abcdef, 0xfedcba0987654321, 0xabcdef0123456789},
+			arg2: p256MontgomeryDomainFieldElement{0x1122334455667788, 0x99aabbccddeeff00, 0x0011223344556677, 0x8899aabbccddeeff},
+		},
+	}
+	b.ResetTimer()
+	for _, tc := range testCases {
+		var out p256MontgomeryDomainFieldElement
+		for i := 0; i < b.N; i++ {
+			p256AddGeneric(&out, &tc.arg1, &tc.arg2)
+		}
+	}
+}
+
+func BenchmarkP256Sub(b *testing.B) {
+	testCases := []struct {
+		name string
+		arg1 p256MontgomeryDomainFieldElement
+		arg2 p256MontgomeryDomainFieldElement
+	}{
+		// Basic cases
+		{
+			name: "zero_minus_zero",
+			arg1: p256MontgomeryDomainFieldElement{0, 0, 0, 0},
+			arg2: p256MontgomeryDomainFieldElement{0, 0, 0, 0},
+		},
+		{
+			name: "one_minus_one",
+			arg1: p256MontgomeryDomainFieldElement{1, 0, 0, 0},
+			arg2: p256MontgomeryDomainFieldElement{1, 0, 0, 0},
+		},
+		{
+			name: "max_minus_max",
+			arg1: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff},
+			arg2: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff},
+		},
+		{
+			name: "zero_minus_max",
+			arg1: p256MontgomeryDomainFieldElement{0, 0, 0, 0},
+			arg2: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff},
+		},
+		{
+			name: "random_large_values",
+			arg1: p256MontgomeryDomainFieldElement{0x123456789abcdef0, 0x0fedcba987654321, 0x1111111111111111, 0x2222222222222222},
+			arg2: p256MontgomeryDomainFieldElement{0xaaaaaaaaaaaaaaaa, 0xbbbbbbbbbbbbbbbb, 0xcccccccccccccccc, 0xdddddddddddddddd},
+		},
+		{
+			name: "p256_prime_like_values",
+			arg1: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0x00000000ffffffff, 0x0000000000000000, 0xffffffff00000001},
+			arg2: p256MontgomeryDomainFieldElement{0x0000000000000001, 0xffffffff00000000, 0xffffffffffffffff, 0x00000000fffffffe},
+		},
+		{
+			name: "alternating_bits",
+			arg1: p256MontgomeryDomainFieldElement{0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x5555555555555555, 0xaaaaaaaaaaaaaaaa},
+			arg2: p256MontgomeryDomainFieldElement{0xaaaaaaaaaaaaaaaa, 0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x5555555555555555},
+		},
+		{
+			name: "random_pattern_1",
+			arg1: p256MontgomeryDomainFieldElement{0xdeadbeefcafebabe, 0x1234567890abcdef, 0xfedcba0987654321, 0xabcdef0123456789},
+			arg2: p256MontgomeryDomainFieldElement{0x1122334455667788, 0x99aabbccddeeff00, 0x0011223344556677, 0x8899aabbccddeeff},
+		},
+	}
+	b.ResetTimer()
+	for _, tc := range testCases {
+		var out p256MontgomeryDomainFieldElement
+		for i := 0; i < b.N; i++ {
+			p256Sub(&out, &tc.arg1, &tc.arg2)
+		}
+	}
+}
+
+func BenchmarkP256SubGeneric(b *testing.B) {
+	testCases := []struct {
+		name string
+		arg1 p256MontgomeryDomainFieldElement
+		arg2 p256MontgomeryDomainFieldElement
+	}{
+		// Basic cases
+		{
+			name: "zero_minus_zero",
+			arg1: p256MontgomeryDomainFieldElement{0, 0, 0, 0},
+			arg2: p256MontgomeryDomainFieldElement{0, 0, 0, 0},
+		},
+		{
+			name: "one_minus_one",
+			arg1: p256MontgomeryDomainFieldElement{1, 0, 0, 0},
+			arg2: p256MontgomeryDomainFieldElement{1, 0, 0, 0},
+		},
+		{
+			name: "max_minus_max",
+			arg1: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff},
+			arg2: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff},
+		},
+		{
+			name: "zero_minus_max",
+			arg1: p256MontgomeryDomainFieldElement{0, 0, 0, 0},
+			arg2: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff},
+		},
+		{
+			name: "random_large_values",
+			arg1: p256MontgomeryDomainFieldElement{0x123456789abcdef0, 0x0fedcba987654321, 0x1111111111111111, 0x2222222222222222},
+			arg2: p256MontgomeryDomainFieldElement{0xaaaaaaaaaaaaaaaa, 0xbbbbbbbbbbbbbbbb, 0xcccccccccccccccc, 0xdddddddddddddddd},
+		},
+		{
+			name: "p256_prime_like_values",
+			arg1: p256MontgomeryDomainFieldElement{0xffffffffffffffff, 0x00000000ffffffff, 0x0000000000000000, 0xffffffff00000001},
+			arg2: p256MontgomeryDomainFieldElement{0x0000000000000001, 0xffffffff00000000, 0xffffffffffffffff, 0x00000000fffffffe},
+		},
+		{
+			name: "alternating_bits",
+			arg1: p256MontgomeryDomainFieldElement{0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x5555555555555555, 0xaaaaaaaaaaaaaaaa},
+			arg2: p256MontgomeryDomainFieldElement{0xaaaaaaaaaaaaaaaa, 0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x5555555555555555},
+		},
+		{
+			name: "random_pattern_1",
+			arg1: p256MontgomeryDomainFieldElement{0xdeadbeefcafebabe, 0x1234567890abcdef, 0xfedcba0987654321, 0xabcdef0123456789},
+			arg2: p256MontgomeryDomainFieldElement{0x1122334455667788, 0x99aabbccddeeff00, 0x0011223344556677, 0x8899aabbccddeeff},
+		},
+	}
+	b.ResetTimer()
+	for _, tc := range testCases {
+		var out p256MontgomeryDomainFieldElement
+		for i := 0; i < b.N; i++ {
+			p256SubGeneric(&out, &tc.arg1, &tc.arg2)
+		}
+	}
+}
