@@ -465,7 +465,7 @@ func TestP256SquareArm64Style(t *testing.T) {
 	})
 }
 
-func TestP256SquareCDisassemble(t *testing.T) {
+func TestP256SquareOld(t *testing.T) {
 	t.Run("CompareGenericWithCDisassemble", func(t *testing.T) {
 		testCases := []struct {
 			name string
@@ -543,7 +543,7 @@ func TestP256SquareCDisassemble(t *testing.T) {
 				var outGeneric, outArm64Style p256MontgomeryDomainFieldElement
 
 				p256SquareGeneric(&outGeneric, &tc.arg)
-				p256SquareCDisassemble(&outArm64Style, &tc.arg)
+				p256SquareOld(&outArm64Style, &tc.arg)
 
 				if outGeneric != outArm64Style {
 					t.Errorf("Mismatch for test case %s:", tc.name)
@@ -1156,7 +1156,7 @@ func BenchmarkP256Square(b *testing.B) {
 	}
 }
 
-func BenchmarkP256SquareCDisassemble(b *testing.B) {
+func BenchmarkP256SquareOld(b *testing.B) {
 	testCases := []struct {
 		name string
 		arg  p256MontgomeryDomainFieldElement
@@ -1231,7 +1231,7 @@ func BenchmarkP256SquareCDisassemble(b *testing.B) {
 	for _, tc := range testCases {
 		var outArm64Style p256MontgomeryDomainFieldElement
 		for i := 0; i < b.N; i++ {
-			p256SquareCDisassemble(&outArm64Style, &tc.arg)
+			p256SquareOld(&outArm64Style, &tc.arg)
 		}
 	}
 }

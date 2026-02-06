@@ -416,7 +416,7 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 
 	RET
 
-TEXT ·p256Square(SB),NOSPLIT,$0-16
+TEXT ·p256SquareOld(SB),NOSPLIT,$0-16
 	MOV	out1+0(FP), X10
 	MOV	arg1+8(FP), X11
 
@@ -679,7 +679,7 @@ skip_sub:
 done:
 	RET
 
-TEXT ·p256SquareCDisassemble(SB),NOSPLIT,$0-16
+TEXT ·p256Square(SB),NOSPLIT,$0-16
 	MOV	out1+0(FP), X10
 	MOV	arg1+8(FP), X11
 
