@@ -415,4 +415,269 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	MOV	X16, 24(X10)
 
 	RET
+
+TEXT ·p256Square(SB),NOSPLIT,$0-16
+	MOV	out1+0(FP), X10
+	MOV	arg1+8(FP), X11
+
+	// Load input x: X5-X8 = x0-x3
+	MOV	0(X11), X5
+	MOV	8(X11), X6
+	MOV	16(X11), X7
+	MOV	24(X11), X8
+
+	// =====================================
+	// Compute cross products: x[1:] * x[0]
+	// =====================================
+	MULHU	X5, X6, X9
+	MUL	X5, X6, X11
+	MULHU	X5, X7, X12
+	MUL	X5, X7, X13
+	ADD	X13, X9, X9
+	SLTU	X13, X9, X13
+	MULHU	X5, X8, X14
+	MUL	X5, X8, X15
+	ADD	X15, X12, X12
+	ADD	X12, X13, X13
+	SLTU	X12, X13, X16
+	SLTU	X15, X12, X12
+	OR	X12, X16, X12
+	ADD	X14, X12, X12
+	MULHU	X6, X7, X14
+	MUL	X6, X7, X15
+	ADD	X15, X13, X13
+	SLTU	X15, X13, X15
+	ADD	X14, X12, X12
+	SLTU	X14, X12, X14
+	ADD	X12, X15, X15
+	SLTU	X12, X15, X12
+	OR	X14, X12, X12
+	MULHU	X6, X8, X14
+	MUL	X6, X8, X16
+	ADD	X16, X15, X15
+	SLTU	X16, X15, X16
+	ADD	X14, X12, X12
+	ADD	X16, X12, X12
+	MULHU	X7, X8, X14
+	MUL	X7, X8, X16
+	ADD	X12, X16, X16
+	SLTU	X12, X16, X12
+	ADD	X14, X12, X12
+
+	// =====================================
+	// Multiply cross products by 2
+	// =====================================
+	ADD	X11, X11, X14
+	SLTU	X11, X14, X11
+	ADD	X9, X9, X17
+	SLTU	X9, X17, X9
+	ADD	X17, X11, X11
+	SLTU	X17, X11, X17
+	OR	X9, X17, X9
+	ADD	X13, X13, X17
+	ADD	X17, X9, X9
+	SLTU	X13, X17, X13
+	SLTU	X17, X9, X17
+	OR	X17, X13, X13
+	ADD	X15, X15, X17
+	ADD	X17, X13, X13
+	SLTU	X15, X17, X15
+	SLTU	X17, X13, X17
+	OR	X17, X15, X15
+	ADD	X16, X16, X17
+	ADD	X17, X15, X15
+	SLTU	X16, X17, X16
+	SLTU	X17, X15, X17
+	OR	X17, X16, X16
+	ADD	X12, X12, X17
+	SLTU	X12, X17, X12
+	ADD	X17, X16, X16
+	SLTU	X17, X16, X17
+	OR	X12, X17, X12
+
+	// =====================================
+	// Add missing products (squares)
+	// =====================================
+	MULHU	X5, X5, X17
+	MUL	X5, X5, X18
+	ADD	X14, X17, X5
+	SLTU	X14, X5, X14
+	MULHU	X6, X6, X17
+	MUL	X6, X6, X19
+	ADD	X11, X19, X6
+	SLTU	X19, X6, X11
+	ADD	X6, X14, X14
+	SLTU	X6, X14, X6
+	OR	X11, X6, X6
+	ADD	X17, X9, X9
+	ADD	X9, X6, X6
+	SLTU	X9, X6, X11
+	SLTU	X17, X9, X9
+	OR	X11, X9, X9
+	MULHU	X7, X7, X11
+	MUL	X7, X7, X17
+	ADD	X13, X17, X7
+	SLTU	X17, X7, X13
+	ADD	X7, X9, X9
+	SLTU	X7, X9, X7
+	OR	X13, X7, X7
+	ADD	X15, X11, X13
+	ADD	X13, X7, X7
+	SLTU	X13, X7, X15
+	SLTU	X11, X13, X11
+	OR	X15, X11, X11
+	MULHU	X8, X8, X13
+	MUL	X8, X8, X15
+	ADD	X16, X15, X8
+	ADD	X8, X11, X11
+	SLTU	X8, X11, X16
+	SLTU	X15, X8, X8
+	OR	X8, X16, X8
+	ADD	X13, X12, X12
+	ADD	X12, X8, X8
+
+	// =====================================
+	// First reduction step
+	// =====================================
+	// Load const1
+	MOV	$p256const1<>(SB), X15
+	MOV	(X15), X15
+
+	SLLI	$32, X18, X12
+	ADD	X12, X5, X5
+	SLTU	X12, X5, X12
+	SRLI	$32, X18, X13
+	MULHU	X18, X15, X16
+	MUL	X18, X15, X17
+	ADD	X13, X14, X14
+	SLTU	X13, X14, X13
+	ADD	X14, X12, X12
+	SLTU	X14, X12, X14
+	OR	X14, X13, X13
+	ADD	X17, X6, X6
+	SLTU	X17, X6, X14
+	ADD	X6, X13, X13
+	SLTU	X6, X13, X6
+	OR	X14, X6, X6
+	ADD	X16, X6, X6
+
+	// =====================================
+	// Second reduction step
+	// =====================================
+	SLLI	$32, X5, X14
+	ADD	X12, X14, X14
+	SLTU	X12, X14, X12
+	SRLI	$32, X5, X16
+	MULHU	X5, X15, X17
+	MUL	X5, X15, X18
+	ADD	X13, X16, X5
+	SLTU	X16, X5, X13
+	ADD	X5, X12, X12
+	SLTU	X5, X12, X5
+	OR	X13, X5, X5
+	ADD	X18, X6, X6
+	SLTU	X18, X6, X13
+	ADD	X6, X5, X5
+	SLTU	X6, X5, X6
+	OR	X13, X6, X6
+	ADD	X17, X6, X6
+
+	// =====================================
+	// Third reduction step
+	// =====================================
+	SLLI	$32, X14, X13
+	ADD	X12, X13, X13
+	SLTU	X12, X13, X12
+	SRLI	$32, X14, X16
+	MULHU	X15, X14, X17
+	MUL	X15, X14, X18
+	ADD	X16, X5, X5
+	SLTU	X16, X5, X14
+	ADD	X5, X12, X12
+	SLTU	X5, X12, X5
+	OR	X14, X5, X5
+	ADD	X6, X18, X14
+	SLTU	X6, X14, X6
+	ADD	X14, X5, X5
+	SLTU	X14, X5, X14
+	OR	X14, X6, X6
+	ADD	X17, X6, X6
+
+	// =====================================
+	// Last reduction step
+	// =====================================
+	SLLI	$32, X13, X14
+	ADD	X14, X12, X12
+	SLTU	X14, X12, X14
+	SRLI	$32, X13, X16
+	MULHU	X15, X13, X17
+	MUL	X15, X13, X18
+	ADD	X16, X5, X5
+	ADD	X5, X14, X13
+	SLTU	X5, X13, X14
+	SLTU	X16, X5, X5
+	OR	X5, X14, X5
+	ADD	X18, X6, X6
+	ADD	X6, X5, X5
+	SLTU	X6, X5, X14
+	SLTU	X18, X6, X6
+	OR	X6, X14, X6
+	ADD	X17, X6, X6
+
+	// =====================================
+	// Add bits [511:256] of the sqr result
+	// =====================================
+	ADD	X9, X12, X12
+	SLTU	X9, X12, X9
+	ADD	X7, X13, X13
+	SLTU	X7, X13, X7
+	ADD	X13, X9, X9
+	SLTU	X13, X9, X13
+	OR	X7, X13, X7
+	ADD	X5, X11, X11
+	SLTU	X5, X11, X5
+	ADD	X11, X7, X7
+	SLTU	X11, X7, X11
+	OR	X5, X11, X5
+	ADD	X6, X8, X8
+	SLTU	X6, X8, X6
+	ADD	X8, X5, X5
+	SLTU	X8, X5, X8
+
+	// =====================================
+	// Conditional subtraction
+	// =====================================
+	ADDI	$1, X12, X11
+	SLTU	X11, X12, X13
+	ADDI	$-1, X0, X14
+	SRLI	$32, X14, X14
+	SUB	X14, X9, X14
+	SLTU	X14, X9, X16
+	SUB	X13, X14, X13
+	SLTU	X13, X14, X14
+	OR	X16, X14, X14
+	SUB	X14, X7, X14
+	SLTU	X14, X7, X16
+	SUB	X15, X5, X15
+	SLTU	X15, X5, X17
+	SUB	X16, X15, X16
+	SLTU	X16, X15, X15
+	OR	X17, X15, X15
+	OR	X6, X8, X6
+	SUB	X15, X6, X8
+	BLTU	X6, X8, skip_sub
+	MOV	X11, 0(X10)
+	MOV	X13, 8(X10)
+	MOV	X14, 16(X10)
+	MOV	X16, 24(X10)
+	JMP	done
+skip_sub:
+	MOV	X12, 0(X10)
+	MOV	X9, 8(X10)
+	MOV	X7, 16(X10)
+	MOV	X5, 24(X10)
+done:
+	RET
+
+TEXT ·p256SquareCDisassemble(SB),NOSPLIT,$0-16
 	

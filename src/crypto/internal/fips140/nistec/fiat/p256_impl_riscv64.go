@@ -8,3 +8,9 @@ package fiat
 
 //go:noescape
 func p256Mul(out, a, b *p256MontgomeryDomainFieldElement)
+
+//go:noescape
+func p256Square(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement)
+
+//go:noescape
+func p256SquareCDisassemble(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement)
