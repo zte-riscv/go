@@ -1143,7 +1143,7 @@ func (x *expandState) invalidateRecursively(a *Value) {
 
 // isFieldByNameFunction checks if the current function is reflect.(*structType).FieldByName
 func (x *expandState) isFieldByNameFunction() bool {
-	isTarget := x.f.Name == "(*structType).FieldByName"
+	isTarget := x.f.Name == "(*structType).FieldByName" || x.f.Name == "(*structType).FieldByNameFunc"
 	if isTarget {
 		// Debug: Print when we match the target function
 		if x.debug > 0 {
