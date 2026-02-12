@@ -52,6 +52,12 @@ func expandCalls(f *Func) {
 		x.secondType = x.typs.Int32
 	}
 
+	// Early optimization: eliminate redundant Store-Move-Dereference chains
+	// This should be done before processing selects and calls
+	if x.isFieldByNameFunction() {
+		x.eliminateRedundantStoreMoveDeref()
+	}
+
 	// Defer select processing until after all calls and selects are seen.
 	var selects []*Value
 	var calls []*Value
@@ -66,6 +72,11 @@ func expandCalls(f *Func) {
 	// rewrite each OpSelectNAddr.
 	for _, b := range f.Blocks {
 		for _, v := range b.Values {
+			// Skip values that have been marked as OpInvalid
+			// (e.g., by nilcheckelim optimization)
+			if v.Op == OpInvalid {
+				continue
+			}
 			switch v.Op {
 			case OpInitMem:
 				m0 = v
@@ -78,7 +89,14 @@ func expandCalls(f *Func) {
 
 			case OpStore:
 				if a := v.Args[1]; a.Op == OpSelectN && !CanSSA(a.Type) {
+					isFieldByName := x.f.Name == "(*structType).FieldByName" || x.f.Name == "(*structType).FieldByNameFunc"
+					if isFieldByName {
+						fmt.Printf("[expand_calls] %s: Store v%d uses wide SelectN v%d (Uses=%d)\n", x.f.Name, v.ID, a.ID, a.Uses)
+					}
 					if a.Uses > 1 {
+						if isFieldByName {
+							fmt.Printf("[expand_calls] %s: ERROR - SelectN v%d has %d uses! Store v%d Op=%v\n", x.f.Name, a.ID, a.Uses, v.ID, v.Op)
+						}
 						panic(fmt.Errorf("Saw double use of wide SelectN %s operand of Store %s",
 							a.LongString(), v.LongString()))
 					}
@@ -247,6 +265,90 @@ func (x *expandState) rewriteFuncResults(v *Value, b *Block, aux *AuxCall) {
 	allResults := []*Value{}
 	var oldArgs []*Value
 	argsWithoutMem := v.Args[:len(v.Args)-1]
+
+	// Optimization for FieldByName: Check if return values come from SelectN of the same call
+	// and if they are in registers. If so, we can skip memory stores for those values.
+	if x.isFieldByNameFunction() && v.Op == OpMakeResult {
+		// Try to optimize: collect SelectN values that can skip stores
+		optimizedResults := make([]*Value, len(argsWithoutMem))
+		allOptimizable := true
+		sourceCall := x.findSourceCallForMakeResult(argsWithoutMem)
+
+		if sourceCall != nil {
+			// Verify sourceCall has valid AuxCall
+			sourceAux, ok := sourceCall.Aux.(*AuxCall)
+			if !ok || sourceAux == nil {
+				// Invalid sourceCall, skip optimization
+				sourceCall = nil
+			} else {
+				callAux := sourceAux
+				// Check each argument
+				for i, a := range argsWithoutMem {
+					var selectN *Value
+					// Extract SelectN from a (may be wrapped in Copy)
+					if a.Op == OpSelectN {
+						selectN = a
+					} else if a.Op == OpCopy && len(a.Args) > 0 && a.Args[0].Op == OpSelectN && a.Args[0].Args[0] == sourceCall {
+						selectN = a.Args[0]
+					} else {
+						// Not a SelectN from our source call, use original value
+						optimizedResults[i] = a
+						// Check if this return value is in registers
+						aRegs := aux.RegsOfResult(int64(i))
+						if len(aRegs) == 0 {
+							// This return value is in memory, can't optimize
+							allOptimizable = false
+						}
+						continue
+					}
+
+					// Check if this SelectN value is in registers
+					which := selectN.AuxInt
+					// Check if AuxInt is a valid return value index (not a register index)
+					// If AuxInt >= number of return values, it's a register index, not a return value index
+					numResults := int64(len(callAux.abiInfo.OutParams()))
+					if which < 0 || which >= numResults {
+						// AuxInt is out of range - either a register index or invalid
+						// This SelectN has already been processed by rewriteSelectOrArg
+						// We can't determine the original return value index, so use original value
+						optimizedResults[i] = a
+						allOptimizable = false
+						continue
+					}
+					regs := callAux.RegsOfResult(which)
+					if len(regs) > 0 {
+						// Value is in registers, use SelectN directly (skip Copy)
+						optimizedResults[i] = selectN
+					} else {
+						// Value is in memory, can't optimize this one
+						optimizedResults[i] = a
+						allOptimizable = false
+					}
+				}
+			}
+
+			// If all SelectN values are in registers and function return values are also in registers
+			if sourceCall != nil && allOptimizable {
+				allRegsInRegisters := true
+				for i := int64(0); i < int64(len(argsWithoutMem)); i++ {
+					aRegs := aux.RegsOfResult(i)
+					if len(aRegs) == 0 {
+						allRegsInRegisters = false
+						break
+					}
+				}
+
+				if allRegsInRegisters {
+					// All conditions met: use optimized results
+					v.resetArgs()
+					v.AddArgs(optimizedResults...)
+					v.AddArg(m0) // Use original memory, no stores needed
+					v.Type = types.NewResults(append(abi.RegisterTypes(aux.abiInfo.OutParams()), types.TypeMem))
+					return
+				}
+			}
+		}
+	}
 
 	for j, a := range argsWithoutMem {
 		oldArgs = append(oldArgs, a)
@@ -637,7 +739,7 @@ func (x *expandState) rewriteSelectOrArg(pos src.XPos, b *Block, container, a, m
 			addArg(e)
 			pos = pos.WithNotStmt()
 		}
-		if at.NumFields() > 4 {
+		if at.NumFields() > MaxStruct {
 			panic(fmt.Errorf("Too many fields (%d, %d bytes), container=%s", at.NumFields(), at.Size(), container.LongString()))
 		}
 		a = makeOf(a, OpStructMake, args)
@@ -1133,6 +1235,123 @@ func (x *expandState) isAutoTmp(addr *Value) bool {
 	return false
 }
 
+// findSourceCallForMakeResult finds the common source call for MakeResult arguments.
+// Returns the call if all SelectN arguments come from the same call, nil otherwise.
+func (x *expandState) findSourceCallForMakeResult(argsWithoutMem []*Value) *Value {
+	if len(argsWithoutMem) == 0 {
+		return nil
+	}
+
+	var sourceCall *Value
+	foundSelectN := false
+
+	for _, a := range argsWithoutMem {
+		var selectN *Value
+		// Check if it's a SelectN or Copy of SelectN
+		if a.Op == OpSelectN {
+			selectN = a
+			foundSelectN = true
+		} else if a.Op == OpCopy && len(a.Args) > 0 && a.Args[0].Op == OpSelectN {
+			selectN = a.Args[0]
+			foundSelectN = true
+		} else {
+			// Not a SelectN or Copy of SelectN, skip it
+			continue
+		}
+
+		// Verify that selectN is a valid SelectN with a call argument
+		if len(selectN.Args) == 0 {
+			continue
+		}
+		call := selectN.Args[0]
+		if !call.Op.IsCall() {
+			continue
+		}
+
+		if sourceCall == nil {
+			sourceCall = call
+		} else if sourceCall != call {
+			// Different calls, can't optimize
+			return nil
+		}
+	}
+
+	// Return the source call if we found at least one SelectN
+	if foundSelectN {
+		return sourceCall
+	}
+	return nil
+}
+
+// canSkipReturnValueStores checks if we can skip storing return values to memory.
+// This is possible when:
+// 1. All return values are SelectN (or Copy of SelectN) from the same call
+// 2. All return values are returned in registers (not memory)
+// 3. The function's return values are also in registers
+func (x *expandState) canSkipReturnValueStores(makeResult *Value, argsWithoutMem []*Value, aux *AuxCall) bool {
+	if len(argsWithoutMem) == 0 {
+		return false
+	}
+
+	// Extract SelectN values from args (may be wrapped in Copy)
+	var selectNVals []*Value
+	var sourceCall *Value
+	for _, a := range argsWithoutMem {
+		var selectN *Value
+		// Check if it's a SelectN or Copy of SelectN
+		if a.Op == OpSelectN {
+			selectN = a
+		} else if a.Op == OpCopy && len(a.Args) > 0 && a.Args[0].Op == OpSelectN {
+			selectN = a.Args[0]
+		} else {
+			// Not a SelectN or Copy of SelectN, can't optimize
+			return false
+		}
+
+		call := selectN.Args[0]
+		if sourceCall == nil {
+			sourceCall = call
+		} else if sourceCall != call {
+			// Different calls, can't optimize
+			return false
+		}
+		selectNVals = append(selectNVals, selectN)
+	}
+
+	if sourceCall == nil {
+		return false
+	}
+
+	// Check if all return values from the source call are in registers
+	callAux := sourceCall.Aux.(*AuxCall)
+	numResults := int64(len(callAux.abiInfo.OutParams()))
+	for _, selectN := range selectNVals {
+		which := selectN.AuxInt
+		// Check if AuxInt is a valid return value index (not a register index)
+		if which < 0 || which >= numResults {
+			// AuxInt is out of range - either a register index or invalid
+			return false
+		}
+		regs := callAux.RegsOfResult(which)
+		if len(regs) == 0 {
+			// This return value is in memory, can't skip stores
+			return false
+		}
+	}
+
+	// Check if all function return values are in registers
+	for i := int64(0); i < int64(len(argsWithoutMem)); i++ {
+		aRegs := aux.RegsOfResult(i)
+		if len(aRegs) == 0 {
+			// Function return value is in memory, can't skip stores
+			return false
+		}
+	}
+
+	// All conditions met: can skip stores
+	return true
+}
+
 // getReturnValueLocation returns the LocalAddr of the return value at index which,
 // or nil if not found or not applicable
 func (x *expandState) getReturnValueLocation(selectN *Value, which int64) *Value {
@@ -1180,6 +1399,164 @@ func (x *expandState) getReturnValueLocation(selectN *Value, which int64) *Value
 
 	// If not found, return nil (should not happen in normal compilation)
 	return nil
+}
+
+// eliminateRedundantStoreMoveDeref eliminates redundant Store-Move-Dereference chains.
+// Pattern: SelectN -> Store(.autotmp) -> Move(.autotmp -> returnLoc) -> Dereference(returnLoc) -> MakeResult
+// Optimization: Directly use SelectN in MakeResult, skipping all intermediate operations.
+func (x *expandState) eliminateRedundantStoreMoveDeref() {
+	// Find all MakeResult operations
+	for _, b := range x.f.Blocks {
+		for _, v := range b.Values {
+			if v.Op != OpMakeResult {
+				continue
+			}
+
+			// Process each argument of MakeResult
+			argsWithoutMem := v.Args[:len(v.Args)-1]
+			optimized := false
+			newArgs := make([]*Value, 0, len(v.Args))
+
+			for _, arg := range argsWithoutMem {
+				// Check if arg is Dereference(returnLoc, mem)
+				if arg.Op != OpDereference || len(arg.Args) < 2 {
+					newArgs = append(newArgs, arg)
+					continue
+				}
+
+				returnLoc := arg.Args[0]
+
+				// Check if returnLoc is LocalAddr (return value location)
+				if returnLoc.Op != OpLocalAddr {
+					newArgs = append(newArgs, arg)
+					continue
+				}
+
+				// Search for Move operation that writes to returnLoc
+				// We need to search in the same block and earlier blocks
+				var moveToReturnLoc *Value
+				var tempAddr *Value
+
+				// Search backwards from the current block
+				for searchBlock := b; searchBlock != nil; {
+					for i := len(searchBlock.Values) - 1; i >= 0; i-- {
+						v := searchBlock.Values[i]
+						if v.Op == OpMove && len(v.Args) >= 2 {
+							dst := v.Args[0]
+							src := v.Args[1]
+
+							// Check if this Move writes to returnLoc
+							if dst == returnLoc {
+								moveToReturnLoc = v
+								tempAddr = src
+								break
+							}
+						}
+					}
+					if moveToReturnLoc != nil {
+						break
+					}
+					// Only search one predecessor to avoid complexity
+					if len(searchBlock.Preds) == 0 {
+						break
+					}
+					searchBlock = searchBlock.Preds[0].b
+				}
+
+				if moveToReturnLoc == nil || tempAddr == nil {
+					newArgs = append(newArgs, arg)
+					continue
+				}
+
+				// Check if tempAddr is LocalAddr (temporary variable)
+				if tempAddr.Op != OpLocalAddr {
+					newArgs = append(newArgs, arg)
+					continue
+				}
+
+				// Find the Store operation that writes SelectN to tempAddr
+				// Search in the same block and earlier blocks, before the Move
+				var storeToTemp *Value
+				var selectNValue *Value
+
+				// Search backwards from the Move operation
+				moveBlock := moveToReturnLoc.Block
+				for searchBlock := moveBlock; searchBlock != nil; {
+					startIdx := len(searchBlock.Values)
+					if searchBlock == moveBlock {
+						// In the same block, only search before the Move
+						for i, v := range searchBlock.Values {
+							if v == moveToReturnLoc {
+								startIdx = i
+								break
+							}
+						}
+					}
+
+					for i := startIdx - 1; i >= 0; i-- {
+						v := searchBlock.Values[i]
+						if v.Op == OpStore && len(v.Args) >= 3 {
+							storeAddr := v.Args[0]
+							storeValue := v.Args[1]
+
+							// Check if this Store writes to tempAddr
+							if storeAddr == tempAddr {
+								storeToTemp = v
+								// Check if storeValue is SelectN
+								if storeValue.Op == OpSelectN {
+									selectNValue = storeValue
+									break
+								}
+							}
+						}
+					}
+					if selectNValue != nil {
+						break
+					}
+					// Only search one predecessor to avoid complexity
+					if len(searchBlock.Preds) == 0 {
+						break
+					}
+					searchBlock = searchBlock.Preds[0].b
+				}
+
+				if selectNValue != nil {
+					// Check if SelectN's type can be represented in SSA
+					// If not, we can't optimize because rewriteSelectOrArg will fail
+					if CanSSA(selectNValue.Type) {
+						// Found the pattern! Replace Dereference with SelectN
+						newArgs = append(newArgs, selectNValue)
+						optimized = true
+
+						// Mark intermediate operations for removal (only if they have no other uses)
+						if arg.Uses == 1 {
+							arg.Op = OpInvalid
+						}
+						if moveToReturnLoc.Uses == 1 {
+							moveToReturnLoc.Op = OpInvalid
+						}
+						if storeToTemp != nil && storeToTemp.Uses == 1 {
+							storeToTemp.Op = OpInvalid
+						}
+					} else {
+						// SelectN type is too large for SSA, can't optimize
+						newArgs = append(newArgs, arg)
+					}
+				} else {
+					newArgs = append(newArgs, arg)
+				}
+			}
+
+			// If we optimized, update MakeResult arguments
+			if optimized {
+				// Keep the memory argument (last one)
+				memArg := v.Args[len(v.Args)-1]
+				v.resetArgs()
+				v.AddArgs(newArgs...)
+				v.AddArg(memArg)
+			}
+		}
+	}
 }
 
 // cleanupRedundantMoves removes redundant Move operations from temporary variables to return value locations.

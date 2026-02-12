@@ -7,6 +7,7 @@ package ssa
 import (
 	"cmd/compile/internal/ir"
 	"cmd/internal/src"
+	"fmt"
 	"internal/buildcfg"
 )
 
@@ -182,6 +183,343 @@ func nilcheckelim(f *Func) {
 		case ClearPtr:
 			nonNilValues[node.ptr.ID] = nil
 			continue
+		}
+	}
+
+	// Optimize redundant Store-Move-Dereference chains for FieldByName functions
+	// This should be done at the end of nilcheckelim, before expandCalls
+	optimizeFieldByNameReturnValues(f)
+}
+
+// optimizeFieldByNameReturnValues eliminates redundant Store-Move-Dereference chains
+// for FieldByName functions. Pattern:
+//
+//	SelectN -> Store(.autotmp) -> Move(.autotmp -> .autotmp2) -> Move(.autotmp2 -> returnLoc) -> Dereference(returnLoc) -> MakeResult
+//
+// Optimization: Directly use SelectN in MakeResult, skipping all intermediate operations.
+func optimizeFieldByNameReturnValues(f *Func) {
+	// Check if this is a FieldByName function
+	if f.Name != "(*structType).FieldByName" && f.Name != "(*structType).FieldByNameFunc" {
+		return
+	}
+
+	// Find all MakeResult operations
+	for _, b := range f.Blocks {
+		for _, v := range b.Values {
+			if v.Op != OpMakeResult {
+				continue
+			}
+
+			// Process each argument of MakeResult
+			argsWithoutMem := v.Args[:len(v.Args)-1]
+			optimized := false
+			newArgs := make([]*Value, 0, len(v.Args))
+
+			for _, arg := range argsWithoutMem {
+				// Check if arg is Dereference(returnLoc, mem)
+				if arg.Op != OpDereference || len(arg.Args) < 2 {
+					newArgs = append(newArgs, arg)
+					continue
+				}
+
+				returnLoc := arg.Args[0]
+
+				// Check if returnLoc is LocalAddr (return value location)
+				if returnLoc.Op != OpLocalAddr {
+					newArgs = append(newArgs, arg)
+					continue
+				}
+
+				// Search for Move operation that writes to returnLoc
+				// We need to search in the same block and earlier blocks
+				var moveToReturnLoc *Value
+				var tempAddr *Value
+
+				// Search backwards from the current block
+				for searchBlock := b; searchBlock != nil; {
+					for i := len(searchBlock.Values) - 1; i >= 0; i-- {
+						v := searchBlock.Values[i]
+						if v.Op == OpMove && len(v.Args) >= 2 {
+							dst := v.Args[0]
+							src := v.Args[1]
+
+							// Check if this Move writes to returnLoc
+							if dst == returnLoc {
+								moveToReturnLoc = v
+								tempAddr = src
+								break
+							}
+						}
+					}
+					if moveToReturnLoc != nil {
+						break
+					}
+					// Only search one predecessor to avoid complexity
+					if len(searchBlock.Preds) == 0 {
+						break
+					}
+					searchBlock = searchBlock.Preds[0].b
+				}
+
+				if moveToReturnLoc == nil || tempAddr == nil {
+					newArgs = append(newArgs, arg)
+					continue
+				}
+
+				// Check if tempAddr is LocalAddr (temporary variable)
+				if tempAddr.Op != OpLocalAddr {
+					newArgs = append(newArgs, arg)
+					continue
+				}
+
+				// Find the Store operation that writes SelectN to tempAddr
+				// We may need to trace through multiple Move operations
+				// Pattern: Store(.autotmp_21) -> Move(.autotmp_21 -> .autotmp_14) -> Move(.autotmp_14 -> f)
+				// Or: Store(.autotmp_21) -> Move(.autotmp_21 -> f)
+				var selectNValue *Value
+				currentAddr := tempAddr
+				maxMoves := 5 // Limit to avoid infinite loops
+				moveCount := 0
+
+				// Trace back through Move operations to find the original Store
+				foundNext := false
+				for moveCount < maxMoves {
+					// Search backwards from the Move operation
+					moveBlock := moveToReturnLoc.Block
+					foundNext = false
+
+					for searchBlock := moveBlock; searchBlock != nil; {
+						startIdx := len(searchBlock.Values)
+						if searchBlock == moveBlock && moveCount == 0 {
+							// In the same block, only search before the Move
+							for i, v := range searchBlock.Values {
+								if v == moveToReturnLoc {
+									startIdx = i
+									break
+								}
+							}
+						}
+
+						for i := startIdx - 1; i >= 0; i-- {
+							v := searchBlock.Values[i]
+
+							// Check for Store operation
+							if v.Op == OpStore && len(v.Args) >= 3 {
+								storeAddr := v.Args[0]
+								storeValue := v.Args[1]
+
+								// Check if this Store writes to currentAddr
+								if storeAddr == currentAddr {
+									// Check if storeValue is SelectN
+									if storeValue.Op == OpSelectN {
+										// Only optimize if SelectN is only used by this Store
+										// (Uses == 1), so that when we replace Dereference with SelectN,
+										// the Store will become unused and can be removed by deadcode.
+										// If SelectN has multiple uses, expand_calls will panic.
+										if storeValue.Uses == 1 {
+											selectNValue = storeValue
+											foundNext = true
+											break
+										}
+									}
+								}
+							}
+
+							// Check for Move operation that might be in the chain
+							if v.Op == OpMove && len(v.Args) >= 2 {
+								dst := v.Args[0]
+								src := v.Args[1]
+								// If this Move writes to currentAddr, trace back to its source
+								if dst == currentAddr && src.Op == OpLocalAddr {
+									currentAddr = src
+									moveCount++
+									foundNext = true
+									break
+								}
+							}
+						}
+
+						if selectNValue != nil {
+							break
+						}
+
+						if foundNext {
+							// Found a Move in the chain, continue searching in the same block
+							break
+						}
+
+						// Only search one predecessor to avoid complexity
+						if len(searchBlock.Preds) == 0 {
+							break
+						}
+						searchBlock = searchBlock.Preds[0].b
+					}
+
+					if selectNValue != nil {
+						break
+					}
+
+					// If we didn't find a Store or another Move, give up
+					if !foundNext {
+						break
+					}
+				}
+
+				if selectNValue != nil {
+					// Found the pattern! Before replacing Dereference with SelectN,
+					// we need to mark the Store that uses this SelectN as OpInvalid,
+					// so that when expand_calls runs, it won't see the SelectN as having multiple uses.
+					// We need to find the Store that uses this SelectN and update the memory chain.
+					isFieldByName := f.Name == "(*structType).FieldByName" || f.Name == "(*structType).FieldByNameFunc"
+					if isFieldByName {
+						fmt.Printf("[nilcheck] %s: Found SelectN v%d (Uses=%d)\n", f.Name, selectNValue.ID, selectNValue.Uses)
+					}
+					var storeOp *Value
+					for _, b2 := range f.Blocks {
+						for _, v2 := range b2.Values {
+							if v2.Op == OpStore && len(v2.Args) >= 3 && v2.Args[1] == selectNValue {
+								storeOp = v2
+								if isFieldByName {
+									fmt.Printf("[nilcheck] %s: Found Store v%d (Uses=%d) using SelectN\n", f.Name, storeOp.ID, storeOp.Uses)
+								}
+								break
+							}
+						}
+						if storeOp != nil {
+							break
+						}
+					}
+
+					if storeOp != nil {
+						// Get the input memory (last argument for Store)
+						inputMem := storeOp.Args[2]
+
+						// Find all values that use this Store's memory output
+						// and replace them with the input memory
+						// Note: SetArg automatically updates Uses counts, so we don't need to manually adjust them
+						replacedCount := 0
+						for _, b3 := range f.Blocks {
+							for _, v3 := range b3.Values {
+								// Check all arguments for memory uses
+								for i, a := range v3.Args {
+									if a == storeOp && a.Type.IsMemory() {
+										// Replace with input memory
+										// SetArg will automatically:
+										// - decrease storeOp.Uses (because it's no longer an arg)
+										// - increase inputMem.Uses (because it's now an arg)
+										v3.SetArg(i, inputMem)
+										replacedCount++
+									}
+								}
+							}
+						}
+						if isFieldByName {
+							fmt.Printf("[nilcheck] %s: Replaced %d memory uses, Store v%d.Uses=%d\n", f.Name, replacedCount, storeOp.ID, storeOp.Uses)
+						}
+
+						// Store's Uses includes:
+						// 1. Memory output uses (we just replaced these)
+						// 2. Argument uses (SelectN in Args[1], inputMem in Args[2], etc.)
+						// After replacing memory uses, if Store.Uses equals the number of argument uses,
+						// then Store has no memory output uses left, and we can mark it as OpInvalid.
+						// For Store, it has 3 args: [0]=addr, [1]=value (SelectN), [2]=inputMem
+						// So if Uses == 2 (SelectN + inputMem), then no memory output uses remain.
+						// But actually, we need to check: if Store is only used by its arguments, then
+						// it has no "real" uses (memory output uses), so we can invalidate it.
+
+						// Actually, the correct approach is: Store.Uses should only count memory output uses.
+						// Argument uses are tracked separately. So if we've replaced all memory uses,
+						// Store.Uses should be 0 (or negative if we over-decremented).
+						// Let's just check if Store.Uses <= 0, meaning no memory output uses remain.
+						if isFieldByName {
+							fmt.Printf("[nilcheck] %s: Checking Store v%d.Uses=%d (<=0? %v)\n", f.Name, storeOp.ID, storeOp.Uses, storeOp.Uses <= 0)
+						}
+						if storeOp.Uses <= 0 {
+							if isFieldByName {
+								fmt.Printf("[nilcheck] %s: Marking Store v%d as OpInvalid, SelectN v%d Uses: %d -> ", f.Name, storeOp.ID, selectNValue.ID, selectNValue.Uses)
+							}
+							storeOp.Op = OpInvalid
+							storeOp.resetArgs()
+							if isFieldByName {
+								fmt.Printf("%d\n", selectNValue.Uses)
+							}
+							// After resetArgs(), SelectN's Uses has been decreased by 1
+							// (from 1 to 0, since Store was the only user)
+						} else {
+							if isFieldByName {
+								fmt.Printf("[nilcheck] %s: ERROR: Store v%d still has %d uses (not <= 0)!\n", f.Name, storeOp.ID, storeOp.Uses)
+							}
+						}
+					}
+
+					// Now replace Dereference with SelectN
+					// When we later call v.AddArgs(newArgs...), SelectN's Uses will increase back to 1
+					if isFieldByName {
+						fmt.Printf("[nilcheck] %s: Adding SelectN v%d to MakeResult, Uses=%d\n", f.Name, selectNValue.ID, selectNValue.Uses)
+					}
+					newArgs = append(newArgs, selectNValue)
+					optimized = true
+
+					// Note: We don't mark Move operations as OpInvalid here
+					// because they are memory operations and their memory outputs may still be used.
+					// The deadcode pass will remove them if they become unused.
+				} else {
+					newArgs = append(newArgs, arg)
+				}
+			}
+
+			// If we optimized, update MakeResult arguments
+			if optimized {
+				// We need to find the correct memory argument to use
+				// Since we're replacing Dereference with SelectN, we should use
+				// the memory from the SelectN's call, not from Dereference
+				var memArg *Value
+				var sourceCall *Value
+
+				// Find the source call from the SelectN values
+				for _, newArg := range newArgs {
+					if newArg.Op == OpSelectN && !newArg.Type.IsMemory() && len(newArg.Args) > 0 {
+						sourceCall = newArg.Args[0]
+						break
+					}
+				}
+
+				// Find the memory SelectN for this call
+				if sourceCall != nil {
+					// Search in the same block first (most common case)
+					for _, v2 := range b.Values {
+						if v2.Op == OpSelectN && v2.Type.IsMemory() && len(v2.Args) > 0 && v2.Args[0] == sourceCall {
+							memArg = v2
+							break
+						}
+					}
+					// If not found in the same block, search in other blocks
+					if memArg == nil {
+						for _, b2 := range f.Blocks {
+							if b2 == b {
+								continue // already searched
+							}
+							for _, v2 := range b2.Values {
+								if v2.Op == OpSelectN && v2.Type.IsMemory() && len(v2.Args) > 0 && v2.Args[0] == sourceCall {
+									memArg = v2
+									break
+								}
+							}
+							if memArg != nil {
+								break
+							}
+						}
+					}
+				}
+
+				// If we didn't find memory from SelectN, use the original memory argument
+				if memArg == nil {
+					memArg = v.Args[len(v.Args)-1]
+				}
+				v.resetArgs()
+				v.AddArgs(newArgs...)
+				v.AddArg(memArg)
+			}
 		}
 	}
 }

@@ -405,7 +405,7 @@ func decomposeArrayPhi(v *Value) {
 
 // MaxStruct is the maximum number of fields a struct
 // can have and still be SSAable.
-const MaxStruct = 4
+const MaxStruct = 8
 
 type namedVal struct {
 	locIndex, valIndex int // f.NamedValues[f.Names[locIndex]][valIndex] = key
