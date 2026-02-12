@@ -162,37 +162,18 @@ func expandCalls(f *Func) {
 				// instead of temporary variable to avoid redundant memory copy.
 				finalDest := storeAddr
 				if x.isFieldByNameFunction() && x.isAutoTmp(storeAddr) {
-					fmt.Printf("OPTIMIZATION: Found auto-tmp storeAddr: %s (ID=%d)\n", storeAddr.LongString(), storeAddr.ID)
 					if returnLoc := x.getReturnValueLocation(v, i); returnLoc != nil {
-						fmt.Printf("OPTIMIZATION: Found return value location: %s (ID=%d), switching from %s (ID=%d)\n",
-							returnLoc.LongString(), returnLoc.ID, storeAddr.LongString(), storeAddr.ID)
 						finalDest = returnLoc
-						fmt.Printf("OPTIMIZATION: finalDest set to: %s (ID=%d)\n", finalDest.LongString(), finalDest.ID)
 						// Record that this temp was optimized
 						if x.optimizedTemps == nil {
 							x.optimizedTemps = make(map[*Value]*Value)
 						}
 						x.optimizedTemps[storeAddr] = returnLoc
-					} else {
-						fmt.Printf("OPTIMIZATION: Could not find return value location for SelectN[%d], using original storeAddr: %s (ID=%d)\n",
-							i, storeAddr.LongString(), storeAddr.ID)
 					}
 				}
-				fmt.Printf("OPTIMIZATION: Initializing registerCursor with finalDest: %s (ID=%d), storeOffset=0\n",
-					finalDest.LongString(), finalDest.ID)
 				rc.init(regs, aux.abiInfo, nil, finalDest, 0)
-				fmt.Printf("OPTIMIZATION: registerCursor.storeDest: %s (ID=%d)\n",
-					rc.storeDest.LongString(), rc.storeDest.ID)
 				mem = x.rewriteWideSelectToStores(call.Pos, call.Block, v, mem, v.Type, rc)
-				if x.isFieldByNameFunction() && x.isAutoTmp(storeAddr) {
-					fmt.Printf("OPTIMIZATION: Replacing original Store operation %s (ID=%d) with Copy of mem %s (ID=%d)\n",
-						store.LongString(), store.ID, mem.LongString(), mem.ID)
-				}
 				store.copyOf(mem)
-				if x.isFieldByNameFunction() && x.isAutoTmp(storeAddr) {
-					fmt.Printf("OPTIMIZATION: After copyOf, store is now: %s (ID=%d)\n",
-						store.LongString(), store.ID)
-				}
 			} else {
 				// Move directly from AuxBase to store target; rewrite the store instruction.
 				offset := aux.OffsetOfResult(i)
@@ -319,8 +300,6 @@ func (x *expandState) rewriteFuncResults(v *Value, b *Block, aux *AuxCall) {
 							if baseAddr == auxBase {
 								// For SelectN values, check if the stored value matches
 								if a.Op == OpSelectN && storeValue == a {
-									fmt.Printf("OPTIMIZATION: Skipping redundant store in rewriteFuncResults: SelectN %s (ID=%d) already stored to %s (ID=%d) at offset %d\n",
-										a.LongString(), a.ID, auxBase.LongString(), auxBase.ID, offset)
 									foundStore = true
 									break
 								}
@@ -883,10 +862,6 @@ func (x *expandState) rewriteWideSelectToStores(pos src.XPos, b *Block, containe
 			reg := int64(rc.nextSlice + Abi1RO(firstReg))
 			a := b.NewValue1I(pos, OpSelectN, at, reg, call)
 			dst := x.offsetFrom(b, rc.storeDest, rc.storeOffset, types.NewPtr(at))
-			if x.f.Name == "(*structType).FieldByName" {
-				fmt.Printf("OPTIMIZATION: rewriteWideSelectToStores - Store to dst: %s (ID=%d), storeDest: %s (ID=%d), storeOffset=%d\n",
-					dst.LongString(), dst.ID, rc.storeDest.LongString(), rc.storeDest.ID, rc.storeOffset)
-			}
 			m0 = b.NewValue3A(pos, OpStore, types.TypeMem, at, dst, a, m0)
 		} else {
 			panic(fmt.Errorf("Expected rc to have registers"))
@@ -1143,17 +1118,7 @@ func (x *expandState) invalidateRecursively(a *Value) {
 
 // isFieldByNameFunction checks if the current function is reflect.(*structType).FieldByName
 func (x *expandState) isFieldByNameFunction() bool {
-	isTarget := x.f.Name == "(*structType).FieldByName" || x.f.Name == "(*structType).FieldByNameFunc"
-	if isTarget {
-		// Debug: Print when we match the target function
-		if x.debug > 0 {
-			x.Printf("OPTIMIZATION: Matched FieldByName function: %s\n", x.f.Name)
-		} else {
-			// Always print for this optimization, even if debug is off
-			fmt.Printf("OPTIMIZATION: Matched FieldByName function: %s\n", x.f.Name)
-		}
-	}
-	return isTarget
+	return x.f.Name == "(*structType).FieldByName" || x.f.Name == "(*structType).FieldByNameFunc"
 }
 
 // isAutoTmp checks if addr is a LocalAddr operation pointing to an auto-temporary variable
@@ -1173,43 +1138,24 @@ func (x *expandState) isAutoTmp(addr *Value) bool {
 func (x *expandState) getReturnValueLocation(selectN *Value, which int64) *Value {
 	// Get the function's return value types
 	resultFields := x.f.Type.Results()
-	fmt.Printf("OPTIMIZATION: getReturnValueLocation called, which=%d, numResults=%d\n", which, len(resultFields))
 	if int(which) >= len(resultFields) {
-		fmt.Printf("OPTIMIZATION: which (%d) >= numResults (%d), returning nil\n", which, len(resultFields))
 		return nil
 	}
 
 	// Get the return value name
 	resultField := resultFields[which]
 	if resultField.Nname == nil {
-		fmt.Printf("OPTIMIZATION: resultField.Nname is nil for which=%d, returning nil\n", which)
 		return nil
 	}
 	n := resultField.Nname.(*ir.Name)
-	fmt.Printf("OPTIMIZATION: Looking for return value name: %s\n",
-		func() string {
-			if n.Sym() != nil {
-				return n.Sym().Name
-			}
-			return "<nil>"
-		}())
 
 	// Find the LocalAddr operation for this return value
 	// Search through the function's values to find a LocalAddr with this name
 	// Typically, return value addresses are created in the entry block
-	fmt.Printf("OPTIMIZATION: Searching Entry block (ID=%d) with %d values\n", x.f.Entry.ID, len(x.f.Entry.Values))
 	for _, v := range x.f.Entry.Values {
 		if v.Op == OpLocalAddr {
 			if name, ok := v.Aux.(*ir.Name); ok {
-				fmt.Printf("OPTIMIZATION: Found LocalAddr in Entry: %s (ID=%d), name=%s\n",
-					v.LongString(), v.ID, func() string {
-						if name.Sym() != nil {
-							return name.Sym().Name
-						}
-						return "<nil>"
-					}())
 				if name == n {
-					fmt.Printf("OPTIMIZATION: MATCH! Found return value location: %s (ID=%d)\n", v.LongString(), v.ID)
 					return v
 				}
 			}
@@ -1217,7 +1163,6 @@ func (x *expandState) getReturnValueLocation(selectN *Value, which int64) *Value
 	}
 
 	// Also search in other blocks (in case it's created later)
-	fmt.Printf("OPTIMIZATION: Searching other blocks (%d total)\n", len(x.f.Blocks))
 	for _, b := range x.f.Blocks {
 		if b == x.f.Entry {
 			continue // already searched
@@ -1226,8 +1171,6 @@ func (x *expandState) getReturnValueLocation(selectN *Value, which int64) *Value
 			if v.Op == OpLocalAddr {
 				if name, ok := v.Aux.(*ir.Name); ok {
 					if name == n {
-						fmt.Printf("OPTIMIZATION: MATCH! Found return value location in block %d: %s (ID=%d)\n",
-							b.ID, v.LongString(), v.ID)
 						return v
 					}
 				}
@@ -1236,13 +1179,6 @@ func (x *expandState) getReturnValueLocation(selectN *Value, which int64) *Value
 	}
 
 	// If not found, return nil (should not happen in normal compilation)
-	fmt.Printf("OPTIMIZATION: Could not find return value location for name %s\n",
-		func() string {
-			if n.Sym() != nil {
-				return n.Sym().Name
-			}
-			return "<nil>"
-		}())
 	return nil
 }
 
@@ -1252,8 +1188,6 @@ func (x *expandState) cleanupRedundantMoves() {
 	if x.optimizedTemps == nil || len(x.optimizedTemps) == 0 {
 		return
 	}
-
-	fmt.Printf("OPTIMIZATION: cleanupRedundantMoves: found %d optimized temps\n", len(x.optimizedTemps))
 
 	// Find and remove Move operations from optimized temps to returnLoc
 	for _, b := range x.f.Blocks {
@@ -1267,16 +1201,11 @@ func (x *expandState) cleanupRedundantMoves() {
 
 					// Check if this is a Move from an optimized temp to its returnLoc
 					if returnLoc, wasOptimized := x.optimizedTemps[src]; wasOptimized && dst == returnLoc {
-						fmt.Printf("OPTIMIZATION: Found redundant Move from temp %s (ID=%d) to returnLoc %s (ID=%d), removing\n",
-							src.LongString(), src.ID, dst.LongString(), dst.ID)
-
 						// Replace the Move with a Copy of its memory argument
 						// This preserves the memory chain while removing the redundant copy
 						if len(v.Args) >= 3 {
 							mem := v.Args[2]
 							v.copyOf(mem)
-							fmt.Printf("OPTIMIZATION: Replaced Move with Copy of mem %s (ID=%d)\n",
-								mem.LongString(), mem.ID)
 						} else {
 							// If no memory arg, invalidate the Move
 							v.Op = OpInvalid
@@ -1296,8 +1225,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 	if !x.isFieldByNameFunction() {
 		return
 	}
-
-	fmt.Printf("OPTIMIZATION: eliminateRedundantStoreLoad: scanning for Store-Load patterns\n")
 
 	// Find return value location
 	var returnLoc *Value
@@ -1361,9 +1288,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 
 							callSelectNMap[call][selectIdx] = value
 							storeSelectNMap[v][offset] = value
-
-							fmt.Printf("OPTIMIZATION: Found Store to returnLoc at offset %d: %s (ID=%d) storing SelectN[%d] %s (ID=%d) from call %s (ID=%d), Store output mem: %s (ID=%d)\n",
-								offset, addr.LongString(), addr.ID, selectIdx, value.LongString(), value.ID, call.LongString(), call.ID, v.LongString(), v.ID)
 						}
 					}
 				}
@@ -1378,7 +1302,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 	// Build a mapping from struct field offsets to SelectN values
 	// But first, we need to identify the target call for the Load
 	// We'll build the mapping only for SelectN values from that call
-	fmt.Printf("OPTIMIZATION: Building offset-to-SelectN mapping, storeSelectNMap has %d entries\n", len(storeSelectNMap))
 
 	// First, find the Load operation to identify the target call
 	var loadFromReturnLocTemp *Value
@@ -1445,25 +1368,16 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 	}
 
 	offsetToSelectN := make(map[int64]*Value)
-	for store, selectNMap := range storeSelectNMap {
-		fmt.Printf("OPTIMIZATION: Processing Store %s (ID=%d) with %d SelectN entries\n",
-			store.LongString(), store.ID, len(selectNMap))
+	for _, selectNMap := range storeSelectNMap {
 		for offset, selectN := range selectNMap {
 			// Only include SelectN values from the target call
 			if targetCallForMapping != nil && selectN.Args[0] == targetCallForMapping {
 				offsetToSelectN[offset] = selectN
-				fmt.Printf("OPTIMIZATION: Mapping offset %d to SelectN %s (ID=%d) from Store %s (ID=%d)\n",
-					offset, selectN.LongString(), selectN.ID, store.LongString(), store.ID)
-			} else {
-				fmt.Printf("OPTIMIZATION: Skipping offset %d, SelectN %s (ID=%d) from different call\n",
-					offset, selectN.LongString(), selectN.ID)
 			}
 		}
 	}
 
-	fmt.Printf("OPTIMIZATION: Built offset-to-SelectN mapping with %d entries\n", len(offsetToSelectN))
 	if len(offsetToSelectN) == 0 {
-		fmt.Printf("OPTIMIZATION: No offset-to-SelectN mapping found, skipping optimization\n")
 		return
 	}
 
@@ -1501,9 +1415,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 						visited[mem] = true
 						depth++
 
-						fmt.Printf("OPTIMIZATION: Tracing memory chain for Load %s (ID=%d), depth=%d, mem: %s (ID=%d, Op=%s)\n",
-							v.LongString(), v.ID, depth, mem.LongString(), mem.ID, mem.Op.String())
-
 						if mem.Op == OpStore {
 							storeValue := mem.Args[1]
 							// Check if this Store is to returnLoc
@@ -1514,19 +1425,12 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 								storeOffset += baseAddr.AuxInt
 								baseAddr = baseAddr.Args[0]
 							}
-							fmt.Printf("OPTIMIZATION: Found Store %s (ID=%d) to baseAddr %s (ID=%d), offset=%d, returnLoc=%s (ID=%d)\n",
-								mem.LongString(), mem.ID, baseAddr.LongString(), baseAddr.ID, storeOffset, returnLoc.LongString(), returnLoc.ID)
 
 							if baseAddr == returnLoc {
 								if storeValue.Op == OpSelectN {
 									call := storeValue.Args[0]
 									targetCallForLoad = call
-									fmt.Printf("OPTIMIZATION: Identified target call for Load %s (ID=%d): %s (ID=%d) from Store %s (ID=%d)\n",
-										v.LongString(), v.ID, targetCallForLoad.LongString(), targetCallForLoad.ID, mem.LongString(), mem.ID)
 									break
-								} else {
-									fmt.Printf("OPTIMIZATION: Store value is not SelectN: %s (ID=%d, Op=%s)\n",
-										storeValue.LongString(), storeValue.ID, storeValue.Op.String())
 								}
 							}
 						}
@@ -1541,8 +1445,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 						} else if mem.Op == OpMove && len(mem.Args) >= 3 && mem.Args[2].Type.IsMemory() {
 							mem = mem.Args[2]
 						} else {
-							fmt.Printf("OPTIMIZATION: Cannot continue memory chain from %s (ID=%d, Op=%s), numArgs=%d\n",
-								mem.LongString(), mem.ID, mem.Op.String(), len(mem.Args))
 							break
 						}
 					}
@@ -1550,13 +1452,11 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 					if targetCallForLoad != nil {
 						// Build offset-to-SelectN mapping for this specific call
 						offsetToSelectNForCall := make(map[int64]*Value)
-						for store, selectNMap := range storeSelectNMap {
+						for _, selectNMap := range storeSelectNMap {
 							for offset, selectN := range selectNMap {
 								// Only include SelectN values from this specific call
 								if selectN.Args[0] == targetCallForLoad {
 									offsetToSelectNForCall[offset] = selectN
-									fmt.Printf("OPTIMIZATION: Mapping offset %d to SelectN %s (ID=%d) from Store %s (ID=%d) for Load %s (ID=%d)\n",
-										offset, selectN.LongString(), selectN.ID, store.LongString(), store.ID, v.LongString(), v.ID)
 								}
 							}
 						}
@@ -1567,12 +1467,7 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 								targetCall:      targetCallForLoad,
 								offsetToSelectN: offsetToSelectNForCall,
 							})
-							fmt.Printf("OPTIMIZATION: Found Load %s (ID=%d) from returnLoc with target call %s (ID=%d) and %d SelectN mappings\n",
-								v.LongString(), v.ID, targetCallForLoad.LongString(), targetCallForLoad.ID, len(offsetToSelectNForCall))
 						}
-					} else {
-						fmt.Printf("OPTIMIZATION: Could not identify target call for Load %s (ID=%d), skipping\n",
-							v.LongString(), v.ID)
 					}
 				}
 			}
@@ -1580,7 +1475,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 	}
 
 	if len(allLoads) == 0 {
-		fmt.Printf("OPTIMIZATION: No Load from returnLoc found, skipping optimization\n")
 		return
 	}
 
@@ -1590,9 +1484,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 		targetCallForLoad := loadInfo.targetCall
 		offsetToSelectN := loadInfo.offsetToSelectN
 
-		fmt.Printf("OPTIMIZATION: Processing Load %s (ID=%d) with target call %s (ID=%d) and %d SelectN mappings\n",
-			loadFromReturnLoc.LongString(), loadFromReturnLoc.ID, targetCallForLoad.LongString(), targetCallForLoad.ID, len(offsetToSelectN))
-
 		// Find all StructSelect operations that use this Load
 		structSelectMap := make(map[*Value]int64) // StructSelect value -> field index
 		for _, b := range x.f.Blocks {
@@ -1600,8 +1491,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 				if v.Op == OpStructSelect && len(v.Args) >= 1 && v.Args[0] == loadFromReturnLoc {
 					fieldIdx := v.AuxInt
 					structSelectMap[v] = fieldIdx
-					fmt.Printf("OPTIMIZATION: Found StructSelect[%d] using Load: %s (ID=%d)\n",
-						fieldIdx, v.LongString(), v.ID)
 				}
 			}
 		}
@@ -1611,7 +1500,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 		// and the struct field is a string, we can replace them with SelectN values
 		structType := loadFromReturnLoc.Type
 		if !structType.IsStruct() {
-			fmt.Printf("OPTIMIZATION: Load type %s is not a struct, skipping\n", structType.String())
 			continue
 		}
 
@@ -1628,12 +1516,7 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 							if selectN, ok := offsetToSelectN[fieldOffset]; ok && selectN.Type.IsPtr() {
 								// Only replace if the SelectN comes from the same call as the Load
 								if selectN.Args[0] == targetCallForLoad {
-									fmt.Printf("OPTIMIZATION: Replacing StringPtr(StructSelect[%d]) %s (ID=%d) with SelectN %s (ID=%d)\n",
-										fieldIdx, v.LongString(), v.ID, selectN.LongString(), selectN.ID)
 									v.copyOf(selectN)
-								} else {
-									fmt.Printf("OPTIMIZATION: Skipping StringPtr(StructSelect[%d]) - SelectN from different call: %s (ID=%d) vs %s (ID=%d)\n",
-										fieldIdx, selectN.Args[0].LongString(), selectN.Args[0].ID, targetCallForLoad.LongString(), targetCallForLoad.ID)
 								}
 							}
 						}
@@ -1652,12 +1535,7 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 							if selectN, ok := offsetToSelectN[fieldOffset+ptrSize]; ok && selectN.Type.IsInteger() {
 								// Only replace if the SelectN comes from the same call as the Load
 								if selectN.Args[0] == targetCallForLoad {
-									fmt.Printf("OPTIMIZATION: Replacing StringLen(StructSelect[%d]) %s (ID=%d) with SelectN %s (ID=%d)\n",
-										fieldIdx, v.LongString(), v.ID, selectN.LongString(), selectN.ID)
 									v.copyOf(selectN)
-								} else {
-									fmt.Printf("OPTIMIZATION: Skipping StringLen(StructSelect[%d]) - SelectN from different call: %s (ID=%d) vs %s (ID=%d)\n",
-										fieldIdx, selectN.Args[0].LongString(), selectN.Args[0].ID, targetCallForLoad.LongString(), targetCallForLoad.ID)
 								}
 							}
 						}
@@ -1674,8 +1552,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 							// ITab is at offset 0 of the interface field
 							if selectN, ok := offsetToSelectN[fieldOffset]; ok && selectN.Type.IsUintptr() {
 								if selectN.Args[0] == targetCallForLoad {
-									fmt.Printf("OPTIMIZATION: Replacing ITab(StructSelect[%d]) %s (ID=%d) with SelectN %s (ID=%d)\n",
-										fieldIdx, v.LongString(), v.ID, selectN.LongString(), selectN.ID)
 									v.copyOf(selectN)
 								}
 							}
@@ -1694,8 +1570,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 							ptrSize := int64(x.f.Config.PtrSize)
 							if selectN, ok := offsetToSelectN[fieldOffset+ptrSize]; ok && selectN.Type.IsPtr() {
 								if selectN.Args[0] == targetCallForLoad {
-									fmt.Printf("OPTIMIZATION: Replacing IData(StructSelect[%d]) %s (ID=%d) with SelectN %s (ID=%d)\n",
-										fieldIdx, v.LongString(), v.ID, selectN.LongString(), selectN.ID)
 									v.copyOf(selectN)
 								}
 							}
@@ -1713,8 +1587,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 							// SlicePtr is at offset 0 of the slice field
 							if selectN, ok := offsetToSelectN[fieldOffset]; ok && selectN.Type.IsPtr() {
 								if selectN.Args[0] == targetCallForLoad {
-									fmt.Printf("OPTIMIZATION: Replacing SlicePtr(StructSelect[%d]) %s (ID=%d) with SelectN %s (ID=%d)\n",
-										fieldIdx, v.LongString(), v.ID, selectN.LongString(), selectN.ID)
 									v.copyOf(selectN)
 								}
 							}
@@ -1733,8 +1605,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 							ptrSize := int64(x.f.Config.PtrSize)
 							if selectN, ok := offsetToSelectN[fieldOffset+ptrSize]; ok && selectN.Type.IsInteger() {
 								if selectN.Args[0] == targetCallForLoad {
-									fmt.Printf("OPTIMIZATION: Replacing SliceLen(StructSelect[%d]) %s (ID=%d) with SelectN %s (ID=%d)\n",
-										fieldIdx, v.LongString(), v.ID, selectN.LongString(), selectN.ID)
 									v.copyOf(selectN)
 								}
 							}
@@ -1753,8 +1623,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 							ptrSize := int64(x.f.Config.PtrSize)
 							if selectN, ok := offsetToSelectN[fieldOffset+2*ptrSize]; ok && selectN.Type.IsInteger() {
 								if selectN.Args[0] == targetCallForLoad {
-									fmt.Printf("OPTIMIZATION: Replacing SliceCap(StructSelect[%d]) %s (ID=%d) with SelectN %s (ID=%d)\n",
-										fieldIdx, v.LongString(), v.ID, selectN.LongString(), selectN.ID)
 									v.copyOf(selectN)
 								}
 							}
@@ -1771,8 +1639,6 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 					if selectN, ok := offsetToSelectN[fieldOffset]; ok {
 						// Check if types match and SelectN comes from the same call
 						if v.Type == selectN.Type && selectN.Args[0] == targetCallForLoad {
-							fmt.Printf("OPTIMIZATION: Replacing StructSelect[%d] %s (ID=%d) with SelectN %s (ID=%d)\n",
-								fieldIdx, v.LongString(), v.ID, selectN.LongString(), selectN.ID)
 							v.copyOf(selectN)
 						}
 					}
@@ -1792,21 +1658,14 @@ func (x *expandState) eliminateRedundantStoreLoad() {
 				for _, arg := range v2.Args {
 					if arg == loadFromReturnLoc {
 						remainingUses++
-						fmt.Printf("OPTIMIZATION: Load %s (ID=%d) still has use: %s (ID=%d, Op=%s)\n",
-							loadFromReturnLoc.LongString(), loadFromReturnLoc.ID, v2.LongString(), v2.ID, v2.Op.String())
 					}
 				}
 			}
 		}
 
 		if remainingUses == 0 {
-			fmt.Printf("OPTIMIZATION: Load %s (ID=%d) has no remaining uses, can be eliminated\n",
-				loadFromReturnLoc.LongString(), loadFromReturnLoc.ID)
 			// Mark the Load as invalid - it will be removed by dead code elimination
 			loadFromReturnLoc.Op = OpInvalid
-		} else {
-			fmt.Printf("OPTIMIZATION: Load %s (ID=%d) still has %d uses, cannot eliminate yet\n",
-				loadFromReturnLoc.LongString(), loadFromReturnLoc.ID, remainingUses)
 		}
 	}
 }
