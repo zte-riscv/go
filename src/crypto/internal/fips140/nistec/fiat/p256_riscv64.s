@@ -927,7 +927,7 @@ skip_sel:
 	MOV	X30, 24(X10)
 	RET
 
-TEXT ·p256Add(SB),NOSPLIT,$0-24
+TEXT ·p256Add_bak(SB),NOSPLIT,$0-24
 	MOV	out1+0(FP), X10
 	MOV	arg1+8(FP), X11
 	MOV	arg2+16(FP), X12
@@ -1013,7 +1013,7 @@ TEXT ·p256Add(SB),NOSPLIT,$0-24
 
 	RET
 
-TEXT ·p256Sub(SB),NOSPLIT,$0-24
+TEXT ·p256Sub_bak(SB),NOSPLIT,$0-24
 	MOV	out1+0(FP), X10
 	MOV	arg1+8(FP), X11
 	MOV	arg2+16(FP), X12
