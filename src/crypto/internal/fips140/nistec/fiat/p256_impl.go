@@ -13,11 +13,3 @@ func p256Mul(out, a, b *p256MontgomeryDomainFieldElement) {
 func p256Square(out, a *p256MontgomeryDomainFieldElement) {
 	p256SquareGeneric(out, a)
 }
-
-func p256Add(out, a, b *p256MontgomeryDomainFieldElement) {
-	p256AddGeneric(out, a, b)
-}
-
-func p256Sub(out, a, b *p256MontgomeryDomainFieldElement) {
-	p256SubGeneric(out, a, b)
-}
