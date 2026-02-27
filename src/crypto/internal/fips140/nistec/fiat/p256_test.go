@@ -332,13 +332,11 @@ func TestP256Square(t *testing.T) {
 						tc.a[0], tc.a[1], tc.a[2], tc.a[3],
 						outGo[0], outGo[1], outGo[2], outGo[3],
 						outAsm[0], outAsm[1], outAsm[2], outAsm[3])
-					// Print detailed difference
 					for i := 0; i < 4; i++ {
 						if outGo[i] != outAsm[i] {
 							diff := outGo[i] ^ outAsm[i]
 							t.Logf("  Limb[%d] differs: Go=%016x Asm=%016x Diff=%016x",
 								i, outGo[i], outAsm[i], diff)
-							// Calculate numeric difference
 							if outGo[i] > outAsm[i] {
 								t.Logf("    Go is larger by %d (0x%x)",
 									outGo[i]-outAsm[i], outGo[i]-outAsm[i])

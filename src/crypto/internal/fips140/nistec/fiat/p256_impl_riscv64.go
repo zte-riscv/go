@@ -11,8 +11,10 @@ import "math/bits"
 //go:noescape
 func p256Mul(out, a, b *p256MontgomeryDomainFieldElement)
 
-// p256Square squares a field element following ARM64 assembly algorithm
-// This is a reference implementation for debugging purposes
+// p256Square squares a field element following ARM64 assembly algorithm of p256Sqr in p256_asm_arm64.s
+// This implementation uses a delayed reduction strategy: compute all products first,
+// then perform Montgomery reduction in batch. This avoids redundant multiplications
+// and improves performance by keeping intermediate values in registers.
 func p256Square(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement) {
 	x0 := arg1[0]
 	x1 := arg1[1]
@@ -20,77 +22,58 @@ func p256Square(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDoma
 	x3 := arg1[3]
 
 	// =====================================
-	// Compute cross products: x[1:] * x[0]
+	// Stage 1: Compute cross products (avoiding duplicates)
 	// =====================================
+	// For x² = (x₀ + x₁·2⁶⁴ + x₂·2¹²⁸ + x₃·2¹⁹²)², we need:
+	// - Square terms: x₀², x₁², x₂², x₃²
+	// - Cross terms: x₀x₁, x₀x₂, x₀x₃, x₁x₂, x₁x₃, x₂x₃ (each multiplied by 2)
+	//
+	// We only compute the upper triangular matrix to avoid redundant multiplications.
+	// acc1-acc7 will accumulate the 512-bit result of cross products.
+
 	var acc1, acc2, acc3, acc4, acc5, acc6, acc7 uint64
 	var carry uint64
 
-	// x0 * x1
-	// MUL x0, x1, acc1
-	// UMULH x0, x1, acc2
-	hi, lo := bits.Mul64(x0, x1) // bits.Mul64 returns (hi, lo)
+	// Compute x₀ × x₁: result goes to acc1 (low) and acc2 (high)
+	hi, lo := bits.Mul64(x0, x1)
 	acc1 = lo
 	acc2 = hi
 
-	// x0 * x2
-	// MUL x0, x2, t0
-	// ADDS t0, acc2, acc2  (acc2 = acc2 + lo, sets C flag)
-	// UMULH x0, x2, acc3   (acc3 = hi, overwrites previous value)
+	// Compute x₀ × x₂: low part adds to acc2, high part goes to acc3
 	hi, lo = bits.Mul64(x0, x2)
-	acc2, carry = bits.Add64(acc2, lo, 0) // carry1 from ADDS
-	acc3 = hi                             // UMULH overwrites acc3
+	acc2, carry = bits.Add64(acc2, lo, 0)
+	acc3 = hi
 
-	// x0 * x3
-	// MUL x0, x3, t0
-	// ADCS t0, acc3, acc3  (acc3 = acc3 + lo + C from ADDS above)
-	// UMULH x0, x3, acc4   (acc4 = hi)
-	// ADC $0, acc4, acc4   (acc4 = acc4 + C from ADCS above)
+	// Compute x₀ × x₃: low part adds to acc3 with carry, high part goes to acc4
 	hi, lo = bits.Mul64(x0, x3)
-	acc3, carry = bits.Add64(acc3, lo, carry) // Use carry1 from ADDS
+	acc3, carry = bits.Add64(acc3, lo, carry)
 	acc4 = hi
-	acc4, carry = bits.Add64(acc4, 0, carry) // Use carry from ADCS
+	acc4, carry = bits.Add64(acc4, 0, carry)
 
-	// =====================================
-	// x[2:] * x[1]
-	// =====================================
-	// x1 * x2
-	// MUL x1, x2, t0
-	// ADDS t0, acc3  (acc3 = acc3 + lo, sets C flag)
-	// UMULH x1, x2, t1  (t1 = hi)
-	// ADCS t1, acc4  (acc4 = acc4 + hi + C from ADDS)
-	// ADC $0, ZR, acc5  (acc5 = C from ADCS)
+	// Compute x₁ × x₂: low part adds to acc3, high part adds to acc4 with carry
 	hi, lo = bits.Mul64(x1, x2)
-	acc3, carry = bits.Add64(acc3, lo, 0)     // carry2 from ADDS
-	acc4, carry = bits.Add64(acc4, hi, carry) // Use carry2
-	acc5 = carry                              // ADC $0, ZR, acc5
+	acc3, carry = bits.Add64(acc3, lo, 0)
+	acc4, carry = bits.Add64(acc4, hi, carry)
+	acc5 = carry
 
-	// x1 * x3
-	// MUL x1, x3, t0
-	// ADDS t0, acc4  (acc4 = acc4 + lo, sets C flag)
-	// UMULH x1, x3, t1  (t1 = hi)
-	// ADC t1, acc5  (acc5 = acc5 + hi + C from ADDS)
+	// Compute x₁ × x₃: low part adds to acc4, high part adds to acc5 with carry
 	hi, lo = bits.Mul64(x1, x3)
-	acc4, carry = bits.Add64(acc4, lo, 0) // carry3 from ADDS
-	acc5, _ = bits.Add64(acc5, hi, carry) // Use carry3, no further carry needed
+	acc4, carry = bits.Add64(acc4, lo, 0)
+	acc5, _ = bits.Add64(acc5, hi, carry)
 
-	// =====================================
-	// x[3] * x[2]
-	// =====================================
-	// x2 * x3
-	// MUL x2, x3, t0
-	// ADDS t0, acc5  (acc5 = acc5 + lo, sets C flag)
-	// UMULH x2, x3, acc6  (acc6 = hi)
-	// ADC $0, acc6  (acc6 = acc6 + C from ADDS)
+	// Compute x₂ × x₃: low part adds to acc5, high part goes to acc6
 	hi, lo = bits.Mul64(x2, x3)
-	acc5, carry = bits.Add64(acc5, lo, 0) // carry4 from ADDS
+	acc5, carry = bits.Add64(acc5, lo, 0)
 	acc6 = hi
-	acc6, _ = bits.Add64(acc6, 0, carry) // Use carry4
+	acc6, _ = bits.Add64(acc6, 0, carry)
 
 	acc7 = 0
 
 	// =====================================
-	// Multiply cross products by 2
+	// Stage 2: Multiply cross products by 2
 	// =====================================
+	// In the square formula (a+b)² = a² + 2ab + b², cross terms need to be doubled.
+	// We multiply each accumulator by 2 using addition (x + x = 2x).
 	acc1, carry = bits.Add64(acc1, acc1, 0)
 	acc2, carry = bits.Add64(acc2, acc2, carry)
 	acc3, carry = bits.Add64(acc3, acc3, carry)
@@ -100,128 +83,90 @@ func p256Square(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDoma
 	acc7, _ = bits.Add64(acc7, acc7, carry)
 
 	// =====================================
-	// Add missing products (squares)
+	// Stage 3: Add square terms
 	// =====================================
+	// Now add the square terms: x₀², x₁², x₂², x₃²
+	// acc0 will hold the lowest 64 bits of the result.
 	var acc0 uint64
-	// x0 * x0
-	// MUL x0, x0, acc0
-	// UMULH x0, x0, t0
-	// ADDS t0, acc1, acc1
-	hi, lo = bits.Mul64(x0, x0) // bits.Mul64 returns (hi, lo)
+
+	// x₀²: low part goes to acc0, high part adds to acc1
+	hi, lo = bits.Mul64(x0, x0)
 	acc0 = lo
 	acc1, carry = bits.Add64(acc1, hi, 0)
 
-	// x1 * x1
-	// MUL x1, x1, t0
-	// ADCS t0, acc2, acc2
-	// UMULH x1, x1, t1
-	// ADCS t1, acc3, acc3
+	// x₁²: low part adds to acc2, high part adds to acc3
 	hi, lo = bits.Mul64(x1, x1)
 	acc2, carry = bits.Add64(acc2, lo, carry)
 	acc3, carry = bits.Add64(acc3, hi, carry)
 
-	// x2 * x2
-	// MUL x2, x2, t0
-	// ADCS t0, acc4, acc4
-	// UMULH x2, x2, t1
-	// ADCS t1, acc5, acc5
+	// x₂²: low part adds to acc4, high part adds to acc5
 	hi, lo = bits.Mul64(x2, x2)
 	acc4, carry = bits.Add64(acc4, lo, carry)
 	acc5, carry = bits.Add64(acc5, hi, carry)
 
-	// x3 * x3
-	// MUL x3, x3, t0
-	// ADCS t0, acc6, acc6
-	// UMULH x3, x3, t1
-	// ADCS t1, acc7, acc7
+	// x₃²: low part adds to acc6, high part adds to acc7
 	hi, lo = bits.Mul64(x3, x3)
 	acc6, carry = bits.Add64(acc6, lo, carry)
 	acc7, _ = bits.Add64(acc7, hi, carry)
 
+	// At this point, acc0-acc7 contain the full 512-bit square result.
+
 	// =====================================
-	// First reduction step
+	// Stage 4: Montgomery reduction (4 steps)
 	// =====================================
-	// Following ARM64: ADDS acc0<<32, acc1, acc1 (sets C)
-	//                  LSR $32, acc0, t0
-	//                  MUL acc0, const1, t1
-	//                  UMULH acc0, const1, acc0 (overwrites acc0)
-	//                  ADCS t0, acc2, acc2 (uses C from ADDS)
-	//                  ADCS t1, acc3, acc3 (uses C from previous ADCS)
-	//                  ADC $0, acc0, acc0 (uses C from previous ADCS)
-	const const1 = 0xffffffff00000001
+	// Reduce the 512-bit result back to 256 bits modulo p.
+	// Each reduction step processes one 64-bit limb using the Montgomery constant.
+	const const1 = 0xffffffff00000001 // Montgomery constant for P-256
+
+	// Reduction step 1: reduce acc0
+	// Shift acc0 left by 32 bits and add to acc1, then compute acc0 * const1
 	t0 := acc0 << 32
-	acc1, carry = bits.Add64(acc1, t0, 0) // ADDS, sets carry1
+	acc1, carry = bits.Add64(acc1, t0, 0)
 	t1 := acc0 >> 32
-	hi, lo = bits.Mul64(acc0, const1) // bits.Mul64 returns (hi, lo)
+	hi, lo = bits.Mul64(acc0, const1)
 	t2 := lo
-	acc0 = hi                                 // UMULH overwrites acc0
-	acc2, carry = bits.Add64(acc2, t1, carry) // ADCS, uses carry1
-	acc3, carry = bits.Add64(acc3, t2, carry) // ADCS, uses carry from previous
-	acc0, _ = bits.Add64(acc0, 0, carry)      // ADC, uses carry from previous
+	acc0 = hi // acc0 is overwritten with the high part of acc0 * const1
+	acc2, carry = bits.Add64(acc2, t1, carry)
+	acc3, carry = bits.Add64(acc3, t2, carry)
+	acc0, _ = bits.Add64(acc0, 0, carry)
 
-	// =====================================
-	// Second reduction step
-	// =====================================
-	// Following ARM64: ADDS acc1<<32, acc2, acc2 (sets C)
-	//                  LSR $32, acc1, t0
-	//                  MUL acc1, const1, t1
-	//                  UMULH acc1, const1, acc1 (overwrites acc1)
-	//                  ADCS t0, acc3, acc3 (uses C from ADDS)
-	//                  ADCS t1, acc0, acc0 (uses C from previous ADCS)
-	//                  ADC $0, acc1, acc1 (uses C from previous ADCS)
+	// Reduction step 2: reduce acc1
 	t0 = acc1 << 32
-	acc2, carry = bits.Add64(acc2, t0, 0) // ADDS, sets carry1
+	acc2, carry = bits.Add64(acc2, t0, 0)
 	t1 = acc1 >> 32
-	hi, lo = bits.Mul64(acc1, const1) // bits.Mul64 returns (hi, lo)
+	hi, lo = bits.Mul64(acc1, const1)
 	t2 = lo
-	acc1 = hi                                 // UMULH overwrites acc1
-	acc3, carry = bits.Add64(acc3, t1, carry) // ADCS, uses carry1
-	acc0, carry = bits.Add64(acc0, t2, carry) // ADCS, uses carry from previous
-	acc1, _ = bits.Add64(acc1, 0, carry)      // ADC, uses carry from previous
+	acc1 = hi
+	acc3, carry = bits.Add64(acc3, t1, carry)
+	acc0, carry = bits.Add64(acc0, t2, carry)
+	acc1, _ = bits.Add64(acc1, 0, carry)
 
-	// =====================================
-	// Third reduction step
-	// =====================================
-	// Following ARM64: ADDS acc2<<32, acc3, acc3 (sets C)
-	//                  LSR $32, acc2, t0
-	//                  MUL acc2, const1, t1
-	//                  UMULH acc2, const1, acc2 (overwrites acc2)
-	//                  ADCS t0, acc0, acc0 (uses C from ADDS)
-	//                  ADCS t1, acc1, acc1 (uses C from previous ADCS)
-	//                  ADC $0, acc2, acc2 (uses C from previous ADCS)
+	// Reduction step 3: reduce acc2
 	t0 = acc2 << 32
-	acc3, carry = bits.Add64(acc3, t0, 0) // ADDS, sets carry1
+	acc3, carry = bits.Add64(acc3, t0, 0)
 	t1 = acc2 >> 32
-	hi, lo = bits.Mul64(acc2, const1) // bits.Mul64 returns (hi, lo)
+	hi, lo = bits.Mul64(acc2, const1)
 	t2 = lo
-	acc2 = hi                                 // UMULH overwrites acc2
-	acc0, carry = bits.Add64(acc0, t1, carry) // ADCS, uses carry1
-	acc1, carry = bits.Add64(acc1, t2, carry) // ADCS, uses carry from previous
-	acc2, _ = bits.Add64(acc2, 0, carry)      // ADC, uses carry from previous
+	acc2 = hi
+	acc0, carry = bits.Add64(acc0, t1, carry)
+	acc1, carry = bits.Add64(acc1, t2, carry)
+	acc2, _ = bits.Add64(acc2, 0, carry)
 
-	// =====================================
-	// Last reduction step
-	// =====================================
-	// Following ARM64: ADDS acc3<<32, acc0, acc0 (sets C)
-	//                  LSR $32, acc3, t0
-	//                  MUL acc3, const1, t1
-	//                  UMULH acc3, const1, acc3 (overwrites acc3)
-	//                  ADCS t0, acc1, acc1 (uses C from ADDS)
-	//                  ADCS t1, acc2, acc2 (uses C from previous ADCS)
-	//                  ADC $0, acc3, acc3 (uses C from previous ADCS)
+	// Reduction step 4: reduce acc3
 	t0 = acc3 << 32
-	acc0, carry = bits.Add64(acc0, t0, 0) // ADDS, sets carry1
+	acc0, carry = bits.Add64(acc0, t0, 0)
 	t1 = acc3 >> 32
-	hi, lo = bits.Mul64(acc3, const1) // bits.Mul64 returns (hi, lo)
+	hi, lo = bits.Mul64(acc3, const1)
 	t2 = lo
-	acc3 = hi                                 // UMULH overwrites acc3
-	acc1, carry = bits.Add64(acc1, t1, carry) // ADCS, uses carry1
-	acc2, carry = bits.Add64(acc2, t2, carry) // ADCS, uses carry from previous
-	acc3, _ = bits.Add64(acc3, 0, carry)      // ADC, uses carry from previous
+	acc3 = hi
+	acc1, carry = bits.Add64(acc1, t1, carry)
+	acc2, carry = bits.Add64(acc2, t2, carry)
+	acc3, _ = bits.Add64(acc3, 0, carry)
 
 	// =====================================
-	// Add bits [511:256] of the sqr result
+	// Stage 5: Add high 256 bits
 	// =====================================
+	// Add the high 256 bits (acc4-acc7) to the reduced result (acc0-acc3)
 	acc0, carry = bits.Add64(acc0, acc4, 0)
 	acc1, carry = bits.Add64(acc1, acc5, carry)
 	acc2, carry = bits.Add64(acc2, acc6, carry)
@@ -229,38 +174,28 @@ func p256Square(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDoma
 	finalCarry := carry
 
 	// =====================================
-	// Conditional subtraction
+	// Stage 6: Conditional subtraction
 	// =====================================
-	// Following ARM64 algorithm and p256SquareGeneric logic
-	// SUBS $-1, acc0, t0 computes t0 = acc0 - (-1) = acc0 + 1
-	// This checks if acc0 >= 0xffffffffffffffff (p0)
-	const p0 = 0xffffffffffffffff
-	const p1 = 0x00000000ffffffff
-	const p3 = 0xffffffff00000001
+	// Ensure the result is in the range [0, p) by conditionally subtracting p.
+	// This is necessary because the reduction might leave the result >= p.
+	const p0 = 0xffffffffffffffff // P-256 prime: bits [63:0]
+	const p1 = 0x00000000ffffffff // P-256 prime: bits [95:64]
+	const p3 = 0xffffffff00000001 // P-256 prime: bits [255:192]
 
 	// Compute (acc0, acc1, acc2, acc3) - (p0, p1, 0, p3)
-	// Following p256SquareGeneric pattern
 	var t0_sub, t1_sub, t2_sub, t3_sub uint64
 	var borrow uint64
 
-	// Step 1: t0 = acc0 - p0 (SUBS $-1, acc0, t0 is acc0 + 1, checking acc0 >= p0)
 	t0_sub, borrow = bits.Sub64(acc0, p0, 0)
-
-	// Step 2: t1 = acc1 - p1 - borrow (SBCS const0, acc1, t1)
 	t1_sub, borrow = bits.Sub64(acc1, p1, borrow)
-
-	// Step 3: t2 = acc2 - 0 - borrow (SBCS $0, acc2, t2)
 	t2_sub, borrow = bits.Sub64(acc2, 0, borrow)
-
-	// Step 4: t3 = acc3 - p3 - borrow (SBCS const1, acc3, t3)
 	t3_sub, borrow = bits.Sub64(acc3, p3, borrow)
 
-	// Step 5: final borrow check (SBCS $0, acc4, acc4)
-	// Check if finalCarry - 0 - borrow produces borrow
+	// Check if the subtraction produced a borrow (meaning result < p)
 	_, finalBorrow := bits.Sub64(finalCarry, 0, borrow)
 
-	// Conditional select: if finalBorrow == 0 (acc >= p), use subtracted; else use original
-	// This matches p256CmovznzU64 logic: if arg1 == 0, select arg2 (subtracted), else arg3 (original)
+	// If finalBorrow == 0, the original result was >= p, so use the subtracted value.
+	// Otherwise, use the original result.
 	if finalBorrow == 0 {
 		out1[0] = t0_sub
 		out1[1] = t1_sub
