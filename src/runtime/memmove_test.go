@@ -664,6 +664,20 @@ func BenchmarkClearFat128(b *testing.B) {
 	}
 }
 
+func BenchmarkClearFat64Unaligned(b *testing.B) {
+	// Allocate a buffer large enough to allow offset
+	buf := make([]byte, 128+1)
+	Escape(buf)
+	// Create an unaligned pointer by offsetting 1 byte from the start
+	// This ensures the address is not 64-byte aligned
+	unalignedPtr := unsafe.Pointer(uintptr(unsafe.Pointer(&buf[0])) + 1)
+	p := (*[64 / 4]uint32)(unalignedPtr)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [64 / 4]uint32{}
+	}
+}
+
 func BenchmarkClearFat256(b *testing.B) {
 	p := new([256 / 4]uint32)
 	Escape(p)

@@ -724,6 +724,91 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		sc := v.AuxValAndOff()
 		n := sc.Val64()
 
+		// Check if we can use CBOZERO:
+		// 1. GORISCV64 >= 22 (supports Zicboz)
+		// 2. n is a multiple of 64
+		// 3. Address is 64-byte aligned (checked at runtime)
+		useCBOZero := buildcfg.GORISCV64 >= 22 && n%64 == 0
+
+		var fallbackLabel *obj.Prog
+		var skipLabel *obj.Prog
+		var pBranch *obj.Prog
+		var pSkip *obj.Prog
+		if useCBOZero {
+			// Check address alignment at runtime
+			alignTmp := v.RegTmp()
+			if alignTmp == 0 {
+				// No temporary register available, fall back to original path
+				useCBOZero = false
+			} else {
+				// AND $63, ptr, alignTmp  // Check if address is 64-byte aligned
+				pCheck := s.Prog(riscv.AAND)
+				pCheck.From.Type = obj.TYPE_CONST
+				pCheck.From.Offset = 63
+				pCheck.Reg = ptr
+				pCheck.To.Type = obj.TYPE_REG
+				pCheck.To.Reg = alignTmp
+
+				// Create fallback label placeholder (will be set to original path start later)
+				fallbackLabel = s.Prog(obj.ANOP)
+
+				// BNEZ alignTmp, fallback  // If not aligned, use fallback
+				pBranch = s.Prog(riscv.ABNEZ)
+				pBranch.From.Type = obj.TYPE_REG
+				pBranch.From.Reg = alignTmp
+				pBranch.To.Type = obj.TYPE_BRANCH
+				pBranch.To.SetTarget(fallbackLabel)
+
+				// Use CBOZERO loop
+				// Calculate number of cache blocks: n / 64
+				blockCount := n / 64
+				// Reuse alignTmp as counter since alignment check is done
+				counter := alignTmp
+				// MOV $blockCount, counter
+				pMov := s.Prog(riscv.AMOV)
+				pMov.From.Type = obj.TYPE_CONST
+				pMov.From.Offset = blockCount
+				pMov.To.Type = obj.TYPE_REG
+				pMov.To.Reg = counter
+
+				// CBOZERO loop
+				loopStart := s.Prog(riscv.ACBOZERO)
+				loopStart.From.Type = obj.TYPE_REG
+				loopStart.From.Reg = ptr
+
+				// ADDI $-1, counter, counter
+				pDec := s.Prog(riscv.AADDI)
+				pDec.From.Type = obj.TYPE_CONST
+				pDec.From.Offset = -1
+				pDec.Reg = counter
+				pDec.To.Type = obj.TYPE_REG
+				pDec.To.Reg = counter
+
+				// BNEZ counter, loopStart
+				pLoop := s.Prog(riscv.ABNEZ)
+				pLoop.From.Type = obj.TYPE_REG
+				pLoop.From.Reg = counter
+				pLoop.To.Type = obj.TYPE_BRANCH
+				pLoop.To.SetTarget(loopStart)
+
+				// Done with CBOZERO, skip to end (after original path)
+				skipLabel = s.Prog(obj.ANOP) // Placeholder, will be set later
+				pSkip = s.Prog(riscv.AJAL)
+				pSkip.From.Type = obj.TYPE_REG
+				pSkip.From.Reg = riscv.REG_X0 // Use X0 (ZERO) as link register since we don't need to return
+				pSkip.To.Type = obj.TYPE_BRANCH
+				pSkip.To.SetTarget(skipLabel)
+			}
+		}
+
+		// Set fallback label if using CBOZERO (start of original path)
+		if useCBOZero && fallbackLabel != nil && pBranch != nil {
+			// Create the actual fallback label here (start of original path)
+			actualFallbackLabel := s.Prog(obj.ANOP)
+			// Update the branch target to point to the actual fallback label
+			pBranch.To.SetTarget(actualFallbackLabel)
+		}
+
 		mov, sz := largestMove(sc.Off64())
 
 		// mov	ZERO, (offset)(Rarg0)
@@ -744,6 +829,14 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			n -= tsz
 		}
 
+		// Set skip label if using CBOZERO (end of original path)
+		if useCBOZero && skipLabel != nil && pSkip != nil {
+			// Create the actual skip label here (end of original path)
+			actualSkipLabel := s.Prog(obj.ANOP)
+			// Update the jump target to point to the actual skip label
+			pSkip.To.SetTarget(actualSkipLabel)
+		}
+
 	case ssa.OpRISCV64LoweredZeroLoop:
 		ptr := v.Args[0].Reg()
 		sc := v.AuxValAndOff()
@@ -753,6 +846,99 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 
 		if n <= 3*chunk {
 			v.Fatalf("ZeroLoop too small:%d, expect:%d", n, 3*chunk)
+		}
+
+		// Check if we can use CBOZERO:
+		// 1. GORISCV64 >= 22 (supports Zicboz)
+		// 2. n is a multiple of 64
+		// 3. Address is 64-byte aligned (checked at runtime)
+		useCBOZero := buildcfg.GORISCV64 >= 22 && n%64 == 0
+
+		var fallbackLabel *obj.Prog
+		var skipLabel *obj.Prog
+		var pBranch *obj.Prog
+		var pSkip *obj.Prog
+		if useCBOZero {
+			// Check address alignment at runtime
+			alignTmp := v.RegTmp()
+			if alignTmp == 0 {
+				// No temporary register available, fall back to original path
+				useCBOZero = false
+			} else {
+				// AND $63, ptr, alignTmp  // Check if address is 64-byte aligned
+				pCheck := s.Prog(riscv.AAND)
+				pCheck.From.Type = obj.TYPE_CONST
+				pCheck.From.Offset = 63
+				pCheck.Reg = ptr
+				pCheck.To.Type = obj.TYPE_REG
+				pCheck.To.Reg = alignTmp
+
+				// Create fallback label placeholder (will be set to original path start later)
+				fallbackLabel = s.Prog(obj.ANOP)
+
+				// BNEZ alignTmp, fallback  // If not aligned, use fallback
+				pBranch = s.Prog(riscv.ABNEZ)
+				pBranch.From.Type = obj.TYPE_REG
+				pBranch.From.Reg = alignTmp
+				pBranch.To.Type = obj.TYPE_BRANCH
+				pBranch.To.SetTarget(fallbackLabel)
+
+				// Use CBOZERO loop
+				// Calculate number of cache blocks: n / 64
+				blockCount := n / 64
+				// Reuse alignTmp as counter since alignment check is done
+				counter := alignTmp
+				// MOV $blockCount, counter
+				pMov := s.Prog(riscv.AMOV)
+				pMov.From.Type = obj.TYPE_CONST
+				pMov.From.Offset = blockCount
+				pMov.To.Type = obj.TYPE_REG
+				pMov.To.Reg = counter
+
+				// CBOZERO loop
+				loopStart := s.Prog(riscv.ACBOZERO)
+				loopStart.From.Type = obj.TYPE_REG
+				loopStart.From.Reg = ptr
+
+				// ADDI $64, ptr, ptr
+				pAdd := s.Prog(riscv.AADDI)
+				pAdd.From.Type = obj.TYPE_CONST
+				pAdd.From.Offset = 64
+				pAdd.Reg = ptr
+				pAdd.To.Type = obj.TYPE_REG
+				pAdd.To.Reg = ptr
+
+				// ADDI $-1, counter, counter
+				pDec := s.Prog(riscv.AADDI)
+				pDec.From.Type = obj.TYPE_CONST
+				pDec.From.Offset = -1
+				pDec.Reg = counter
+				pDec.To.Type = obj.TYPE_REG
+				pDec.To.Reg = counter
+
+				// BNEZ counter, loopStart
+				pLoop := s.Prog(riscv.ABNEZ)
+				pLoop.From.Type = obj.TYPE_REG
+				pLoop.From.Reg = counter
+				pLoop.To.Type = obj.TYPE_BRANCH
+				pLoop.To.SetTarget(loopStart)
+
+				// Done with CBOZERO, skip to end (after original code)
+				skipLabel = s.Prog(obj.ANOP) // Placeholder, will be set later
+				pSkip = s.Prog(riscv.AJAL)
+				pSkip.From.Type = obj.TYPE_REG
+				pSkip.From.Reg = riscv.REG_X0 // Use X0 (ZERO) as link register since we don't need to return
+				pSkip.To.Type = obj.TYPE_BRANCH
+				pSkip.To.SetTarget(skipLabel)
+			}
+		}
+
+		// Set fallback label if using CBOZERO (start of original path)
+		if useCBOZero && fallbackLabel != nil && pBranch != nil {
+			// Create the actual fallback label here (start of original path)
+			actualFallbackLabel := s.Prog(obj.ANOP)
+			// Update the branch target to point to the actual fallback label
+			pBranch.To.SetTarget(actualFallbackLabel)
 		}
 
 		tmp := v.RegTmp()
@@ -799,6 +985,14 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			zeroOp(s, fracMovOps[i], ptr, off)
 			off += tsz
 			n -= tsz
+		}
+
+		// Set skip label if using CBOZERO (end of original path)
+		if useCBOZero && skipLabel != nil && pSkip != nil {
+			// Create the actual skip label here (end of original path)
+			actualSkipLabel := s.Prog(obj.ANOP)
+			// Update the jump target to point to the actual skip label
+			pSkip.To.SetTarget(actualSkipLabel)
 		}
 
 	case ssa.OpRISCV64LoweredMove:

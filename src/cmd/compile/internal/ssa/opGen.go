@@ -34544,6 +34544,7 @@ var opcodeTable = [...]opInfo{
 		name:           "LoweredZero",
 		auxType:        auxSymValAndOff,
 		argLen:         2,
+		needIntTemp:    true,
 		faultOnNilArg0: true,
 		symEffect:      SymWrite,
 		reg: regInfo{

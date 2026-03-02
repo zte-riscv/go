@@ -300,6 +300,7 @@ func init() {
 			typ:            "Mem",
 			argLength:      2,
 			symEffect:      "Write",
+			needIntTemp:    true,
 			faultOnNilArg0: true,
 			reg: regInfo{
 				inputs: []regMask{gpMask},
