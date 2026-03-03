@@ -738,65 +738,61 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		if useCBOZero {
 			// Check address alignment at runtime
 			alignTmp := v.RegTmp()
-			if alignTmp == 0 {
-				// No temporary register available, fall back to original path
-				useCBOZero = false
-			} else {
-				// AND $63, ptr, alignTmp  // Check if address is 64-byte aligned
-				pCheck := s.Prog(riscv.AAND)
-				pCheck.From.Type = obj.TYPE_CONST
-				pCheck.From.Offset = 63
-				pCheck.Reg = ptr
-				pCheck.To.Type = obj.TYPE_REG
-				pCheck.To.Reg = alignTmp
+			// AND $63, ptr, alignTmp  // Check if address is 64-byte aligned
+			pCheck := s.Prog(riscv.AAND)
+			pCheck.From.Type = obj.TYPE_CONST
+			pCheck.From.Offset = 63
+			pCheck.Reg = ptr
+			pCheck.To.Type = obj.TYPE_REG
+			pCheck.To.Reg = alignTmp
 
-				// Create fallback label placeholder (will be set to original path start later)
-				fallbackLabel = s.Prog(obj.ANOP)
+			// Create fallback label placeholder (will be set to original path start later)
+			fallbackLabel = s.Prog(obj.ANOP)
 
-				// BNEZ alignTmp, fallback  // If not aligned, use fallback
-				pBranch = s.Prog(riscv.ABNEZ)
-				pBranch.From.Type = obj.TYPE_REG
-				pBranch.From.Reg = alignTmp
-				pBranch.To.Type = obj.TYPE_BRANCH
-				pBranch.To.SetTarget(fallbackLabel)
+			// BNEZ alignTmp, fallback  // If not aligned, use fallback
+			pBranch = s.Prog(riscv.ABNEZ)
+			pBranch.From.Type = obj.TYPE_REG
+			pBranch.From.Reg = alignTmp
+			pBranch.To.Type = obj.TYPE_BRANCH
+			pBranch.To.SetTarget(fallbackLabel)
 
-				// Use CBOZERO loop
-				// Calculate number of cache blocks: n / 64
-				blockCount := n / 64
-				// IMPORTANT: LoweredZero does not clobber arg0. Keep ptr unchanged.
-				// Reuse alignTmp as a walking pointer for CBOZERO.
-				pInitPtr := s.Prog(riscv.AMOV)
-				pInitPtr.From.Type = obj.TYPE_REG
-				pInitPtr.From.Reg = ptr
-				pInitPtr.To.Type = obj.TYPE_REG
-				pInitPtr.To.Reg = alignTmp
+			// Use CBOZERO loop
+			// Calculate number of cache blocks: n / 64
+			blockCount := n / 64
+			// IMPORTANT: LoweredZero does not clobber arg0. Keep ptr unchanged.
+			// Reuse alignTmp as a walking pointer for CBOZERO.
+			pInitPtr := s.Prog(riscv.AMOV)
+			pInitPtr.From.Type = obj.TYPE_REG
+			pInitPtr.From.Reg = ptr
+			pInitPtr.To.Type = obj.TYPE_REG
+			pInitPtr.To.Reg = alignTmp
 
-				for i := int64(0); i < blockCount; i++ {
-					pCbo := s.Prog(riscv.ACBOZERO)
-					pCbo.From.Type = obj.TYPE_REG
-					pCbo.From.Reg = alignTmp
+			for i := int64(0); i < blockCount; i++ {
+				pCbo := s.Prog(riscv.ACBOZERO)
+				pCbo.From.Type = obj.TYPE_REG
+				pCbo.From.Reg = alignTmp
 
-					if i+1 < blockCount {
-						pAdvance := s.Prog(riscv.AADDI)
-						pAdvance.From.Type = obj.TYPE_CONST
-						pAdvance.From.Offset = 64
-						pAdvance.Reg = alignTmp
-						pAdvance.To.Type = obj.TYPE_REG
-						pAdvance.To.Reg = alignTmp
-					}
+				if i+1 < blockCount {
+					pAdvance := s.Prog(riscv.AADDI)
+					pAdvance.From.Type = obj.TYPE_CONST
+					pAdvance.From.Offset = 64
+					pAdvance.Reg = alignTmp
+					pAdvance.To.Type = obj.TYPE_REG
+					pAdvance.To.Reg = alignTmp
 				}
-
-				// Ensure CBOZERO effects are visible before continuing.
-				// s.Prog(riscv.AFENCE)
-
-				// Done with CBOZERO, skip to end (after original path)
-				skipLabel = s.Prog(obj.ANOP) // Placeholder, will be set later
-				pSkip = s.Prog(riscv.AJAL)
-				pSkip.From.Type = obj.TYPE_REG
-				pSkip.From.Reg = riscv.REG_X0 // Use X0 (ZERO) as link register since we don't need to return
-				pSkip.To.Type = obj.TYPE_BRANCH
-				pSkip.To.SetTarget(skipLabel)
 			}
+
+			// Ensure CBOZERO effects are visible before continuing.
+			// s.Prog(riscv.AFENCE)
+
+			// Done with CBOZERO, skip to end (after original path)
+			skipLabel = s.Prog(obj.ANOP) // Placeholder, will be set later
+			pSkip = s.Prog(riscv.AJAL)
+			pSkip.From.Type = obj.TYPE_REG
+			pSkip.From.Reg = riscv.REG_X0 // Use X0 (ZERO) as link register since we don't need to return
+			pSkip.To.Type = obj.TYPE_BRANCH
+			pSkip.To.SetTarget(skipLabel)
+
 		}
 
 		// Set fallback label if using CBOZERO (start of original path)
@@ -848,9 +844,9 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 
 		// CBOZERO fast path for more cases:
 		// 1. GORISCV64 >= 22 (supports Zicboz)
-		// 2. n >= 192 (guarantees useful aligned middle region)
+		// 2. n >= 128 (guarantees useful aligned middle region)
 		// 3. n is a multiple of the chosen store size
-		useCBOZero := buildcfg.GORISCV64 >= 22 && n >= 192 && n%sz == 0
+		useCBOZero := buildcfg.GORISCV64 >= 22 && n >= 128 && n%sz == 0
 
 		if useCBOZero {
 			// Fixed registers in this fast path:
