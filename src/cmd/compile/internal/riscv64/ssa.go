@@ -875,6 +875,19 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			pEndAligned.To.Type = obj.TYPE_REG
 			pEndAligned.To.Reg = riscv.REG_X11
 
+			// If ptr is already 64-byte aligned, skip prolog setup and stores.
+			pAlignCheck := s.Prog(riscv.AAND)
+			pAlignCheck.From.Type = obj.TYPE_CONST
+			pAlignCheck.From.Offset = 63
+			pAlignCheck.Reg = ptr
+			pAlignCheck.To.Type = obj.TYPE_REG
+			pAlignCheck.To.Reg = counter
+
+			pAlignedToCbo := s.Prog(riscv.ABEQZ)
+			pAlignedToCbo.From.Type = obj.TYPE_REG
+			pAlignedToCbo.From.Reg = counter
+			pAlignedToCbo.To.Type = obj.TYPE_BRANCH
+
 			// counter = alignedPtr = (ptr + 63) & -64
 			pAlignedAdd := s.Prog(riscv.AADDI)
 			pAlignedAdd.From.Type = obj.TYPE_CONST
@@ -927,6 +940,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			pPrologLoop.To.SetTarget(prologLoop)
 
 			cbozeroStart := s.Prog(obj.ANOP)
+			pAlignedToCbo.To.SetTarget(cbozeroStart)
 			pSkipProlog.To.SetTarget(cbozeroStart)
 
 			// middle: CBOZERO loop on 64B aligned range.
