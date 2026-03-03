@@ -17,27 +17,6 @@ TEXT runtime·memclrNoHeapPointers<ABIInternal>(SB),NOSPLIT,$0-16
 	MOV	$8, X9
 	BLT	X11, X9, check4
 
-#ifdef hasZicboz
-	// Check if we can use cache zero:
-	// 1. Address is 64-byte aligned
-	// 2. Byte count is a multiple of 64
-	// Check if address is 64-byte aligned
-	AND	$63, X10, X7
-	BNEZ	X7, skip_cache_zero_check
-	// Check if byte count is a multiple of 64
-	AND	$63, X11, X7
-	BNEZ	X7, skip_cache_zero_check
-	// All conditions met, use cache zero loop
-	PCALIGN	$16
-cache_zero_loop:
-	CBOZERO	(X10)
-	ADDI	$64, X10
-	SUB	$64, X11
-	BNEZ	X11, cache_zero_loop
-	RET
-skip_cache_zero_check:
-#endif
-
 #ifndef hasV
 	MOVB	internal∕cpu·RISCV64+const_offsetRISCV64HasV(SB), X5
 	BEQZ	X5, memclr_scalar
