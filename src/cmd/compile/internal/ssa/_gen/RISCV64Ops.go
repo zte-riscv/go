@@ -321,7 +321,7 @@ func init() {
 			faultOnNilArg0: true,
 			reg: regInfo{
 				inputs:   []regMask{regNamed["X5"]},
-				clobbers: regNamed["X5"],
+				clobbers: regNamed["X5"] | regNamed["X7"] | regNamed["X9"] | regNamed["X11"],
 			},
 		},
 
