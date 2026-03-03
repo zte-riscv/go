@@ -9,7 +9,6 @@
 #define hasZba
 #define hasZbb
 #define hasZbs
-#define hasZicboz
 #endif
 
 #ifdef GORISCV64_rva23u64
@@ -18,6 +17,5 @@
 #define hasZbb
 #define hasZbs
 #define hasZfa
-#define hasZicboz
 #define hasZicond
 #endif
