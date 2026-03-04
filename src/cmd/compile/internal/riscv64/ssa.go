@@ -814,20 +814,45 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 
 		var off int64
 		tmp := int16(riscv.REG_X5)
-		for n >= sz {
-			moveOp(s, mov, dst, src, tmp, off)
-			off += sz
-			n -= sz
-		}
-
-		for i := len(fracMovOps) - 1; i >= 0; i-- {
-			tsz := int64(1 << i)
-			if n < tsz {
-				continue
+		if buildcfg.GORISCV64EXT.MisalignedFast {
+			// On cores with fast misaligned accesses, choose move width from the
+			// remaining size directly to minimize the number of move instructions.
+			for n > 0 {
+				switch {
+				case n >= 8:
+					moveOp(s, riscv.AMOV, dst, src, tmp, off)
+					off += 8
+					n -= 8
+				case n >= 4:
+					moveOp(s, riscv.AMOVW, dst, src, tmp, off)
+					off += 4
+					n -= 4
+				case n >= 2:
+					moveOp(s, riscv.AMOVH, dst, src, tmp, off)
+					off += 2
+					n -= 2
+				default:
+					moveOp(s, riscv.AMOVB, dst, src, tmp, off)
+					off++
+					n--
+				}
 			}
-			moveOp(s, fracMovOps[i], dst, src, tmp, off)
-			off += tsz
-			n -= tsz
+		} else {
+			for n >= sz {
+				moveOp(s, mov, dst, src, tmp, off)
+				off += sz
+				n -= sz
+			}
+
+			for i := len(fracMovOps) - 1; i >= 0; i-- {
+				tsz := int64(1 << i)
+				if n < tsz {
+					continue
+				}
+				moveOp(s, fracMovOps[i], dst, src, tmp, off)
+				off += tsz
+				n -= tsz
+			}
 		}
 
 	case ssa.OpRISCV64LoweredMoveLoop:

@@ -1224,3 +1224,213 @@ func BenchmarkMemmoveKnownSize1024(b *testing.B) {
 
 	memclrSink = p.x[:]
 }
+
+func BenchmarkMemmoveKnownSizeIs8(b *testing.B) {
+	type T struct {
+		x [8]int8
+	}
+	p := &T{}
+	q := &T{}
+
+	b.SetBytes(int64(unsafe.Sizeof(T{})))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
+
+func BenchmarkMemmoveKnownSizeIs12(b *testing.B) {
+	type T struct {
+		x [12]int8
+	}
+	p := &T{}
+	q := &T{}
+
+	b.SetBytes(int64(unsafe.Sizeof(T{})))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
+
+func BenchmarkMemmoveKnownSizeIs14(b *testing.B) {
+	type T struct {
+		x [14]int8
+	}
+	p := &T{}
+	q := &T{}
+
+	b.SetBytes(int64(unsafe.Sizeof(T{})))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
+
+func BenchmarkMemmoveKnownSizeIs15(b *testing.B) {
+	type T struct {
+		x [15]int8
+	}
+	p := &T{}
+	q := &T{}
+
+	b.SetBytes(int64(unsafe.Sizeof(T{})))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
+
+func BenchmarkMemmoveKnownSizeIs16(b *testing.B) {
+	type T struct {
+		x [16]int8
+	}
+	p := &T{}
+	q := &T{}
+
+	b.SetBytes(int64(unsafe.Sizeof(T{})))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
+
+func BenchmarkMemmoveKnownSizeIs24(b *testing.B) {
+	type T struct {
+		x [24]int8
+	}
+	p := &T{}
+	q := &T{}
+
+	b.SetBytes(int64(unsafe.Sizeof(T{})))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
+
+func BenchmarkMemmoveKnownSizeIs8Unaligned(b *testing.B) {
+	type T struct {
+		x [8]int8
+	}
+	size := unsafe.Sizeof(T{})
+	buf := make([]byte, size*2+8)
+	aligned := uintptr(unsafe.Pointer(&buf[0]))
+	aligned = (aligned + 7) &^ uintptr(7) // 8-byte align
+	unaligned := aligned + 1              // 1-byte offset, not 8-byte aligned
+	p := (*T)(unsafe.Pointer(unaligned))
+	q := (*T)(unsafe.Pointer(unaligned + size)) // Ensure enough space between src and dst
+
+	b.SetBytes(int64(size))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
+
+func BenchmarkMemmoveKnownSizeIs12Unaligned(b *testing.B) {
+	type T struct {
+		x [12]int8
+	}
+	size := unsafe.Sizeof(T{})
+	buf := make([]byte, size*2+8)
+	aligned := uintptr(unsafe.Pointer(&buf[0]))
+	aligned = (aligned + 7) &^ uintptr(7) // 8-byte align
+	unaligned := aligned + 1              // 1-byte offset, not 8-byte aligned
+	p := (*T)(unsafe.Pointer(unaligned))
+	q := (*T)(unsafe.Pointer(unaligned + size)) // Ensure enough space between src and dst
+
+	b.SetBytes(int64(size))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
+
+func BenchmarkMemmoveKnownSizeIs14Unaligned(b *testing.B) {
+	type T struct {
+		x [14]int8
+	}
+	size := unsafe.Sizeof(T{})
+	buf := make([]byte, size*2+8)
+	aligned := uintptr(unsafe.Pointer(&buf[0]))
+	aligned = (aligned + 7) &^ uintptr(7) // 8-byte align
+	unaligned := aligned + 1              // 1-byte offset, not 8-byte aligned
+	p := (*T)(unsafe.Pointer(unaligned))
+	q := (*T)(unsafe.Pointer(unaligned + size)) // Ensure enough space between src and dst
+
+	b.SetBytes(int64(size))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
+
+func BenchmarkMemmoveKnownSizeIs15Unaligned(b *testing.B) {
+	type T struct {
+		x [15]int8
+	}
+	size := unsafe.Sizeof(T{})
+	buf := make([]byte, size*2+8)
+	aligned := uintptr(unsafe.Pointer(&buf[0]))
+	aligned = (aligned + 7) &^ uintptr(7) // 8-byte align
+	unaligned := aligned + 1              // 1-byte offset, not 8-byte aligned
+	p := (*T)(unsafe.Pointer(unaligned))
+	q := (*T)(unsafe.Pointer(unaligned + size)) // Ensure enough space between src and dst
+
+	b.SetBytes(int64(size))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
+
+func BenchmarkMemmoveKnownSizeIs16Unaligned(b *testing.B) {
+	type T struct {
+		x [16]int8
+	}
+	size := unsafe.Sizeof(T{})
+	buf := make([]byte, size*2+8)
+	aligned := uintptr(unsafe.Pointer(&buf[0]))
+	aligned = (aligned + 7) &^ uintptr(7) // 8-byte align
+	unaligned := aligned + 1              // 1-byte offset, not 8-byte aligned
+	p := (*T)(unsafe.Pointer(unaligned))
+	q := (*T)(unsafe.Pointer(unaligned + size)) // Ensure enough space between src and dst
+
+	b.SetBytes(int64(size))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
+
+func BenchmarkMemmoveKnownSizeIs24Unaligned(b *testing.B) {
+	type T struct {
+		x [24]int8
+	}
+	size := unsafe.Sizeof(T{})
+	buf := make([]byte, size*2+8)
+	aligned := uintptr(unsafe.Pointer(&buf[0]))
+	aligned = (aligned + 7) &^ uintptr(7) // 8-byte align
+	unaligned := aligned + 1              // 1-byte offset, not 8-byte aligned
+	p := (*T)(unsafe.Pointer(unaligned))
+	q := (*T)(unsafe.Pointer(unaligned + size)) // Ensure enough space between src and dst
+
+	b.SetBytes(int64(size))
+	for i := 0; i < b.N; i++ {
+		*p = *q
+	}
+
+	memclrSink = p.x[:]
+}
