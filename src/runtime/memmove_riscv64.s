@@ -29,15 +29,58 @@ TEXT runtime·memmove<ABIInternal>(SB),NOSPLIT|NOFRAME,$0-24
 	BEQZ	X5, f_memmove_scalar
 #endif
 
-	// Use vector if destination and source are not 8 byte aligned.
-	OR	X10, X11, X5
-	AND	$7, X5
-	BNEZ	X5, f_vector_loop
+	PCALIGN	$16
+f_vector_dispatch:
+	MOV	$128, X6
+	BGTU	X12, X6, f_vector_loop
+	MOV	$32, X6
+	BGTU	X12, X6, f_vector_medium
 
-	// Use scalar if destination and source are 8 byte aligned and n <= 64 bytes.
-	SUB	$64, X12, X6
-	BLEZ	X6, f_loop_check
+// Small copies: 1..32 bytes
+f_vector_small:
+	VSETVLI	X12, E8, M1, TA, MA, X5
+	VLE8V	(X11), V8
+	ADD	X11, X12, X6
+	SUB	X5, X6
+	VLE8V	(X6), V9
+	ADD	X10, X12, X7
+	SUB	X5, X7
+	VSE8V	V9, (X7)
+	VSE8V	V8, (X10)
+	RET
 
+// Medium copies: 33..128 bytes
+f_vector_medium:
+	ADD	X11, X12, X6
+	ADD	X10, X12, X7
+	VSETVLI	X12, E8, M2, TA, MA, X5
+	VLE8V	(X11), V8
+	SUB	$32, X6, X8
+	VLE8V	(X8), V10
+	MOV	$64, X9
+	BGTU	X12, X9, f_vector_medium_65_128
+	VSE8V	V8, (X10)
+	SUB	$32, X7, X8
+	VSE8V	V10, (X8)
+	RET
+f_vector_medium_65_128:
+	ADD	$32, X11, X8
+	VLE8V	(X8), V12
+	MOV	$96, X9
+	BLEU	X12, X9, f_vector_medium_96
+	SUB	$64, X6, X8
+	VLE8V	(X8), V14
+	SUB	$64, X7, X9
+	VSE8V	V14, (X9)
+f_vector_medium_96:
+	VSE8V	V8, (X10)
+	ADD	$32, X10, X8
+	VSE8V	V12, (X8)
+	SUB	$32, X7, X9
+	VSE8V	V10, (X9)
+	RET
+
+// Copy more than 128 bytes.
 	PCALIGN	$16
 f_vector_loop:
 	VSETVLI	X12, E8, M8, TA, MA, X5
@@ -208,15 +251,61 @@ backward:
 	BEQZ	X5, b_memmove_scalar
 #endif
 
-	// Use vector if destination and source are not 8 byte aligned.
-	OR	X10, X11, X5
-	AND	$7, X5
-	BNEZ	X5, b_vector_loop
+	// 有向量时统一走向量路径，按 n 分小块/中块/循环（与 forward 一致）
+	// 向量路径分发：按长度走小块(1-32)、中块(33-128)或循环(129+)，与 gcc_plan9 一致
+	PCALIGN	$16
+b_vector_dispatch:
+	MOV	$128, X6
+	BGTU	X12, X6, b_vector_loop
+	MOV	$32, X6
+	BGTU	X12, X6, b_vector_medium
 
-	// Use scalar if destination and source are 8 byte aligned and n <= 64 bytes.
-	SUB	$32, X12, X6
-	BLEZ	X6, b_loop_check
+// Small copies: 1..32 bytes
+b_vector_small:
+	VSETVLI	X12, E8, M1, TA, MA, X5
+	SUB	X5, X11, X6
+	VLE8V	(X6), V8
+	SUB	X12, X11, X7
+	VLE8V	(X7), V9
+	SUB	X5, X10, X6
+	VSE8V	V8, (X6)
+	SUB	X12, X10, X7
+	VSE8V	V9, (X7)
+	RET
 
+// Medium copies: 33..128 bytes
+b_vector_medium:
+	VSETVLI	X12, E8, M2, TA, MA, X5
+	SUB	$32, X11, X6
+	VLE8V	(X6), V8
+	SUB	X12, X11, X8
+	VLE8V	(X8), V10
+	MOV	$64, X9
+	BGTU	X12, X9, b_vector_medium_65_128
+	SUB	$32, X10, X7
+	VSE8V	V8, (X7)
+	SUB	X12, X10, X9
+	VSE8V	V10, (X9)
+	RET
+b_vector_medium_65_128:
+	SUB	$64, X11, X8
+	VLE8V	(X8), V12
+	MOV	$96, X9
+	BLEU	X12, X9, b_vector_medium_96
+	SUB	$96, X11, X8
+	VLE8V	(X8), V14
+	SUB	$96, X10, X9
+	VSE8V	V14, (X9)
+b_vector_medium_96:
+	SUB	$32, X10, X7
+	VSE8V	V8, (X7)
+	SUB	$64, X10, X8
+	VSE8V	V12, (X8)
+	SUB	X12, X10, X9
+	VSE8V	V10, (X9)
+	RET
+
+// Copy more than 128 bytes.
 	PCALIGN	$16
 b_vector_loop:
 	VSETVLI	X12, E8, M8, TA, MA, X5
