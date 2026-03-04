@@ -815,28 +815,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		var off int64
 		tmp := int16(riscv.REG_X5)
 		if buildcfg.GORISCV64EXT.MisalignedFast {
-			// On cores with fast misaligned accesses, choose move width from the
-			// remaining size directly to minimize the number of move instructions.
-			for n > 0 {
-				switch {
-				case n >= 8:
-					moveOp(s, riscv.AMOV, dst, src, tmp, off)
-					off += 8
-					n -= 8
-				case n >= 4:
-					moveOp(s, riscv.AMOVW, dst, src, tmp, off)
-					off += 4
-					n -= 4
-				case n >= 2:
-					moveOp(s, riscv.AMOVH, dst, src, tmp, off)
-					off += 2
-					n -= 2
-				default:
-					moveOp(s, riscv.AMOVB, dst, src, tmp, off)
-					off++
-					n--
-				}
-			}
+			emitDynamicMoves(s, dst, src, tmp, off, n)
 		} else {
 			for n >= sz {
 				moveOp(s, mov, dst, src, tmp, off)
@@ -865,12 +844,63 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		sc := v.AuxValAndOff()
 		n := sc.Val64()
 		mov, sz := largestMove(sc.Off64())
+		tmp := int16(riscv.REG_X5)
+
+		if buildcfg.GORISCV64EXT.MisalignedFast {
+			//   n < 64:        fully unrolled with dynamic 8/4/2/1 moves
+			//   64 <= n < 128: unroll 64 bytes + unroll remainder
+			//   n >= 128:      loop by 64-byte chunks + unroll remainder
+			const chunk = int64(64)
+			if n < chunk {
+				emitDynamicMoves(s, dst, src, tmp, 0, n)
+				break
+			}
+			if n < 2*chunk {
+				emitDynamicMoves(s, dst, src, tmp, 0, chunk)
+				emitDynamicMoves(s, dst, src, tmp, chunk, n-chunk)
+				break
+			}
+
+			p := s.Prog(riscv.AADD)
+			p.From.Type = obj.TYPE_CONST
+			p.From.Offset = n - n%chunk
+			p.Reg = src
+			p.To.Type = obj.TYPE_REG
+			p.To.Reg = riscv.REG_X6
+
+			loopHead := s.Prog(obj.ANOP)
+			emitDynamicMoves(s, dst, src, tmp, 0, chunk)
+
+			p1 := s.Prog(riscv.AADD)
+			p1.From.Type = obj.TYPE_CONST
+			p1.From.Offset = chunk
+			p1.To.Type = obj.TYPE_REG
+			p1.To.Reg = src
+
+			p2 := s.Prog(riscv.AADD)
+			p2.From.Type = obj.TYPE_CONST
+			p2.From.Offset = chunk
+			p2.To.Type = obj.TYPE_REG
+			p2.To.Reg = dst
+
+			p3 := s.Prog(riscv.ABNE)
+			p3.From.Reg = riscv.REG_X6
+			p3.From.Type = obj.TYPE_REG
+			p3.Reg = src
+			p3.To.Type = obj.TYPE_BRANCH
+			p3.To.SetTarget(loopHead)
+
+			if rem := n % chunk; rem > 0 {
+				emitDynamicMoves(s, dst, src, tmp, 0, rem)
+			}
+			break
+		}
+
 		chunk := 8 * sz
 
 		if n <= 3*chunk {
 			v.Fatalf("MoveLoop too small:%d, expect:%d", n, 3*chunk)
 		}
-		tmp := int16(riscv.REG_X5)
 
 		p := s.Prog(riscv.AADD)
 		p.From.Type = obj.TYPE_CONST
@@ -1080,7 +1110,6 @@ func zeroOp(s *ssagen.State, mov obj.As, reg int16, off int64) {
 	p.To.Type = obj.TYPE_MEM
 	p.To.Reg = reg
 	p.To.Offset = off
-	return
 }
 
 func moveOp(s *ssagen.State, mov obj.As, dst int16, src int16, tmp int16, off int64) {
@@ -1097,6 +1126,27 @@ func moveOp(s *ssagen.State, mov obj.As, dst int16, src int16, tmp int16, off in
 	p1.To.Type = obj.TYPE_MEM
 	p1.To.Reg = dst
 	p1.To.Offset = off
+}
 
-	return
+func emitDynamicMoves(s *ssagen.State, dst int16, src int16, tmp int16, off int64, n int64) {
+	for n > 0 {
+		switch {
+		case n >= 8:
+			moveOp(s, riscv.AMOV, dst, src, tmp, off)
+			off += 8
+			n -= 8
+		case n >= 4:
+			moveOp(s, riscv.AMOVW, dst, src, tmp, off)
+			off += 4
+			n -= 4
+		case n >= 2:
+			moveOp(s, riscv.AMOVH, dst, src, tmp, off)
+			off += 2
+			n -= 2
+		default:
+			moveOp(s, riscv.AMOVB, dst, src, tmp, off)
+			off++
+			n--
+		}
+	}
 }
