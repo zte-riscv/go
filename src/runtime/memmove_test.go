@@ -1558,21 +1558,6 @@ func BenchmarkMemmoveKnownSize127(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSize128(b *testing.B) {
-	type T struct {
-		x [128]int8
-	}
-	p := &T{}
-	q := &T{}
-
-	b.SetBytes(int64(unsafe.Sizeof(T{})))
-	for i := 0; i < b.N; i++ {
-		*p = *q
-	}
-
-	memclrSink = p.x[:]
-}
-
 func BenchmarkMemmoveKnownSize160(b *testing.B) {
 	type T struct {
 		x [160]int8
