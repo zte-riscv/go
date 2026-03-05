@@ -709,6 +709,159 @@ func BenchmarkClearFat1040(b *testing.B) {
 	}
 }
 
+func ptr8Unaligned(buf []byte) unsafe.Pointer {
+	base := uintptr(unsafe.Pointer(&buf[0]))
+	aligned := (base + 7) &^ uintptr(7)
+	return unsafe.Pointer(aligned + 1)
+}
+
+func BenchmarkClearFatLoweredZero56(b *testing.B) {
+	p := new([56]byte)
+	Escape(p)
+	b.SetBytes(56)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [56]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZero56Unaligned(b *testing.B) {
+	buf := make([]byte, 56+8)
+	p := (*[56]byte)(ptr8Unaligned(buf))
+	Escape(p)
+	b.SetBytes(56)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [56]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZero64(b *testing.B) {
+	p := new([64]byte)
+	Escape(p)
+	b.SetBytes(64)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [64]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZero64Unaligned(b *testing.B) {
+	buf := make([]byte, 64+8)
+	p := (*[64]byte)(ptr8Unaligned(buf))
+	Escape(p)
+	b.SetBytes(64)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [64]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZero127(b *testing.B) {
+	p := new([127]byte)
+	Escape(p)
+	b.SetBytes(127)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [127]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZero127Unaligned(b *testing.B) {
+	buf := make([]byte, 127+8)
+	p := (*[127]byte)(ptr8Unaligned(buf))
+	Escape(p)
+	b.SetBytes(127)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [127]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZero128(b *testing.B) {
+	p := new([128]byte)
+	Escape(p)
+	b.SetBytes(128)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [128]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZero128Unaligned(b *testing.B) {
+	buf := make([]byte, 128+8)
+	p := (*[128]byte)(ptr8Unaligned(buf))
+	Escape(p)
+	b.SetBytes(128)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [128]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZeroLoop248(b *testing.B) {
+	p := new([248]byte)
+	Escape(p)
+	b.SetBytes(248)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [248]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZeroLoop248Unaligned(b *testing.B) {
+	buf := make([]byte, 248+8)
+	p := (*[248]byte)(ptr8Unaligned(buf))
+	Escape(p)
+	b.SetBytes(248)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [248]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZeroLoop256(b *testing.B) {
+	p := new([256]byte)
+	Escape(p)
+	b.SetBytes(256)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [256]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZeroLoop256Unaligned(b *testing.B) {
+	buf := make([]byte, 256+8)
+	p := (*[256]byte)(ptr8Unaligned(buf))
+	Escape(p)
+	b.SetBytes(256)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [256]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZeroLoop320(b *testing.B) {
+	p := new([320]byte)
+	Escape(p)
+	b.SetBytes(320)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [320]byte{}
+	}
+}
+
+func BenchmarkClearFatLoweredZeroLoop320Unaligned(b *testing.B) {
+	buf := make([]byte, 320+8)
+	p := (*[320]byte)(ptr8Unaligned(buf))
+	Escape(p)
+	b.SetBytes(320)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		*p = [320]byte{}
+	}
+}
+
 func BenchmarkCopyFat7(b *testing.B) {
 	var x [7]byte
 	p := new([7]byte)
