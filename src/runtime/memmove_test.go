@@ -1378,7 +1378,7 @@ func BenchmarkMemmoveKnownSize1024(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs8(b *testing.B) {
+func BenchmarkMemmoveKnownSize8(b *testing.B) {
 	type T struct {
 		x [8]int8
 	}
@@ -1393,7 +1393,7 @@ func BenchmarkMemmoveKnownSizeIs8(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs12(b *testing.B) {
+func BenchmarkMemmoveKnownSize12(b *testing.B) {
 	type T struct {
 		x [12]int8
 	}
@@ -1408,7 +1408,7 @@ func BenchmarkMemmoveKnownSizeIs12(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs14(b *testing.B) {
+func BenchmarkMemmoveKnownSize14(b *testing.B) {
 	type T struct {
 		x [14]int8
 	}
@@ -1423,7 +1423,7 @@ func BenchmarkMemmoveKnownSizeIs14(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs15(b *testing.B) {
+func BenchmarkMemmoveKnownSize15(b *testing.B) {
 	type T struct {
 		x [15]int8
 	}
@@ -1438,7 +1438,7 @@ func BenchmarkMemmoveKnownSizeIs15(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs16(b *testing.B) {
+func BenchmarkMemmoveKnownSize16(b *testing.B) {
 	type T struct {
 		x [16]int8
 	}
@@ -1453,7 +1453,7 @@ func BenchmarkMemmoveKnownSizeIs16(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs24(b *testing.B) {
+func BenchmarkMemmoveKnownSize24(b *testing.B) {
 	type T struct {
 		x [24]int8
 	}
@@ -1468,7 +1468,7 @@ func BenchmarkMemmoveKnownSizeIs24(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs56Loop(b *testing.B) {
+func BenchmarkMemmoveKnownSize56(b *testing.B) {
 	type T struct {
 		x [56]int8
 	}
@@ -1483,7 +1483,7 @@ func BenchmarkMemmoveKnownSizeIs56Loop(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs60Loop(b *testing.B) {
+func BenchmarkMemmoveKnownSize60(b *testing.B) {
 	type T struct {
 		x [60]int8
 	}
@@ -1498,7 +1498,7 @@ func BenchmarkMemmoveKnownSizeIs60Loop(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs62Loop(b *testing.B) {
+func BenchmarkMemmoveKnownSize62(b *testing.B) {
 	type T struct {
 		x [62]int8
 	}
@@ -1513,7 +1513,7 @@ func BenchmarkMemmoveKnownSizeIs62Loop(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs63Loop(b *testing.B) {
+func BenchmarkMemmoveKnownSize63(b *testing.B) {
 	type T struct {
 		x [63]int8
 	}
@@ -1528,7 +1528,7 @@ func BenchmarkMemmoveKnownSizeIs63Loop(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs64Loop(b *testing.B) {
+func BenchmarkMemmoveKnownSize64(b *testing.B) {
 	type T struct {
 		x [64]int8
 	}
@@ -1543,7 +1543,7 @@ func BenchmarkMemmoveKnownSizeIs64Loop(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs127Loop(b *testing.B) {
+func BenchmarkMemmoveKnownSize127(b *testing.B) {
 	type T struct {
 		x [127]int8
 	}
@@ -1558,7 +1558,7 @@ func BenchmarkMemmoveKnownSizeIs127Loop(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs128Loop(b *testing.B) {
+func BenchmarkMemmoveKnownSize128(b *testing.B) {
 	type T struct {
 		x [128]int8
 	}
@@ -1573,7 +1573,7 @@ func BenchmarkMemmoveKnownSizeIs128Loop(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs160Loop(b *testing.B) {
+func BenchmarkMemmoveKnownSize160(b *testing.B) {
 	type T struct {
 		x [160]int8
 	}
@@ -1588,7 +1588,7 @@ func BenchmarkMemmoveKnownSizeIs160Loop(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs164Loop(b *testing.B) {
+func BenchmarkMemmoveKnownSize164(b *testing.B) {
 	type T struct {
 		x [164]int8
 	}
@@ -1606,7 +1606,7 @@ func BenchmarkMemmoveKnownSizeIs164Loop(b *testing.B) {
 // Unaligned versions of the Loop benchmarks.
 // These use addresses that are 1-byte aligned but not 8-byte aligned.
 
-func BenchmarkMemmoveKnownSizeIs56LoopUnaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize56Unaligned(b *testing.B) {
 	type T struct {
 		x [56]int8
 	}
@@ -1626,7 +1626,7 @@ func BenchmarkMemmoveKnownSizeIs56LoopUnaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs60LoopUnaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize60Unaligned(b *testing.B) {
 	type T struct {
 		x [60]int8
 	}
@@ -1646,7 +1646,7 @@ func BenchmarkMemmoveKnownSizeIs60LoopUnaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs62LoopUnaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize62Unaligned(b *testing.B) {
 	type T struct {
 		x [62]int8
 	}
@@ -1666,7 +1666,7 @@ func BenchmarkMemmoveKnownSizeIs62LoopUnaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs63LoopUnaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize63Unaligned(b *testing.B) {
 	type T struct {
 		x [63]int8
 	}
@@ -1686,7 +1686,7 @@ func BenchmarkMemmoveKnownSizeIs63LoopUnaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs64LoopUnaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize64Unaligned(b *testing.B) {
 	type T struct {
 		x [64]int8
 	}
@@ -1706,7 +1706,7 @@ func BenchmarkMemmoveKnownSizeIs64LoopUnaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs127LoopUnaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize127Unaligned(b *testing.B) {
 	type T struct {
 		x [127]int8
 	}
@@ -1726,7 +1726,7 @@ func BenchmarkMemmoveKnownSizeIs127LoopUnaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs128LoopUnaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize128Unaligned(b *testing.B) {
 	type T struct {
 		x [128]int8
 	}
@@ -1746,7 +1746,7 @@ func BenchmarkMemmoveKnownSizeIs128LoopUnaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs160LoopUnaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize160Unaligned(b *testing.B) {
 	type T struct {
 		x [160]int8
 	}
@@ -1766,7 +1766,7 @@ func BenchmarkMemmoveKnownSizeIs160LoopUnaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs164LoopUnaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize164Unaligned(b *testing.B) {
 	type T struct {
 		x [164]int8
 	}
@@ -1786,7 +1786,7 @@ func BenchmarkMemmoveKnownSizeIs164LoopUnaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs8Unaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize8Unaligned(b *testing.B) {
 	type T struct {
 		x [8]int8
 	}
@@ -1806,7 +1806,7 @@ func BenchmarkMemmoveKnownSizeIs8Unaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs12Unaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize12Unaligned(b *testing.B) {
 	type T struct {
 		x [12]int8
 	}
@@ -1826,7 +1826,7 @@ func BenchmarkMemmoveKnownSizeIs12Unaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs14Unaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize14Unaligned(b *testing.B) {
 	type T struct {
 		x [14]int8
 	}
@@ -1846,7 +1846,7 @@ func BenchmarkMemmoveKnownSizeIs14Unaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs15Unaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize15Unaligned(b *testing.B) {
 	type T struct {
 		x [15]int8
 	}
@@ -1866,7 +1866,7 @@ func BenchmarkMemmoveKnownSizeIs15Unaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs16Unaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize16Unaligned(b *testing.B) {
 	type T struct {
 		x [16]int8
 	}
@@ -1886,7 +1886,7 @@ func BenchmarkMemmoveKnownSizeIs16Unaligned(b *testing.B) {
 	memclrSink = p.x[:]
 }
 
-func BenchmarkMemmoveKnownSizeIs24Unaligned(b *testing.B) {
+func BenchmarkMemmoveKnownSize24Unaligned(b *testing.B) {
 	type T struct {
 		x [24]int8
 	}

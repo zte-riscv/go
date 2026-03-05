@@ -1161,6 +1161,7 @@ func zeroOp(s *ssagen.State, mov obj.As, reg int16, off int64) {
 	p.To.Type = obj.TYPE_MEM
 	p.To.Reg = reg
 	p.To.Offset = off
+	return
 }
 
 func moveOp(s *ssagen.State, mov obj.As, dst int16, src int16, tmp int16, off int64) {
@@ -1177,6 +1178,7 @@ func moveOp(s *ssagen.State, mov obj.As, dst int16, src int16, tmp int16, off in
 	p1.To.Type = obj.TYPE_MEM
 	p1.To.Reg = dst
 	p1.To.Offset = off
+	return
 }
 
 func emitDynamicMoves(s *ssagen.State, dst int16, src int16, tmp int16, off int64, n int64) {
@@ -1200,6 +1202,7 @@ func emitDynamicMoves(s *ssagen.State, dst int16, src int16, tmp int16, off int6
 			n--
 		}
 	}
+	return
 }
 
 func emitDynamicZeros(s *ssagen.State, ptr int16, off int64, n int64) {
@@ -1223,4 +1226,5 @@ func emitDynamicZeros(s *ssagen.State, ptr int16, off int64, n int64) {
 			n--
 		}
 	}
+	return
 }
