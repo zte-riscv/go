@@ -1,0 +1,85 @@
+// Copyright 2025 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// RISC-V 64-bit CRC32 algorithms using carry-less multiplication (Zbc extension).
+// See crc32.go for a description of the interface that each architecture-specific
+// file implements.
+
+package crc32
+
+import "internal/cpu"
+
+// ieeeUpdateCLMUL is defined in crc32_riscv64.s and uses the Zbc
+// carry-less multiplication instructions for CRC32-IEEE.
+//
+//go:noescape
+func ieeeUpdateCLMUL(crc uint32, p []byte) uint32
+
+// castagnoliUpdateCLMUL is defined in crc32_riscv64.s and uses the Zbc
+// carry-less multiplication instructions for CRC32-C (Castagnoli).
+//
+//go:noescape
+func castagnoliUpdateCLMUL(crc uint32, p []byte) uint32
+
+func archAvailableIEEE() bool {
+	return cpu.RISCV64.HasZbc
+}
+
+var archIeeeTable8 *slicing8Table
+
+func archInitIEEE() {
+	if !cpu.RISCV64.HasZbc {
+		panic("arch-specific crc32 instruction for IEEE not available")
+	}
+	// We still use slicing-by-8 for small buffers.
+	archIeeeTable8 = slicingMakeTable(IEEE)
+}
+
+func archUpdateIEEE(crc uint32, p []byte) uint32 {
+	if !cpu.RISCV64.HasZbc {
+		panic("arch-specific crc32 instruction for IEEE not available")
+	}
+
+	if len(p) >= 64 {
+		left := len(p) & 15
+		do := len(p) - left
+		crc = ^ieeeUpdateCLMUL(^crc, p[:do])
+		p = p[do:]
+	}
+	if len(p) == 0 {
+		return crc
+	}
+	return slicingUpdate(crc, archIeeeTable8, p)
+}
+
+func archAvailableCastagnoli() bool {
+	return cpu.RISCV64.HasZbc
+}
+
+var archCastagnoliTable8 *slicing8Table
+
+func archInitCastagnoli() {
+	if !cpu.RISCV64.HasZbc {
+		panic("arch-specific crc32 instruction for Castagnoli not available")
+	}
+	// We still use slicing-by-8 for small buffers.
+	archCastagnoliTable8 = slicingMakeTable(Castagnoli)
+}
+
+func archUpdateCastagnoli(crc uint32, p []byte) uint32 {
+	if !cpu.RISCV64.HasZbc {
+		panic("arch-specific crc32 instruction for Castagnoli not available")
+	}
+
+	if len(p) >= 64 {
+		left := len(p) & 15
+		do := len(p) - left
+		crc = ^castagnoliUpdateCLMUL(^crc, p[:do])
+		p = p[do:]
+	}
+	if len(p) == 0 {
+		return crc
+	}
+	return slicingUpdate(crc, archCastagnoliTable8, p)
+}
