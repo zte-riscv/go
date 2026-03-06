@@ -20,67 +20,75 @@ TEXT runtime·memmove<ABIInternal>(SB),NOSPLIT|NOFRAME,$0-24
 	// buffer and go backward.
 	BGTU	X10, X11, backward
 
+#ifndef EnableSmallSizeMemVector
 	// If less than 8 bytes, do single byte copies.
 	MOV	$8, X9
 	BLT	X12, X9, f_loop4_check
+#endif
 
 #ifndef hasV
 	MOVB	internal∕cpu·RISCV64+const_offsetRISCV64HasV(SB), X5
 	BEQZ	X5, f_memmove_scalar
 #endif
 
+#ifndef EnableSmallSizeMemVector
+	// Use vector if destination and source are not 8 byte aligned.
+	OR	X10, X11, X5
+	AND	$7, X5
+	BNEZ	X5, f_vector_loop
+
+	// Use scalar if destination and source are 8 byte aligned and n <= 64 bytes.
+	SUB	$64, X12, X6
+	BLEZ	X6, f_loop_check
+#endif
+
 	PCALIGN	$16
+#ifdef EnableSmallSizeMemVector
 f_vector_dispatch:
 	MOV	$128, X6
 	BGTU	X12, X6, f_vector_loop
+	MOV	$64, X6
+	BGTU	X12, X6, f_vector_quarter
 	MOV	$32, X6
-	BGTU	X12, X6, f_vector_medium
+	BGTU	X12, X6, f_vector_double
 
-// Small copies: 1..32 bytes
-f_vector_small:
+// Copy 1..32 bytes
+	PCALIGN	$16
+f_vector_single:
 	VSETVLI	X12, E8, M1, TA, MA, X5
 	VLE8V	(X11), V8
-	ADD	X11, X12, X6
-	SUB	X5, X6
-	VLE8V	(X6), V9
-	ADD	X10, X12, X7
-	SUB	X5, X7
-	VSE8V	V9, (X7)
 	VSE8V	V8, (X10)
+	ADD	X5, X10
+	ADD	X5, X11
+	SUB	X5, X12
+	BNEZ	X12, f_vector_single
 	RET
 
-// Medium copies: 33..128 bytes
-f_vector_medium:
-	ADD	X11, X12, X6
-	ADD	X10, X12, X7
+// Copy 33..64 bytes
+	PCALIGN	$16
+f_vector_double:
 	VSETVLI	X12, E8, M2, TA, MA, X5
 	VLE8V	(X11), V8
-	SUB	$32, X6, X8
-	VLE8V	(X8), V10
-	MOV	$64, X9
-	BGTU	X12, X9, f_vector_medium_65_128
 	VSE8V	V8, (X10)
-	SUB	$32, X7, X8
-	VSE8V	V10, (X8)
-	RET
-f_vector_medium_65_128:
-	ADD	$32, X11, X8
-	VLE8V	(X8), V12
-	MOV	$96, X9
-	BLEU	X12, X9, f_vector_medium_96
-	SUB	$64, X6, X8
-	VLE8V	(X8), V14
-	SUB	$64, X7, X9
-	VSE8V	V14, (X9)
-f_vector_medium_96:
-	VSE8V	V8, (X10)
-	ADD	$32, X10, X8
-	VSE8V	V12, (X8)
-	SUB	$32, X7, X9
-	VSE8V	V10, (X9)
+	ADD	X5, X10
+	ADD	X5, X11
+	SUB	X5, X12
+	BNEZ	X12, f_vector_double
 	RET
 
-// Copy more than 128 bytes.
+// Copy 65..128 bytes
+	PCALIGN	$16
+f_vector_quarter:
+	VSETVLI	X12, E8, M4, TA, MA, X5
+	VLE8V	(X11), V8
+	VSE8V	V8, (X10)
+	ADD	X5, X10
+	ADD	X5, X11
+	SUB	X5, X12
+	BNEZ	X12, f_vector_quarter
+	RET
+#endif
+
 	PCALIGN	$16
 f_vector_loop:
 	VSETVLI	X12, E8, M8, TA, MA, X5
@@ -92,6 +100,7 @@ f_vector_loop:
 	BNEZ	X12, f_vector_loop
 	RET
 
+#ifndef hasV
 f_memmove_scalar:
 	// Check alignment - if alignment differs we have to do one byte at a time.
 	AND	$7, X10, X5
@@ -109,7 +118,9 @@ f_align:
 	ADD	$1, X10
 	ADD	$1, X11
 	BNEZ	X5, f_align
+#endif
 
+#ifndef EnableSmallSizeMemVector
 f_loop_check:
 	MOV	$16, X9
 	BLT	X12, X9, f_loop8_check
@@ -237,75 +248,81 @@ f_loop1:
 	ADD	$1, X11
 	SUB	$1, X12
 	JMP	f_loop1
+#endif
 
 backward:
 	ADD	X10, X12, X10
 	ADD	X11, X12, X11
 
+#ifndef EnableSmallSizeMemVector
 	// If less than 8 bytes, do single byte copies.
 	MOV	$8, X9
 	BLT	X12, X9, b_loop4_check
+#endif
 
 #ifndef hasV
 	MOVB	internal∕cpu·RISCV64+const_offsetRISCV64HasV(SB), X5
 	BEQZ	X5, b_memmove_scalar
 #endif
 
-	// 有向量时统一走向量路径，按 n 分小块/中块/循环（与 forward 一致）
-	// 向量路径分发：按长度走小块(1-32)、中块(33-128)或循环(129+)，与 gcc_plan9 一致
+#ifndef EnableSmallSizeMemVector
+	// Use vector if destination and source are not 8 byte aligned.
+	OR	X10, X11, X5
+	AND	$7, X5
+	BNEZ	X5, b_vector_loop
+
+	// Use scalar if destination and source are 8 byte aligned and n <= 64 bytes.
+	SUB	$32, X12, X6
+	BLEZ	X6, b_loop_check
+#endif
+
 	PCALIGN	$16
+#ifdef EnableSmallSizeMemVector
 b_vector_dispatch:
 	MOV	$128, X6
 	BGTU	X12, X6, b_vector_loop
+	MOV	$64, X6
+	BGTU	X12, X6, b_vector_quarter
 	MOV	$32, X6
-	BGTU	X12, X6, b_vector_medium
+	BGTU	X12, X6, b_vector_double
 
-// Small copies: 1..32 bytes
-b_vector_small:
+// Copy 1..32 bytes
+	PCALIGN	$16
+b_vector_single:
 	VSETVLI	X12, E8, M1, TA, MA, X5
-	SUB	X5, X11, X6
-	VLE8V	(X6), V8
-	SUB	X12, X11, X7
-	VLE8V	(X7), V9
-	SUB	X5, X10, X6
-	VSE8V	V8, (X6)
-	SUB	X12, X10, X7
-	VSE8V	V9, (X7)
+	SUB	X5, X10
+	SUB	X5, X11
+	VLE8V	(X11), V8
+	VSE8V	V8, (X10)
+	SUB	X5, X12
+	BNEZ	X12, b_vector_single
 	RET
 
-// Medium copies: 33..128 bytes
-b_vector_medium:
+// Copy 33..64 bytes
+	PCALIGN	$16
+b_vector_double:
 	VSETVLI	X12, E8, M2, TA, MA, X5
-	SUB	$32, X11, X6
-	VLE8V	(X6), V8
-	SUB	X12, X11, X8
-	VLE8V	(X8), V10
-	MOV	$64, X9
-	BGTU	X12, X9, b_vector_medium_65_128
-	SUB	$32, X10, X7
-	VSE8V	V8, (X7)
-	SUB	X12, X10, X9
-	VSE8V	V10, (X9)
-	RET
-b_vector_medium_65_128:
-	SUB	$64, X11, X8
-	VLE8V	(X8), V12
-	MOV	$96, X9
-	BLEU	X12, X9, b_vector_medium_96
-	SUB	$96, X11, X8
-	VLE8V	(X8), V14
-	SUB	$96, X10, X9
-	VSE8V	V14, (X9)
-b_vector_medium_96:
-	SUB	$32, X10, X7
-	VSE8V	V8, (X7)
-	SUB	$64, X10, X8
-	VSE8V	V12, (X8)
-	SUB	X12, X10, X9
-	VSE8V	V10, (X9)
+	SUB	X5, X10
+	SUB	X5, X11
+	VLE8V	(X11), V8
+	VSE8V	V8, (X10)
+	SUB	X5, X12
+	BNEZ	X12, b_vector_double
 	RET
 
-// Copy more than 128 bytes.
+// Copy 65..128 bytes
+	PCALIGN	$16
+b_vector_quarter:
+	VSETVLI	X12, E8, M4, TA, MA, X5
+	SUB	X5, X10
+	SUB	X5, X11
+	VLE8V	(X11), V8
+	VSE8V	V8, (X10)
+	SUB	X5, X12
+	BNEZ	X12, b_vector_quarter
+	RET
+#endif
+
 	PCALIGN	$16
 b_vector_loop:
 	VSETVLI	X12, E8, M8, TA, MA, X5
@@ -317,6 +334,7 @@ b_vector_loop:
 	BNEZ	X12, b_vector_loop
 	RET
 
+#ifndef hasV
 b_memmove_scalar:
 	// Check alignment - if alignment differs we have to do one byte at a time.
 	AND	$7, X10, X5
@@ -333,7 +351,9 @@ b_align:
 	MOVB	0(X11), X14
 	MOVB	X14, 0(X10)
 	BNEZ	X5, b_align
+#endif
 
+#ifndef EnableSmallSizeMemVector
 b_loop_check:
 	MOV	$16, X9
 	BLT	X12, X9, b_loop8_check
@@ -459,6 +479,7 @@ b_loop1:
 	MOVB	X14, 0(X10)
 	SUB	$1, X12
 	JMP	b_loop1
+#endif
 
 done:
 	RET
