@@ -45,50 +45,45 @@ TEXT runtime·memmove<ABIInternal>(SB),NOSPLIT|NOFRAME,$0-24
 	PCALIGN	$16
 #ifdef EnableSmallSizeMemVector
 f_vector_dispatch:
-	MOV	$128, X6
+	MOV		$16, X6
+#ifdef VLen_256
+	SLLI	$1, X6
+#endif
+#ifdef VLen_512
+	SLLI	$2, X6
+#endif
+	BGEU	X6, X12, f_vector_single
+	SLLI	$2, X6
 	BGTU	X12, X6, f_vector_loop
-	MOV	$64, X6
+	SRLI	$1, X6
 	BGTU	X12, X6, f_vector_quarter
-	MOV	$32, X6
-	BGTU	X12, X6, f_vector_double
 
-// Copy 1..32 bytes
-	PCALIGN	$16
-f_vector_single:
-	VSETVLI	X12, E8, M1, TA, MA, X5
-	VLE8V	(X11), V8
-	VSE8V	V8, (X10)
-	ADD	X5, X10
-	ADD	X5, X11
-	SUB	X5, X12
-	BNEZ	X12, f_vector_single
-	RET
-
-// Copy 33..64 bytes
+// Copy (vlen+1)..(2*vlen) bytes
 	PCALIGN	$16
 f_vector_double:
 	VSETVLI	X12, E8, M2, TA, MA, X5
 	VLE8V	(X11), V8
 	VSE8V	V8, (X10)
-	ADD	X5, X10
-	ADD	X5, X11
-	SUB	X5, X12
-	BNEZ	X12, f_vector_double
 	RET
 
-// Copy 65..128 bytes
+// Copy 1..(vlen) bytes
+	PCALIGN	$16
+f_vector_single:
+	VSETVLI	X12, E8, M1, TA, MA, X5
+	VLE8V	(X11), V8
+	VSE8V	V8, (X10)
+	RET
+
+// Copy (2*vlen+1)..(4*vlen) bytes
 	PCALIGN	$16
 f_vector_quarter:
 	VSETVLI	X12, E8, M4, TA, MA, X5
 	VLE8V	(X11), V8
 	VSE8V	V8, (X10)
-	ADD	X5, X10
-	ADD	X5, X11
-	SUB	X5, X12
-	BNEZ	X12, f_vector_quarter
 	RET
 #endif
 
+// Copy (4*vlen+1).. bytes
 	PCALIGN	$16
 f_vector_loop:
 	VSETVLI	X12, E8, M8, TA, MA, X5
@@ -279,26 +274,20 @@ backward:
 	PCALIGN	$16
 #ifdef EnableSmallSizeMemVector
 b_vector_dispatch:
-	MOV	$128, X6
+	MOV		$16, X6
+#ifdef VLen_256
+	SLLI	$1, X6
+#endif
+#ifdef VLen_512
+	SLLI	$2, X6
+#endif
+	BGEU	X6, X12, b_vector_single
+	SLLI	$2, X6
 	BGTU	X12, X6, b_vector_loop
-	MOV	$64, X6
+	SRLI	$1, X6
 	BGTU	X12, X6, b_vector_quarter
-	MOV	$32, X6
-	BGTU	X12, X6, b_vector_double
 
-// Copy 1..32 bytes
-	PCALIGN	$16
-b_vector_single:
-	VSETVLI	X12, E8, M1, TA, MA, X5
-	SUB	X5, X10
-	SUB	X5, X11
-	VLE8V	(X11), V8
-	VSE8V	V8, (X10)
-	SUB	X5, X12
-	BNEZ	X12, b_vector_single
-	RET
-
-// Copy 33..64 bytes
+// Copy (vlen+1)..(2*vlen) bytes
 	PCALIGN	$16
 b_vector_double:
 	VSETVLI	X12, E8, M2, TA, MA, X5
@@ -306,11 +295,19 @@ b_vector_double:
 	SUB	X5, X11
 	VLE8V	(X11), V8
 	VSE8V	V8, (X10)
-	SUB	X5, X12
-	BNEZ	X12, b_vector_double
 	RET
 
-// Copy 65..128 bytes
+// Copy 1..(vlen) bytes
+	PCALIGN	$16
+b_vector_single:
+	VSETVLI	X12, E8, M1, TA, MA, X5
+	SUB	X5, X10
+	SUB	X5, X11
+	VLE8V	(X11), V8
+	VSE8V	V8, (X10)
+	RET
+
+// Copy (2*vlen+1)..(4*vlen) bytes
 	PCALIGN	$16
 b_vector_quarter:
 	VSETVLI	X12, E8, M4, TA, MA, X5
@@ -318,11 +315,10 @@ b_vector_quarter:
 	SUB	X5, X11
 	VLE8V	(X11), V8
 	VSE8V	V8, (X10)
-	SUB	X5, X12
-	BNEZ	X12, b_vector_quarter
 	RET
 #endif
 
+// Copy (4*vlen+1).. bytes
 	PCALIGN	$16
 b_vector_loop:
 	VSETVLI	X12, E8, M8, TA, MA, X5
