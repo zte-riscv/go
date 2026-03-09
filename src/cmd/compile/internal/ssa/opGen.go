@@ -34564,7 +34564,7 @@ var opcodeTable = [...]opInfo{
 			inputs: []inputInfo{
 				{0, 16}, // X5
 			},
-			clobbers: 1360, // X5 X7 X9 X11
+			clobbers: 939524112, // X5 X28 X29 X30
 		},
 	},
 	{

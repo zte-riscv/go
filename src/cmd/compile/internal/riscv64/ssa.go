@@ -846,33 +846,33 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		//   3. n is a multiple of sz
 		//
 		// Register usage (fixed to avoid conflicts):
-		//   X7  = counter (temporary calculations and loop counters)
-		//   X9  = endPtr (ptr + n, end address)
-		//   X11 = endAligned (last 64-byte aligned address before endPtr)
+		//   X28 = counter (temporary calculations and loop counters)
+		//   X29 = endPtr (ptr + n, end address)
+		//   X30 = endAligned (last 64-byte aligned address before endPtr)
 		//   ptr = walking pointer (modified during execution)
 		useCBOZero := buildcfg.GORISCV64 >= 22 && n >= 128 && n%sz == 0
 
 		if useCBOZero {
-			counter := int16(riscv.REG_X7)
+			counter := int16(riscv.REG_X28)
 
 			// === Phase 0: Setup ===
-			// ADDI $n, ptr, X9  // X9 = endPtr = ptr + n
+			// ADDI $n, ptr, X29  // X29 = endPtr = ptr + n
 			pEnd := s.Prog(riscv.AADD)
 			pEnd.From.Type = obj.TYPE_CONST
 			pEnd.From.Offset = n
 			pEnd.Reg = ptr
 			pEnd.To.Type = obj.TYPE_REG
-			pEnd.To.Reg = riscv.REG_X9
+			pEnd.To.Reg = riscv.REG_X29
 
-			// ANDI $-64, X9, X11  // X11 = endAligned = endPtr & -64
+			// ANDI $-64, X29, X30  // X30 = endAligned = endPtr & -64
 			pEndAligned := s.Prog(riscv.AAND)
 			pEndAligned.From.Type = obj.TYPE_CONST
 			pEndAligned.From.Offset = -64
-			pEndAligned.Reg = riscv.REG_X9
+			pEndAligned.Reg = riscv.REG_X29
 			pEndAligned.To.Type = obj.TYPE_REG
-			pEndAligned.To.Reg = riscv.REG_X11
+			pEndAligned.To.Reg = riscv.REG_X30
 
-			// ANDI $63, ptr, X7  // X7 = ptr & 63 (0 if aligned)
+			// ANDI $63, ptr, X28  // X28 = ptr & 63 (0 if aligned)
 			pAlignCheck := s.Prog(riscv.AAND)
 			pAlignCheck.From.Type = obj.TYPE_CONST
 			pAlignCheck.From.Offset = 63
@@ -880,13 +880,13 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			pAlignCheck.To.Type = obj.TYPE_REG
 			pAlignCheck.To.Reg = counter
 
-			// BEQZ X7, cbozeroPhase  // skip prolog if already aligned
+			// BEQZ X28, cbozeroPhase  // skip prolog if already aligned
 			pAlignedToCbo := s.Prog(riscv.ABEQZ)
 			pAlignedToCbo.From.Type = obj.TYPE_REG
 			pAlignedToCbo.From.Reg = counter
 			pAlignedToCbo.To.Type = obj.TYPE_BRANCH
 
-			// ADDI $63, ptr, X7; ANDI $-64, X7, X7  // X7 = alignedPtr = (ptr + 63) & -64
+			// ADDI $63, ptr, X28; ANDI $-64, X28, X28  // X28 = alignedPtr = (ptr + 63) & -64
 			pAlignedAdd := s.Prog(riscv.AADDI)
 			pAlignedAdd.From.Type = obj.TYPE_CONST
 			pAlignedAdd.From.Offset = 63
@@ -902,7 +902,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			pAlignedMask.To.Reg = counter
 
 			// === Phase 1: Prolog ===
-			// SUB ptr, X7, X7  // X7 = alignedPtr - ptr (bytes to zero)
+			// SUB ptr, X28, X28  // X28 = alignedPtr - ptr (bytes to zero)
 			pPrologCnt := s.Prog(riscv.ASUB)
 			pPrologCnt.From.Type = obj.TYPE_REG
 			pPrologCnt.From.Reg = ptr
@@ -910,13 +910,13 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			pPrologCnt.To.Type = obj.TYPE_REG
 			pPrologCnt.To.Reg = counter
 
-			// BLEZ X7, cbozeroPhase  // skip if already aligned
+			// BLEZ X28, cbozeroPhase  // skip if already aligned
 			pSkipProlog := s.Prog(riscv.ABLEZ)
 			pSkipProlog.From.Type = obj.TYPE_REG
 			pSkipProlog.From.Reg = counter
 			pSkipProlog.To.Type = obj.TYPE_BRANCH
 
-			// prolog_loop: MOV ZERO, (ptr); ADDI $sz, ptr, ptr; ADDI $-sz, X7, X7; BGTZ X7, prolog_loop
+			// prolog_loop: MOV ZERO, (ptr); ADDI $sz, ptr, ptr; ADDI $-sz, X28, X28; BGTZ X28, prolog_loop
 			prologLoop := s.Prog(obj.ANOP)
 			zeroOp(s, mov, ptr, 0)
 
@@ -941,23 +941,23 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			pPrologLoop.To.SetTarget(prologLoop)
 
 			// === Phase 2: CBOZERO loop ===
-			// SUB ptr, X11, X7  // X7 = endAligned - ptr (aligned region size)
+			// SUB ptr, X30, X28  // X28 = endAligned - ptr (aligned region size)
 			pCboCnt := s.Prog(riscv.ASUB)
 			pCboCnt.From.Type = obj.TYPE_REG
 			pCboCnt.From.Reg = ptr
-			pCboCnt.Reg = riscv.REG_X11
+			pCboCnt.Reg = riscv.REG_X30
 			pCboCnt.To.Type = obj.TYPE_REG
 			pCboCnt.To.Reg = counter
 			pAlignedToCbo.To.SetTarget(pCboCnt)
 			pSkipProlog.To.SetTarget(pCboCnt)
 
-			// BLEZ X7, epilogPhase  // skip if no aligned region
+			// BLEZ X28, epilogPhase  // skip if no aligned region
 			pSkipCbo := s.Prog(riscv.ABLEZ)
 			pSkipCbo.From.Type = obj.TYPE_REG
 			pSkipCbo.From.Reg = counter
 			pSkipCbo.To.Type = obj.TYPE_BRANCH
 
-			// cbozero_loop: CBOZERO (ptr); ADDI $64, ptr, ptr; ADDI $-64, X7, X7; BGTZ X7, cbozero_loop
+			// cbozero_loop: CBOZERO (ptr); ADDI $64, ptr, ptr; ADDI $-64, X28, X28; BGTZ X28, cbozero_loop
 			cbozeroLoop := s.Prog(riscv.ACBOZERO)
 			cbozeroLoop.From.Type = obj.TYPE_REG
 			cbozeroLoop.From.Reg = ptr
@@ -983,22 +983,22 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			pCboLoop.To.SetTarget(cbozeroLoop)
 
 			// === Phase 3: Epilog ===
-			// SUB ptr, X9, X7  // X7 = endPtr - ptr (remaining bytes)
+			// SUB ptr, X29, X28  // X28 = endPtr - ptr (remaining bytes)
 			pEpilogCnt := s.Prog(riscv.ASUB)
 			pEpilogCnt.From.Type = obj.TYPE_REG
 			pEpilogCnt.From.Reg = ptr
-			pEpilogCnt.Reg = riscv.REG_X9
+			pEpilogCnt.Reg = riscv.REG_X29
 			pEpilogCnt.To.Type = obj.TYPE_REG
 			pEpilogCnt.To.Reg = counter
 			pSkipCbo.To.SetTarget(pEpilogCnt)
 
-			// BLEZ X7, doneLabel  // skip if no tail
+			// BLEZ X28, doneLabel  // skip if no tail
 			pDoneIfNoTail := s.Prog(riscv.ABLEZ)
 			pDoneIfNoTail.From.Type = obj.TYPE_REG
 			pDoneIfNoTail.From.Reg = counter
 			pDoneIfNoTail.To.Type = obj.TYPE_BRANCH
 
-			// epilog_loop: MOV ZERO, (ptr); ADDI $sz, ptr, ptr; ADDI $-sz, X7, X7; BGTZ X7, epilog_loop
+			// epilog_loop: MOV ZERO, (ptr); ADDI $sz, ptr, ptr; ADDI $-sz, X28, X28; BGTZ X28, epilog_loop
 			epilogLoop := s.Prog(obj.ANOP)
 			zeroOp(s, mov, ptr, 0)
 
