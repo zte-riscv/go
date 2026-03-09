@@ -1502,7 +1502,7 @@ var (
 )
 
 // Must agree with internal/buildcfg.FramePointerEnabled.
-const framepointer_enabled = GOARCH == "amd64" || GOARCH == "arm64"
+const framepointer_enabled = GOARCH == "amd64" || GOARCH == "arm64" || GOARCH == "riscv64"
 
 // getcallerfp returns the frame pointer of the caller of the caller
 // of this function.
@@ -1512,8 +1512,16 @@ const framepointer_enabled = GOARCH == "amd64" || GOARCH == "arm64"
 func getcallerfp() uintptr {
 	fp := getfp() // This frame's FP.
 	if fp != 0 {
-		fp = *(*uintptr)(unsafe.Pointer(fp)) // The caller's FP.
-		fp = *(*uintptr)(unsafe.Pointer(fp)) // The caller's caller's FP.
+		if GOARCH == "riscv64" {
+			// On RISC-V, FP (S0) points to SP+8.
+			// The caller's FP is saved at SP-8, which is fp-16.
+			fp = *(*uintptr)(unsafe.Pointer(fp - 16)) // The caller's FP.
+			fp = *(*uintptr)(unsafe.Pointer(fp - 16)) // The caller's caller's FP.
+		} else {
+			// On ARM64/AMD64, FP points exactly to the saved FP.
+			fp = *(*uintptr)(unsafe.Pointer(fp)) // The caller's FP.
+			fp = *(*uintptr)(unsafe.Pointer(fp)) // The caller's caller's FP.
+		}
 	}
 	return fp
 }
