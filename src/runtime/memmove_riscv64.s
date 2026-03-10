@@ -42,8 +42,8 @@ TEXT runtime·memmove<ABIInternal>(SB),NOSPLIT|NOFRAME,$0-24
 	BLEZ	X6, f_loop_check
 #endif
 
-	PCALIGN	$16
 #ifdef EnableSmallSizeMemVector
+	PCALIGN	$16
 f_vector_dispatch:
 	MOV		$16, X6
 #ifdef VLen_256
@@ -271,8 +271,8 @@ backward:
 	BLEZ	X6, b_loop_check
 #endif
 
-	PCALIGN	$16
 #ifdef EnableSmallSizeMemVector
+	PCALIGN	$16
 b_vector_dispatch:
 	MOV		$16, X6
 #ifdef VLen_256
