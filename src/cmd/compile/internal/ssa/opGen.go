@@ -34562,9 +34562,9 @@ var opcodeTable = [...]opInfo{
 		symEffect:      SymWrite,
 		reg: regInfo{
 			inputs: []inputInfo{
-				{0, 16}, // X5
+				{0, 16777216}, // X25
 			},
-			clobbers: 939524112, // X5 X28 X29 X30
+			clobbers: 956301312, // X25 X28 X29 X30
 		},
 	},
 	{
