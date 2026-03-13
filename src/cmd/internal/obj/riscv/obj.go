@@ -4011,17 +4011,17 @@ func (ins *instruction) compress() {
 		}
 
 	case ALH:
-		if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 2, 2) {
+		if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 2, 2) && buildcfg.GORISCV64 >= 23 {
 			ins.as = ACLH
 		}
 
 	case ALBU:
-		if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && immUFits(ins.imm, 2) == nil {
+		if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && immUFits(ins.imm, 2) == nil && buildcfg.GORISCV64 >= 23 {
 			ins.as = ACLBU
 		}
 
 	case ALHU:
-		if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 2, 2) {
+		if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 2, 2) && buildcfg.GORISCV64 >= 23 {
 			ins.as = ACLHU
 		}
 
@@ -4047,12 +4047,12 @@ func (ins *instruction) compress() {
 		}
 
 	case ASB:
-		if isIntPrimeReg(ins.rs1) && isIntPrimeReg(ins.rs2) && immUFits(ins.imm, 2) == nil {
+		if isIntPrimeReg(ins.rs1) && isIntPrimeReg(ins.rs2) && immUFits(ins.imm, 2) == nil && buildcfg.GORISCV64 >= 23 {
 			ins.as, ins.rd, ins.rs1, ins.rs2 = ACSB, obj.REG_NONE, ins.rd, ins.rs1
 		}
 
 	case ASH:
-		if isIntPrimeReg(ins.rs1) && isIntPrimeReg(ins.rs2) && isScaledImmU(ins.imm, 2, 2) {
+		if isIntPrimeReg(ins.rs1) && isIntPrimeReg(ins.rs2) && isScaledImmU(ins.imm, 2, 2) && buildcfg.GORISCV64 >= 23 {
 			ins.as, ins.rd, ins.rs1, ins.rs2 = ACSH, obj.REG_NONE, ins.rd, ins.rs1
 		}
 
@@ -4106,27 +4106,27 @@ func (ins *instruction) compress() {
 	case AANDI:
 		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && immIFits(ins.imm, 6) == nil {
 			ins.as = ACANDI
-		} else if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.imm == 0xff {
+		} else if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.imm == 0xff && buildcfg.GORISCV64 >= 23 {
 			ins.as = ACZEXTB
 		}
 
 	case ASEXTB:
-		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 {
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && buildcfg.GORISCV64 >= 23 {
 			ins.as = ACSEXTB
 		}
 
 	case ASEXTH:
-		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 {
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && buildcfg.GORISCV64 >= 23 {
 			ins.as = ACSEXTH
 		}
 
 	case AZEXTH:
-		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 {
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && buildcfg.GORISCV64 >= 23 {
 			ins.as = ACZEXTH
 		}
 
 	case AADDUW:
-		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.rs2 == REG_X0 {
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.rs2 == REG_X0 && buildcfg.GORISCV64 >= 23 {
 			ins.as, ins.rs2 = ACZEXTW, obj.REG_NONE
 		}
 
@@ -4140,7 +4140,7 @@ func (ins *instruction) compress() {
 		}
 
 	case AMUL:
-		if ins.rd == ins.rs1 && isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs2) {
+		if ins.rd == ins.rs1 && isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs2) && buildcfg.GORISCV64 >= 23 {
 			ins.as = ACMUL
 		}
 
@@ -4183,7 +4183,7 @@ func (ins *instruction) compress() {
 		}
 
 	case AXORI:
-		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.imm == -1 {
+		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.imm == -1 && buildcfg.GORISCV64 >= 23 {
 			ins.as = ACNOT
 		}
 
