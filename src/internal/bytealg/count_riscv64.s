@@ -31,8 +31,8 @@ TEXT ·Count<ABIInternal>(SB),NOSPLIT|NOFRAME,$0
 count_vector_loop:
 	VSETVLI	X11, E8, M8, TA, MA, X5
 	VLE8V	(X14), V8
-	VMSEQVX	X13, V8, V0
-	VCPOPM	V0, X15
+	VMSEQVX	X13, V8, V1
+	VCPOPM	V1, X15
 	ADD	X15, X10	// add counter
 	ADD	X5, X14
 	SUB	X5, X11
