@@ -1162,7 +1162,7 @@ OwxM2SipWoj1YuM=
 
 // localhostKey is the private key for localhostCert.
 var localhostKey = []byte(testingKey(`
------BEGIN PRIVATE KEY-----
+-----BEGIN RSA TESTING KEY-----
 MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDi9YvqiwQbTDiv
 tDoDi9KkaOHx5zj1dZL1Bq3plBJTpPLzOpAsVBrnHIuC3FMrgJ4HrZ3cvMlYyf0Y
 0eU0CYgJPzUlOvH0k36lT99ACoksCLevpdrMbMyqMRDzfGdsUQSG6KYQUGv5HCZB
@@ -1189,6 +1189,6 @@ qRp/tu3Ldf1wbsNoOnWdEYpf+O6iLZhxKIW96pkCgYBHR7f/uk1Gvj/F/dv4nJxL
 KxYaWuBGSrZQc2ijdDNd0A+4H1IniFnAonuLuWncPjBlzYf6P6xnkrW8dg0JeFWx
 0ROeTlfi7UpdnaOuzvS1Q9I5b+nfT7W22TYy4eE3v9+rLhGCG1DDZlJ8CS2mo4ZV
 nAqSbV04Zu6fD+rIZtW3YA==
------END PRIVATE KEY-----`))
+-----END RSA TESTING KEY-----`))
 
 func testingKey(s string) string { return strings.ReplaceAll(s, "TESTING KEY", "PRIVATE KEY") }
