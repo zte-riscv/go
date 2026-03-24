@@ -2012,7 +2012,7 @@ func compressedEncoding(as obj.As) uint32 {
 		op = 0b101 << 13
 	// CSB Format
 	case ACSB:
-		op = 0b100010<<10
+		op = 0b100010 << 10
 	// CSH Format
 	case ACSH:
 		op = 0b100011<<10 | 0b0<<6
@@ -2190,12 +2190,14 @@ func encodeCS(ins *instruction) uint32 {
 	}
 	return compressedEncoding(ins.as) | ((imm>>2)&0x7)<<10 | regCI(ins.rs1)<<7 | (imm&3)<<5 | rs2<<2
 }
+
 // encodeCSB encodes a compressed store the least significant byte (CSB-type) instruction.
 func encodeCSB(ins *instruction) uint32 {
 	// Bit order [0|1]
 	imm := encodeBitPattern(uint32(ins.imm), []int{0, 1})
 	return compressedEncoding(ins.as) | regCI(ins.rs1)<<7 | (imm&0x3)<<5 | regCI(ins.rs2)<<2
 }
+
 // encodeCSH encodes a compressed store the least significant halfword (CSH-type) instruction.
 func encodeCSH(ins *instruction) uint32 {
 	// Bit order [1]
@@ -2625,9 +2627,9 @@ var (
 	cssEncoding = encoding{encode: encodeCSS, validate: validateCSS, length: 2}
 
 	// Zcb encodings
-	clbEncoding  = encoding{encode: encodeCLB, validate: validateCLB, length: 2}
-	clhEncoding  = encoding{encode: encodeCLH, validate: validateCLH, length: 2}
-	csbEncoding  = encoding{encode: encodeCSB, validate: validateCSB, length: 2}
+	clbEncoding = encoding{encode: encodeCLB, validate: validateCLB, length: 2}
+	clhEncoding = encoding{encode: encodeCLH, validate: validateCLH, length: 2}
+	csbEncoding = encoding{encode: encodeCSB, validate: validateCSB, length: 2}
 	cshEncoding = encoding{encode: encodeCSH, validate: validateCSH, length: 2}
 	cuEncoding  = encoding{encode: encodeCU, validate: validateCU, length: 2}
 
@@ -2988,14 +2990,14 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	// 27.8: "zcb" Extension for simple code-size saving instruction
 	ACLBU & obj.AMask:   {enc: clbEncoding},
 	ACLHU & obj.AMask:   {enc: clhEncoding},
-	ACLH & obj.AMask:   {enc: clhEncoding},
-	ACSB & obj.AMask:   {enc: csbEncoding},
-	ACSH & obj.AMask:   {enc: cshEncoding},
-	ACZEXTB & obj.AMask:   {enc: cuEncoding},
-	ACSEXTB & obj.AMask:   {enc: cuEncoding},
-	ACZEXTH & obj.AMask:   {enc: cuEncoding},
-	ACSEXTH & obj.AMask:   {enc: cuEncoding},
-	ACZEXTW & obj.AMask:   {enc: cuEncoding},
+	ACLH & obj.AMask:    {enc: clhEncoding},
+	ACSB & obj.AMask:    {enc: csbEncoding},
+	ACSH & obj.AMask:    {enc: cshEncoding},
+	ACZEXTB & obj.AMask: {enc: cuEncoding},
+	ACSEXTB & obj.AMask: {enc: cuEncoding},
+	ACZEXTH & obj.AMask: {enc: cuEncoding},
+	ACSEXTH & obj.AMask: {enc: cuEncoding},
+	ACZEXTW & obj.AMask: {enc: cuEncoding},
 	ACNOT & obj.AMask:   {enc: cuEncoding},
 	ACMUL & obj.AMask:   {enc: caEncoding, ternary: true},
 
@@ -4014,7 +4016,7 @@ func (ins *instruction) compress() {
 		}
 
 	case ALBU:
-		if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && immUFits(ins.imm, 2) == nil{
+		if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && immUFits(ins.imm, 2) == nil {
 			ins.as = ACLBU
 		}
 
@@ -4104,7 +4106,7 @@ func (ins *instruction) compress() {
 	case AANDI:
 		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && immIFits(ins.imm, 6) == nil {
 			ins.as = ACANDI
-		} else if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1  && ins.imm == 0xff {
+		} else if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.imm == 0xff {
 			ins.as = ACZEXTB
 		}
 
