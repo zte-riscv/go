@@ -609,7 +609,7 @@ func benchBytes(b *testing.B, sizes []int, f func(b *testing.B, n int)) {
 	}
 }
 
-var indexSizes = []int{10, 32, 4 << 10, 4 << 20, 64 << 20}
+var indexSizes = []int{1, 2, 4, 8, 10, 32, 64, 128, 4 << 10, 4 << 20, 64 << 20}
 
 var isRaceBuilder = strings.HasSuffix(testenv.Builder(), "-race")
 
