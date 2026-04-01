@@ -6,6 +6,8 @@
 
 package codegen
 
+import "unsafe"
+
 // This file contains codegen tests related to arithmetic
 // simplifications and optimizations on float types.
 // For codegen tests on integer types, see arithmetic.go.
@@ -62,6 +64,72 @@ func indexStore(b0 []float64, b1 float64, idx int) {
 	// arm64:`FMOVD\sF[0-9]+,\s\(R[0-9]+\)\(R[0-9]+<<3\)`
 	// loong64:`MOVD\sF[0-9]+,\s\(R[0-9]+\)\(R[0-9]+\)`
 	b0[idx] = b1
+}
+
+//go:noinline
+func AddrFoldLoad32(p *float32) float32 {
+	// arm64:`FMOVS\t4\(R[0-9]+\), F[0-9]+`
+	// riscv64:`MOVF\t4\(X[0-9]+\), F[0-9]+`
+	return *(*float32)(unsafe.Add(unsafe.Pointer(p), 4))
+}
+
+//go:noinline
+func AddrFoldLoad64(p *float64) float64 {
+	// arm64:`FMOVD\t8\(R[0-9]+\), F[0-9]+`
+	// riscv64:`MOVD\t8\(X[0-9]+\), F[0-9]+`
+	return *(*float64)(unsafe.Add(unsafe.Pointer(p), 8))
+}
+
+//go:noinline
+func AddrFoldStore32(p *float32, v float32) {
+	// arm64:`FMOVS\tF[0-9]+, 4\(R[0-9]+\)`
+	// riscv64:`MOVF\tF[0-9]+, 4\(X[0-9]+\)`
+	*(*float32)(unsafe.Add(unsafe.Pointer(p), 4)) = v
+}
+
+//go:noinline
+func AddrFoldStore64(p *float64, v float64) {
+	// arm64:`FMOVD\tF[0-9]+, 8\(R[0-9]+\)`
+	// riscv64:`MOVD\tF[0-9]+, 8\(X[0-9]+\)`
+	*(*float64)(unsafe.Add(unsafe.Pointer(p), 8)) = v
+}
+
+type structF32 struct {
+	pad int32
+	f   float32
+}
+
+type structF64 struct {
+	pad int64
+	f   float64
+}
+
+//go:noinline
+func StructFieldLoad32(s *structF32) float32 {
+	// arm64:`FMOVS\t4\(R[0-9]+\), F[0-9]+`
+	// riscv64:`MOVF\t4\(X[0-9]+\), F[0-9]+`
+	return s.f
+}
+
+//go:noinline
+func StructFieldLoad64(s *structF64) float64 {
+	// arm64:`FMOVD\t8\(R[0-9]+\), F[0-9]+`
+	// riscv64:`MOVD\t8\(X[0-9]+\), F[0-9]+`
+	return s.f
+}
+
+//go:noinline
+func StructFieldStore32(s *structF32, v float32) {
+	// arm64:`FMOVS\tF[0-9]+, 4\(R[0-9]+\)`
+	// riscv64:`MOVF\tF[0-9]+, 4\(X[0-9]+\)`
+	s.f = v
+}
+
+//go:noinline
+func StructFieldStore64(s *structF64, v float64) {
+	// arm64:`FMOVD\tF[0-9]+, 8\(R[0-9]+\)`
+	// riscv64:`MOVD\tF[0-9]+, 8\(X[0-9]+\)`
+	s.f = v
 }
 
 // ----------- //

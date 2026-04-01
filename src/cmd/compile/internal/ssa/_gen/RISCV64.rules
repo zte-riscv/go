@@ -311,6 +311,16 @@
 	(base.Op != OpSB || !config.ctxt.Flag_dynlink) =>
 	(MOV(B|H|W|D)storezero [off1+off2] {mergeSym(sym1,sym2)} base mem)
 
+(FMOV(W|D)load [off1] {sym1} (MOVaddr [off2] {sym2} base) mem) &&
+	is32Bit(int64(off1)+int64(off2)) && canMergeSym(sym1, sym2) &&
+	(base.Op != OpSB || !config.ctxt.Flag_dynlink) =>
+	(FMOV(W|D)load [off1+off2] {mergeSym(sym1,sym2)} base mem)
+
+(FMOV(W|D)store [off1] {sym1} (MOVaddr [off2] {sym2} base) val mem) &&
+	is32Bit(int64(off1)+int64(off2)) && canMergeSym(sym1, sym2) &&
+	(base.Op != OpSB || !config.ctxt.Flag_dynlink) =>
+	(FMOV(W|D)store [off1+off2] {mergeSym(sym1,sym2)} base val mem)
+
 (MOV(B|BU|H|HU|W|WU|D)load [off1] {sym} (ADDI [off2] base) mem) && is32Bit(int64(off1)+off2) =>
 	(MOV(B|BU|H|HU|W|WU|D)load [off1+int32(off2)] {sym} base mem)
 
@@ -319,6 +329,12 @@
 
 (MOV(B|H|W|D)storezero [off1] {sym} (ADDI [off2] base) mem) && is32Bit(int64(off1)+off2) =>
 	(MOV(B|H|W|D)storezero [off1+int32(off2)] {sym} base mem)
+
+(FMOV(W|D)load [off1] {sym} (ADDI [off2] base) mem) && is32Bit(int64(off1)+off2) =>
+	(FMOV(W|D)load [off1+int32(off2)] {sym} base mem)
+
+(FMOV(W|D)store [off1] {sym} (ADDI [off2] base) val mem) && is32Bit(int64(off1)+off2) =>
+	(FMOV(W|D)store [off1+int32(off2)] {sym} base val mem)
 
 // Similarly, fold ADDI into MOVaddr to avoid confusing live variable analysis
 // with OffPtr -> ADDI.
