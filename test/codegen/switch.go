@@ -25,6 +25,8 @@ func f(x string) int {
 func square(x int) int {
 	// amd64:`JMP\s\(.*\)\(.*\)$`
 	// arm64:`MOVD\s\(R.*\)\(R.*<<3\)`,`JMP\s\(R.*\)$`
+	// riscv64/rva20u64:`SLLI`,`ADD`,`MOV`,`JALR`
+	// riscv64/rva22u64,riscv64/rva23u64:`SH3ADD`,`MOV`,`JALR`
 	switch x {
 	case 1:
 		return 1
@@ -51,6 +53,8 @@ func square(x int) int {
 func length(x string) int {
 	// amd64:`JMP\s\(.*\)\(.*\)$`
 	// arm64:`MOVD\s\(R.*\)\(R.*<<3\)`,`JMP\s\(R.*\)$`
+	// riscv64/rva20u64:`SLLI`,`ADD`,`MOV`,`JALR`
+	// riscv64/rva22u64,riscv64/rva23u64:`SH3ADD`,`MOV`,`JALR`
 	switch x {
 	case "a":
 		return 1
@@ -104,6 +108,8 @@ func mimetype(ext string) string {
 func typeSwitch(x any) int {
 	// amd64:`JMP\s\(.*\)\(.*\)$`
 	// arm64:`MOVD\s\(R.*\)\(R.*<<3\)`,`JMP\s\(R.*\)$`
+	// riscv64/rva20u64:`SLLI`,`ADD`,`MOV`,`JALR`
+	// riscv64/rva22u64,riscv64/rva23u64:`SH3ADD`,`MOV`,`JALR`
 	switch x.(type) {
 	case int:
 		return 0
