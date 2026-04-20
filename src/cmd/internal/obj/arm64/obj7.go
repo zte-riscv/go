@@ -689,27 +689,52 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 					q1.To.Offset = -8
 				}
 			} else {
-				// small frame, update SP and save LR in a single MOVD.W instruction.
-				// So if a signal comes during the execution of the function prologue,
-				// the traceback code will not see a half-updated stack frame.
-				// Also, on Linux, in a cgo binary we may get a SIGSETXID signal
-				// early on before the signal stack is set, as glibc doesn't allow
-				// us to block SIGSETXID. So it is important that we don't write below
-				// the SP until the signal stack is set.
-				// Luckily, all the functions from thread entry to setting the signal
-				// stack have small frames.
-				q1 = obj.Appendp(q, c.newprog)
+				// small frame.
+				//
+				// Match riscv's prologue shape:
+				//   MOVD LR, -aoffset(SP)
+				//   ADD  $-aoffset, SP, SP
+				//
+				// Keep this sequence async non-preemptible so traceback will
+				// not observe a half-updated frame.
+				q1 = c.ctxt.StartUnsafePoint(q, c.newprog)
+
+				// MOVD LR, -aoffset(SP)
+				q1 = obj.Appendp(q1, c.newprog)
 				q1.As = AMOVD
 				q1.Pos = p.Pos
 				q1.From.Type = obj.TYPE_REG
 				q1.From.Reg = REGLINK
 				q1.To.Type = obj.TYPE_MEM
-				q1.Scond = C_XPRE
 				q1.To.Offset = int64(-aoffset)
 				q1.To.Reg = REGSP
-				q1.Spadj = aoffset
 
+				// SUB $aoffset, SP, SP
+				q1 = obj.Appendp(q1, c.newprog)
+				q1.As = ASUB
+				q1.Pos = p.Pos
+				q1.From.Type = obj.TYPE_CONST
+				q1.From.Offset = int64(aoffset)
+				q1.Reg = REGSP
+				q1.To.Type = obj.TYPE_REG
+				q1.To.Reg = REGSP
+				q1.Spadj = aoffset
 				prologueEnd = q1
+
+				q1 = c.ctxt.EndUnsafePoint(q1, c.newprog, -1)
+
+				// On Linux, in a cgo binary we may get a SIGSETXID signal early on
+				// before the signal stack is set, as glibc doesn't allow us to block
+				// SIGSETXID. So a signal may land on the current stack and clobber
+				// content below SP. Store LR again after SP is decremented.
+				q1 = obj.Appendp(q1, c.newprog)
+				q1.As = AMOVD
+				q1.Pos = p.Pos
+				q1.From.Type = obj.TYPE_REG
+				q1.From.Reg = REGLINK
+				q1.To.Type = obj.TYPE_MEM
+				q1.To.Offset = 0
+				q1.To.Reg = REGSP
 
 				// Frame pointer.
 				q1 = obj.Appendp(q1, c.newprog)
@@ -873,11 +898,11 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 					p.Spadj = -c.autosize
 				}
 			} else if aoffset <= 0xF0 {
-				// small frame, restore LR and update SP in a single MOVD.P instruction.
-				// There is no correctness issue to use a single LDP for LR and FP,
-				// but the instructions are not pattern matched with the prologue's
-				// MOVD.W and MOVD, which may cause performance issue in
-				// store-forwarding.
+				// small frame.
+				//
+				// Match riscv's epilogue shape:
+				//   MOVD 0(SP), LR
+				//   ADD  $aoffset, SP, SP
 
 				// MOVD -8(RSP), R29
 				p.As = AMOVD
@@ -888,14 +913,22 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				p.To.Reg = REGFP
 				p = obj.Appendp(p, c.newprog)
 
-				// MOVD.P offset(RSP), R30
+				// MOVD 0(RSP), R30
 				p.As = AMOVD
 				p.From.Type = obj.TYPE_MEM
-				p.Scond = C_XPOST
-				p.From.Offset = int64(aoffset)
+				p.From.Offset = 0
 				p.From.Reg = REGSP
 				p.To.Type = obj.TYPE_REG
 				p.To.Reg = REGLINK
+				p = obj.Appendp(p, c.newprog)
+
+				// ADD $aoffset, RSP, RSP
+				p.As = AADD
+				p.From.Type = obj.TYPE_CONST
+				p.From.Offset = int64(aoffset)
+				p.Reg = REGSP
+				p.To.Type = obj.TYPE_REG
+				p.To.Reg = REGSP
 				p.Spadj = -aoffset
 			} else {
 				// LDP -8(RSP), (R29, R30)
