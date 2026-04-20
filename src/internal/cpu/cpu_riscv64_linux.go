@@ -54,7 +54,7 @@ const (
 	riscv_HWPROBE_KEY_CPUPERF_0   = 0x5
 	riscv_HWPROBE_MISALIGNED_FAST = 0x3
 	riscv_HWPROBE_MISALIGNED_MASK = 0x7
-	riscv_HWPROBE_EXT_ZBC         = 0x80 //CHECK一下
+	riscv_HWPROBE_EXT_ZBC         = 0x80
 )
 
 // riscvHWProbePairs is copied from golang.org/x/sys/unix/ztypes_linux_riscv64.go.

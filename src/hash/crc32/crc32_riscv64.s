@@ -11,17 +11,10 @@
 //   2. Fold each subsequent 16-byte block using carry-less multiplication
 //   3. Final fold: reduce 128-bit accumulator to 64 bits
 //   4. Barrett reduction: reduce 64 bits to 32-bit CRC
-//
-// References:
-//   - ISA-L: https://github.com/intel/isa-l (crc/riscv64/)
-//   - Intel paper: "Fast CRC Computation for Generic Polynomials Using PCLMULQDQ"
-//   - JDK: PR 22475 (8339910: RISC-V: crc32 intrinsic with carry-less multiplication)
 
 #include "textflag.h"
 
-// ============================================================================
 // IEEE CRC32 constants (reflected polynomial 0xEDB88320)
-// ============================================================================
 
 // Fold-by-128-bit (16-byte) constants for IEEE CRC32 reflected.
 // K1 and K2 are used to fold a 128-bit accumulator with new 16-byte data.
@@ -40,10 +33,7 @@ DATA ieee_reduce<>+16(SB)/8, $0x1f7011641   // const_quo (μ)
 DATA ieee_reduce<>+24(SB)/8, $0x1db710641   // const_poly (P)
 GLOBL ieee_reduce<>(SB), RODATA, $32
 
-// ============================================================================
 // Castagnoli CRC32-C constants (reflected polynomial 0x82F63B78)
-// ============================================================================
-
 // Fold-by-128-bit (16-byte) constants for Castagnoli CRC32-C reflected.
 DATA cast_fold<>+0(SB)/8, $0x493c7d27   // K2 (fold high)
 DATA cast_fold<>+8(SB)/8, $0xf20c0dfe   // K1 (fold low)
@@ -60,13 +50,10 @@ GLOBL cast_reduce<>(SB), RODATA, $32
 DATA mask32<>+0(SB)/8, $0xffffffff
 GLOBL mask32<>(SB), RODATA, $8
 
-// ============================================================================
-// func ieeeUpdateCLMUL(crc uint32, p []byte) uint32
-//
+
 // Computes CRC32-IEEE using carry-less multiplication (Zbc extension).
 // Expects non-inverted CRC input. Returns non-inverted CRC.
 // Requires len(p) >= 64 and len(p) is a multiple of 16.
-// ============================================================================
 TEXT ·ieeeUpdateCLMUL(SB), NOSPLIT, $0-36
 	MOVWU	crc+0(FP), X5		// CRC value (inverted by caller)
 	MOV	p+8(FP), X6		// data pointer
@@ -161,13 +148,10 @@ ieee_fold_done:
 	MOVW	X5, ret+32(FP)
 	RET
 
-// ============================================================================
-// func castagnoliUpdateCLMUL(crc uint32, p []byte) uint32
-//
+
 // Computes CRC32-C (Castagnoli) using carry-less multiplication (Zbc extension).
 // Expects non-inverted CRC input. Returns non-inverted CRC.
 // Requires len(p) >= 64 and len(p) is a multiple of 16.
-// ============================================================================
 TEXT ·castagnoliUpdateCLMUL(SB), NOSPLIT, $0-36
 	MOVWU	crc+0(FP), X5		// CRC value (inverted by caller)
 	MOV	p+8(FP), X6		// data pointer

@@ -30,7 +30,7 @@ var archIeeeTable8 *slicing8Table
 
 func archInitIEEE() {
 	if !cpu.RISCV64.HasZbc {
-		panic("arch-specific crc32 instruction for IEEE not available")
+		panic("arch-specific zbc instruction for IEEE not available")
 	}
 	// We still use slicing-by-8 for small buffers.
 	archIeeeTable8 = slicingMakeTable(IEEE)
@@ -38,7 +38,7 @@ func archInitIEEE() {
 
 func archUpdateIEEE(crc uint32, p []byte) uint32 {
 	if !cpu.RISCV64.HasZbc {
-		panic("arch-specific crc32 instruction for IEEE not available")
+		panic("arch-specific zbc instruction for IEEE not available")
 	}
 
 	if len(p) >= 64 {
@@ -61,7 +61,7 @@ var archCastagnoliTable8 *slicing8Table
 
 func archInitCastagnoli() {
 	if !cpu.RISCV64.HasZbc {
-		panic("arch-specific crc32 instruction for Castagnoli not available")
+		panic("arch-specific zbc instruction for Castagnoli not available")
 	}
 	// We still use slicing-by-8 for small buffers.
 	archCastagnoliTable8 = slicingMakeTable(Castagnoli)
@@ -69,7 +69,7 @@ func archInitCastagnoli() {
 
 func archUpdateCastagnoli(crc uint32, p []byte) uint32 {
 	if !cpu.RISCV64.HasZbc {
-		panic("arch-specific crc32 instruction for Castagnoli not available")
+		panic("arch-specific zbc instruction for Castagnoli not available")
 	}
 
 	if len(p) >= 64 {
