@@ -32,6 +32,7 @@ import (
 	"math"
 	"math/bits"
 	"strings"
+	"sync"
 )
 
 func buildop(ctxt *obj.Link) {}
@@ -738,6 +739,8 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		stackOffset(&p.From, stacksize)
 		stackOffset(&p.To, stacksize)
 	}
+
+	optimizeMemAddrRegTmpReuse(cursym.Func().Text)
 
 	// Additional instruction rewriting.
 	for p := cursym.Func().Text; p != nil; p = p.Link {
@@ -4292,6 +4295,14 @@ func instructionsForLoad(p *obj.Prog, as obj.As, rs int16) []*instruction {
 		return []*instruction{ins}
 	}
 
+	// Check if we can reuse a previous address calculation (REG_TMP = base + (high<<12)); use REG_TMP+low.
+	if p.From.Name == obj.NAME_AUTO || p.From.Name == obj.NAME_PARAM || p.From.Name == obj.NAME_NONE {
+		if _, ok := memAddrRegTmpReuseMap.Load(p); ok {
+			ins.rs1, ins.imm = REG_TMP, low
+			return []*instruction{ins}
+		}
+	}
+
 	// LUI $high, TMP
 	// ADD TMP, REG, TMP
 	// <load> $low, TMP, TO
@@ -4330,6 +4341,14 @@ func instructionsForStore(p *obj.Prog, as obj.As, rd int16) []*instruction {
 	}
 	if high == 0 {
 		return []*instruction{ins}
+	}
+
+	// Check if we can reuse a previous address calculation (REG_TMP = base + (high<<12)); use REG_TMP+low.
+	if p.To.Name == obj.NAME_AUTO || p.To.Name == obj.NAME_PARAM || p.To.Name == obj.NAME_NONE {
+		if _, ok := memAddrRegTmpReuseMap.Load(p); ok {
+			ins.rd, ins.imm = REG_TMP, low
+			return []*instruction{ins}
+		}
 	}
 
 	// LUI $high, TMP
@@ -5607,11 +5626,171 @@ func assemble(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		}
 	}
 
+	// Remove this function's progs from memAddrRegTmpReuseMap now that codegen is done,
+	// so we do not retain *obj.Prog keys that may be freed (avoids "pointer to free object").
+	clearMemAddrRegTmpReuseMapForProgs(cursym.Func().Text)
+
 	obj.MarkUnsafePoints(ctxt, cursym.Func().Text, newprog, isUnsafePoint, nil)
 }
 
 func isUnsafePoint(p *obj.Prog) bool {
 	return p.Mark&USES_REG_TMP == USES_REG_TMP || p.From.Reg == REG_TMP || p.To.Reg == REG_TMP || p.Reg == REG_TMP
+}
+
+// memAddrRegTmpReuseMap marks Progs whose memory address can reuse REG_TMP from the
+// previous LUI+ADD (same base reg, same high, no jump target, prev doesn't clobber base).
+// Applies to any base register (e.g. SP, SB).
+var memAddrRegTmpReuseMap sync.Map
+
+// clearMemAddrRegTmpReuseMapForProgs removes all entries for the given prog list from memAddrRegTmpReuseMap.
+// Call this after codegen for a function is done so we do not retain *obj.Prog keys.
+func clearMemAddrRegTmpReuseMapForProgs(text *obj.Prog) {
+	for p := text; p != nil; p = p.Link {
+		memAddrRegTmpReuseMap.Delete(p)
+	}
+}
+
+// optimizeMemAddrRegTmpReuse marks consecutive LUI+ADD+load/store groups that share the
+// same base register so only the first in each run emits LUI+ADD; the rest reuse REG_TMP.
+func optimizeMemAddrRegTmpReuse(text *obj.Prog) {
+	var progs []*obj.Prog
+	for p := text; p != nil; p = p.Link {
+		progs = append(progs, p)
+	}
+	for _, p := range progs {
+		memAddrRegTmpReuseMap.Delete(p)
+	}
+
+	// Collect all branch/call targets in this function. We must not optimize a prog
+	// that can be reached by a jump, because then the "previous" prog's LUI+ADD
+	// may not have been executed and REG_TMP would be wrong.
+	targets := make(map[*obj.Prog]bool)
+	for _, q := range progs {
+		if q.To.Type == obj.TYPE_BRANCH && q.To.Target() != nil {
+			targets[q.To.Target()] = true
+		}
+		// JAL with target is an intra-function call (or jump); target can be reached without going through prev.
+		if (q.As == AJAL || q.As == ACJALR) && q.To.Target() != nil {
+			targets[q.To.Target()] = true
+		}
+	}
+
+	for i, p := range progs {
+		var baseReg int16 = -1
+		var offset int64
+		var isMemAccess bool
+
+		// Only optimize actual load/store (TYPE_MEM). TYPE_ADDR (LEA) uses instructionsForOpImmediate
+		// and does not use memAddrRegTmpReuseMap, so skip it.
+		if p.From.Type == obj.TYPE_MEM && (p.From.Name == obj.NAME_AUTO || p.From.Name == obj.NAME_PARAM || p.From.Name == obj.NAME_NONE) {
+			baseReg = p.From.Reg
+			offset = p.From.Offset
+			isMemAccess = true
+		} else if p.To.Type == obj.TYPE_MEM && (p.To.Name == obj.NAME_AUTO || p.To.Name == obj.NAME_PARAM || p.To.Name == obj.NAME_NONE) {
+			baseReg = p.To.Reg
+			offset = p.To.Offset
+			isMemAccess = true
+		}
+
+		if !isMemAccess {
+			continue
+		}
+
+		_, high, err := Split32BitImmediate(offset)
+		if err != nil {
+			continue
+		}
+		if high == 0 {
+			continue
+		}
+
+		// Only consider the immediately preceding Prog—no other instruction in between
+		if i == 0 {
+			continue
+		}
+		prev := progs[i-1]
+
+		// prev must be a load/store (TYPE_MEM) that actually emits LUI+ADD into REG_TMP.
+		// TYPE_ADDR (LEA) uses instructionsForOpImmediate and writes the result to p.To.Reg,
+		// not REG_TMP, so reusing REG_TMP after a LEA would use the wrong value and corrupt memory.
+		var prevOffset int64
+		var prevBaseReg int16 = -1
+		var prevIsMemAccess bool
+
+		if prev.From.Type == obj.TYPE_MEM && (prev.From.Name == obj.NAME_AUTO || prev.From.Name == obj.NAME_PARAM || prev.From.Name == obj.NAME_NONE) {
+			prevOffset, prevBaseReg = prev.From.Offset, prev.From.Reg
+			prevIsMemAccess = true
+		} else if prev.To.Type == obj.TYPE_MEM && (prev.To.Name == obj.NAME_AUTO || prev.To.Name == obj.NAME_PARAM || prev.To.Name == obj.NAME_NONE) {
+			prevOffset, prevBaseReg = prev.To.Offset, prev.To.Reg
+			prevIsMemAccess = true
+		}
+
+		// Do not use prev.From.Type == obj.TYPE_ADDR: LEA does not leave REG_TMP with the base address.
+		if !prevIsMemAccess || prevBaseReg != baseReg {
+			continue
+		}
+
+		// Prev must not write the base register, or REG_TMP (holding base+high) would be used with a stale base.
+		if prev.To.Type == obj.TYPE_REG && prev.To.Reg == baseReg {
+			continue
+		}
+
+		// If prev is a Load whose destination is REG_TMP, REG_TMP is overwritten with the loaded
+		// value, not the address, so the next instruction cannot reuse REG_TMP.
+		if prev.From.Type == obj.TYPE_MEM && prev.To.Type == obj.TYPE_REG && prev.To.Reg == REG_TMP {
+			continue
+		}
+
+		_, prevHigh, err := Split32BitImmediate(prevOffset)
+		if err != nil || prevHigh == 0 {
+			continue
+		}
+
+		diff := offset - prevOffset
+		absDiff := diff
+		if absDiff < 0 {
+			absDiff = -absDiff
+		}
+		if absDiff >= 2048 || high != prevHigh {
+			continue
+		}
+
+		// Do not optimize if any branch/jump targets this prog or any between prev and p.
+		// Then control flow could reach p without executing prev, so REG_TMP would be wrong.
+		skip := targets[p]
+		if !skip {
+			for q := prev.Link; q != nil && q != p; q = q.Link {
+				if targets[q] {
+					skip = true
+					break
+				}
+			}
+		}
+		if skip {
+			continue
+		}
+
+		// For stores only: avoid long runs of store instructions.
+		if p.To.Type == obj.TYPE_MEM {
+			runLen := 0
+			for j := i - 1; j >= 0; j-- {
+				q := progs[j]
+				if q.To.Type != obj.TYPE_MEM {
+					break
+				}
+				if _, ok := memAddrRegTmpReuseMap.Load(q); !ok {
+					break
+				}
+				runLen++
+			}
+			if runLen >= 3 {
+				continue
+			}
+		}
+
+		// Value is unused; presence of key means this prog can reuse REG_TMP.
+		memAddrRegTmpReuseMap.Store(p, struct{}{})
+	}
 }
 
 func ParseSuffix(prog *obj.Prog, cond string) (err error) {
