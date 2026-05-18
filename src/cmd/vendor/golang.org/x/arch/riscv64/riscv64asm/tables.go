@@ -2578,13 +2578,13 @@ var instFormats = [...]instFormat{
 	// BSETI rd, rs1, shamt6
 	{mask: 0xfc00707f, value: 0x28001013, op: BSETI, args: argTypeList{arg_rd, arg_rs1, arg_shamt6}},
 	// CBO.CLEAN rs1
-	{mask: 0xfff07fff, value: 0x0010200f, op: CBO_CLEAN, args: argTypeList{arg_rs1}},
+	{mask: 0xfff07fff, value: 0x0010200f, op: CBO_CLEAN, args: argTypeList{arg_rs1_ptr}},
 	// CBO.FLUSH rs1
-	{mask: 0xfff07fff, value: 0x0020200f, op: CBO_FLUSH, args: argTypeList{arg_rs1}},
+	{mask: 0xfff07fff, value: 0x0020200f, op: CBO_FLUSH, args: argTypeList{arg_rs1_ptr}},
 	// CBO.INVAL rs1
-	{mask: 0xfff07fff, value: 0x0000200f, op: CBO_INVAL, args: argTypeList{arg_rs1}},
+	{mask: 0xfff07fff, value: 0x0000200f, op: CBO_INVAL, args: argTypeList{arg_rs1_ptr}},
 	// CBO.ZERO rs1
-	{mask: 0xfff07fff, value: 0x0040200f, op: CBO_ZERO, args: argTypeList{arg_rs1}},
+	{mask: 0xfff07fff, value: 0x0040200f, op: CBO_ZERO, args: argTypeList{arg_rs1_ptr}},
 	// CLMUL rd, rs1, rs2
 	{mask: 0xfe00707f, value: 0x0a001033, op: CLMUL, args: argTypeList{arg_rd, arg_rs1, arg_rs2}},
 	// CLMULH rd, rs1, rs2

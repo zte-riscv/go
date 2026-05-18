@@ -302,12 +302,12 @@ start:
 	AMOCASH		X5, (X6), X7			// af13532e
 
 	// 19.6.1: Cache-Block Management Instructions (Zicbom)
-	CBOCLEAN	X5				// 0fa01200
-	CBOFLUSH	X5				// 0fa02200
-	CBOINVAL	X5				// 0fa00200
+	CBOCLEAN	(X5)					// 0fa01200
+	CBOFLUSH	(X5)					// 0fa02200
+	CBOINVAL	(X5)					// 0fa00200
 
 	// 19.6.2: Cache-Block Zero Instructions (Zicboz)
-	CBOZERO		X5				// 0fa04200
+	CBOZERO		(X5)					// 0fa04200
 
 	// 19.6.3: Cache-Block Prefetch Instructions
 	PREFETCHI 448(X5)					// 13e0021c
