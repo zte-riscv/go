@@ -1323,7 +1323,7 @@ func Index(s, sep []byte) int {
 		return -1
 	case n > len(s):
 		return -1
-	case n <= bytealg.MaxLen && bytealg.UseFastIndex():
+	case n <= bytealg.MaxLen:
 		// Use brute force when s and sep both are small
 		if len(s) <= bytealg.MaxBruteForce {
 			return bytealg.Index(s, sep)

@@ -8,9 +8,13 @@ package bytealg
 // performance when len(s) <= 16.
 const MaxBruteForce = 16
 
+func hasMisalignedFastBuild() bool
+
 func init() {
-	// Optimize cases where the length of the substring is less than 32 bytes.
-	MaxLen = 32
+	MaxLen = 0
+	if hasMisalignedFastBuild() {
+		MaxLen = 32
+	}
 }
 
 // Cutover reports the number of failures of IndexByte we should tolerate
