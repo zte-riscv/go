@@ -39,7 +39,7 @@ func Index(s, substr string) int {
 		return -1
 	case n > len(s):
 		return -1
-	case n <= bytealg.MaxLen && bytealg.UseFastIndex():
+	case n <= bytealg.MaxLen:
 		// Use brute force when s and substr both are small
 		if len(s) <= bytealg.MaxBruteForce {
 			return bytealg.IndexString(s, substr)
