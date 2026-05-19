@@ -12,6 +12,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Show available extensions
+        run: |
+            set -euxo pipefail
+            cat /proc/cpuinfo
+
       - name: Ensure C toolchain is available
         run: |
             set -euxo pipefail
@@ -27,11 +32,14 @@ jobs:
             set -euxo pipefail
             BOOT=/tmp/go-bootstrap
             rm -rf "$BOOT"
-            curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tar.gz
+            curl -fsSL https://go.dev/dl/go1.26.1.linux-riscv64.tar.gz -o /tmp/go.tar.gz
             tar -C /tmp -xzf /tmp/go.tar.gz
             mv /tmp/go "$BOOT"
             export GOROOT_BOOTSTRAP="$BOOT"
 
             # build toolchain
             cd "$GITHUB_WORKSPACE/src"
-            ./all.bash
+            ./make.bash
+            export GOROOT=/home/runner/_work/go/go
+            cd /home/runner/_work/go/go/src/reflect
+            go test reflect -test.run=TestMethodValueCallABI -test.v
