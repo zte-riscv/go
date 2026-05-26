@@ -159,6 +159,62 @@ func rewriteValueRISCV64latelower_OpRISCV64ANDI(v *Value) bool {
 		v.AddArg(x)
 		return true
 	}
+	// match: (ANDI (AND (SRL x y) (MOVDconst [mask])) [1])
+	// cond: (mask&1)==0
+	// result: (MOVDconst [0])
+	for {
+		if auxIntToInt64(v.AuxInt) != 1 || v_0.Op != OpRISCV64AND {
+			break
+		}
+		_ = v_0.Args[1]
+		v_0_0 := v_0.Args[0]
+		v_0_1 := v_0.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, v_0_0, v_0_1 = _i0+1, v_0_1, v_0_0 {
+			if v_0_0.Op != OpRISCV64SRL {
+				continue
+			}
+			if v_0_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			mask := auxIntToInt64(v_0_1.AuxInt)
+			if !((mask & 1) == 0) {
+				continue
+			}
+			v.reset(OpRISCV64MOVDconst)
+			v.AuxInt = int64ToAuxInt(0)
+			return true
+		}
+		break
+	}
+	// match: (ANDI (AND (SRL x y) (MOVDconst [mask])) [1])
+	// cond: (mask&1)==1
+	// result: (BEXT x y)
+	for {
+		if auxIntToInt64(v.AuxInt) != 1 || v_0.Op != OpRISCV64AND {
+			break
+		}
+		_ = v_0.Args[1]
+		v_0_0 := v_0.Args[0]
+		v_0_1 := v_0.Args[1]
+		for _i0 := 0; _i0 <= 1; _i0, v_0_0, v_0_1 = _i0+1, v_0_1, v_0_0 {
+			if v_0_0.Op != OpRISCV64SRL {
+				continue
+			}
+			y := v_0_0.Args[1]
+			x := v_0_0.Args[0]
+			if v_0_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			mask := auxIntToInt64(v_0_1.AuxInt)
+			if !((mask & 1) == 1) {
+				continue
+			}
+			v.reset(OpRISCV64BEXT)
+			v.AddArg2(x, y)
+			return true
+		}
+		break
+	}
 	// match: (ANDI (AND (SRL x y) mask) [1])
 	// cond: buildcfg.GORISCV64 >= 22
 	// result: (AND (BEXT <typ.UInt64> x y) mask)
@@ -759,96 +815,6 @@ func rewriteValueRISCV64latelower_OpRISCV64SEQZ(v *Value) bool {
 		}
 		break
 	}
-	// match: (SEQZ (ANDI (SRL x y) [1]))
-	// cond: buildcfg.GORISCV64 >= 22
-	// result: (SEQZ (BEXT <typ.UInt64> x y))
-	for {
-		if v_0.Op != OpRISCV64ANDI || auxIntToInt64(v_0.AuxInt) != 1 {
-			break
-		}
-		v_0_0 := v_0.Args[0]
-		if v_0_0.Op != OpRISCV64SRL {
-			break
-		}
-		y := v_0_0.Args[1]
-		x := v_0_0.Args[0]
-		if !(buildcfg.GORISCV64 >= 22) {
-			break
-		}
-		v.reset(OpRISCV64SEQZ)
-		v0 := b.NewValue0(v.Pos, OpRISCV64BEXT, typ.UInt64)
-		v0.AddArg2(x, y)
-		v.AddArg(v0)
-		return true
-	}
-	// match: (SEQZ (ANDI (SRLW x y) [1]))
-	// cond: buildcfg.GORISCV64 >= 22
-	// result: (SEQZ (BEXT <typ.UInt64> x y))
-	for {
-		if v_0.Op != OpRISCV64ANDI || auxIntToInt64(v_0.AuxInt) != 1 {
-			break
-		}
-		v_0_0 := v_0.Args[0]
-		if v_0_0.Op != OpRISCV64SRLW {
-			break
-		}
-		y := v_0_0.Args[1]
-		x := v_0_0.Args[0]
-		if !(buildcfg.GORISCV64 >= 22) {
-			break
-		}
-		v.reset(OpRISCV64SEQZ)
-		v0 := b.NewValue0(v.Pos, OpRISCV64BEXT, typ.UInt64)
-		v0.AddArg2(x, y)
-		v.AddArg(v0)
-		return true
-	}
-	// match: (SEQZ (ANDI (SRLI x [c]) [1]))
-	// cond: c < 64 && buildcfg.GORISCV64 >= 22
-	// result: (SEQZ (BEXTI <typ.UInt64> [c] x))
-	for {
-		if v_0.Op != OpRISCV64ANDI || auxIntToInt64(v_0.AuxInt) != 1 {
-			break
-		}
-		v_0_0 := v_0.Args[0]
-		if v_0_0.Op != OpRISCV64SRLI {
-			break
-		}
-		c := auxIntToInt64(v_0_0.AuxInt)
-		x := v_0_0.Args[0]
-		if !(c < 64 && buildcfg.GORISCV64 >= 22) {
-			break
-		}
-		v.reset(OpRISCV64SEQZ)
-		v0 := b.NewValue0(v.Pos, OpRISCV64BEXTI, typ.UInt64)
-		v0.AuxInt = int64ToAuxInt(c)
-		v0.AddArg(x)
-		v.AddArg(v0)
-		return true
-	}
-	// match: (SEQZ (ANDI (SRLIW x [c]) [1]))
-	// cond: c < 32 && buildcfg.GORISCV64 >= 22
-	// result: (SEQZ (BEXTI <typ.UInt64> [c] x))
-	for {
-		if v_0.Op != OpRISCV64ANDI || auxIntToInt64(v_0.AuxInt) != 1 {
-			break
-		}
-		v_0_0 := v_0.Args[0]
-		if v_0_0.Op != OpRISCV64SRLIW {
-			break
-		}
-		c := auxIntToInt64(v_0_0.AuxInt)
-		x := v_0_0.Args[0]
-		if !(c < 32 && buildcfg.GORISCV64 >= 22) {
-			break
-		}
-		v.reset(OpRISCV64SEQZ)
-		v0 := b.NewValue0(v.Pos, OpRISCV64BEXTI, typ.UInt64)
-		v0.AuxInt = int64ToAuxInt(c)
-		v0.AddArg(x)
-		v.AddArg(v0)
-		return true
-	}
 	// match: (SEQZ (ANDI (SLLI x [c]) [1]))
 	// cond: c > 0 && c < 64 && buildcfg.GORISCV64 >= 22
 	// result: (SEQZ (BEXTI <typ.UInt64> [64-c] x))
@@ -1185,7 +1151,7 @@ func rewriteValueRISCV64latelower_OpRISCV64SNEZ(v *Value) bool {
 		break
 	}
 	// match: (SNEZ (MOVWUreg (AND x (SLLI [c] (MOVDconst [1])))))
-	// cond: c < 64 && buildcfg.GORISCV64 >= 22
+	// cond: c < 32 && buildcfg.GORISCV64 >= 22
 	// result: (BEXTI [c] x)
 	for {
 		if v_0.Op != OpRISCV64MOVWUreg {
@@ -1205,7 +1171,7 @@ func rewriteValueRISCV64latelower_OpRISCV64SNEZ(v *Value) bool {
 			}
 			c := auxIntToInt64(v_0_0_1.AuxInt)
 			v_0_0_1_0 := v_0_0_1.Args[0]
-			if v_0_0_1_0.Op != OpRISCV64MOVDconst || auxIntToInt64(v_0_0_1_0.AuxInt) != 1 || !(c < 64 && buildcfg.GORISCV64 >= 22) {
+			if v_0_0_1_0.Op != OpRISCV64MOVDconst || auxIntToInt64(v_0_0_1_0.AuxInt) != 1 || !(c < 32 && buildcfg.GORISCV64 >= 22) {
 				continue
 			}
 			v.reset(OpRISCV64BEXTI)
@@ -1307,7 +1273,7 @@ func rewriteValueRISCV64latelower_OpRISCV64SNEZ(v *Value) bool {
 		break
 	}
 	// match: (SNEZ (MOVWreg (AND x (SLLI [c] (MOVDconst [1])))))
-	// cond: c < 64 && buildcfg.GORISCV64 >= 22
+	// cond: c < 32 && buildcfg.GORISCV64 >= 22
 	// result: (BEXTI [c] x)
 	for {
 		if v_0.Op != OpRISCV64MOVWreg {
@@ -1327,7 +1293,7 @@ func rewriteValueRISCV64latelower_OpRISCV64SNEZ(v *Value) bool {
 			}
 			c := auxIntToInt64(v_0_0_1.AuxInt)
 			v_0_0_1_0 := v_0_0_1.Args[0]
-			if v_0_0_1_0.Op != OpRISCV64MOVDconst || auxIntToInt64(v_0_0_1_0.AuxInt) != 1 || !(c < 64 && buildcfg.GORISCV64 >= 22) {
+			if v_0_0_1_0.Op != OpRISCV64MOVDconst || auxIntToInt64(v_0_0_1_0.AuxInt) != 1 || !(c < 32 && buildcfg.GORISCV64 >= 22) {
 				continue
 			}
 			v.reset(OpRISCV64BEXTI)
@@ -1367,88 +1333,6 @@ func rewriteValueRISCV64latelower_OpRISCV64SNEZ(v *Value) bool {
 			return true
 		}
 		break
-	}
-	// match: (SNEZ (ANDI (SRL x y) [1]))
-	// cond: buildcfg.GORISCV64 >= 22
-	// result: (BEXT x y)
-	for {
-		if v_0.Op != OpRISCV64ANDI || auxIntToInt64(v_0.AuxInt) != 1 {
-			break
-		}
-		v_0_0 := v_0.Args[0]
-		if v_0_0.Op != OpRISCV64SRL {
-			break
-		}
-		y := v_0_0.Args[1]
-		x := v_0_0.Args[0]
-		if !(buildcfg.GORISCV64 >= 22) {
-			break
-		}
-		v.reset(OpRISCV64BEXT)
-		v.AddArg2(x, y)
-		return true
-	}
-	// match: (SNEZ (ANDI (SRLW x y) [1]))
-	// cond: buildcfg.GORISCV64 >= 22
-	// result: (BEXT x y)
-	for {
-		if v_0.Op != OpRISCV64ANDI || auxIntToInt64(v_0.AuxInt) != 1 {
-			break
-		}
-		v_0_0 := v_0.Args[0]
-		if v_0_0.Op != OpRISCV64SRLW {
-			break
-		}
-		y := v_0_0.Args[1]
-		x := v_0_0.Args[0]
-		if !(buildcfg.GORISCV64 >= 22) {
-			break
-		}
-		v.reset(OpRISCV64BEXT)
-		v.AddArg2(x, y)
-		return true
-	}
-	// match: (SNEZ (ANDI (SRLI x [c]) [1]))
-	// cond: c < 64 && buildcfg.GORISCV64 >= 22
-	// result: (BEXTI [c] x)
-	for {
-		if v_0.Op != OpRISCV64ANDI || auxIntToInt64(v_0.AuxInt) != 1 {
-			break
-		}
-		v_0_0 := v_0.Args[0]
-		if v_0_0.Op != OpRISCV64SRLI {
-			break
-		}
-		c := auxIntToInt64(v_0_0.AuxInt)
-		x := v_0_0.Args[0]
-		if !(c < 64 && buildcfg.GORISCV64 >= 22) {
-			break
-		}
-		v.reset(OpRISCV64BEXTI)
-		v.AuxInt = int64ToAuxInt(c)
-		v.AddArg(x)
-		return true
-	}
-	// match: (SNEZ (ANDI (SRLIW x [c]) [1]))
-	// cond: c < 32 && buildcfg.GORISCV64 >= 22
-	// result: (BEXTI [c] x)
-	for {
-		if v_0.Op != OpRISCV64ANDI || auxIntToInt64(v_0.AuxInt) != 1 {
-			break
-		}
-		v_0_0 := v_0.Args[0]
-		if v_0_0.Op != OpRISCV64SRLIW {
-			break
-		}
-		c := auxIntToInt64(v_0_0.AuxInt)
-		x := v_0_0.Args[0]
-		if !(c < 32 && buildcfg.GORISCV64 >= 22) {
-			break
-		}
-		v.reset(OpRISCV64BEXTI)
-		v.AuxInt = int64ToAuxInt(c)
-		v.AddArg(x)
-		return true
 	}
 	// match: (SNEZ (ANDI (SLLI x [c]) [1]))
 	// cond: c > 0 && c < 64 && buildcfg.GORISCV64 >= 22
