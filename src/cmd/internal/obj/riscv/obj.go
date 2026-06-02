@@ -4952,27 +4952,20 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 		}
 		ins.rs2 = obj.REG_NONE
 
-	case AFLIS:
+	case AFLIS, AFLID:
 		fimm := p.From.Val.(float64)
 		var index uint32
-		// NaN is special as it can't be used in comparison.
-		if math.IsNaN(fimm) {
-			index = 31
-		} else if idx, ok := fimmMappingS[fimm]; ok {
-			index = idx
+		var mapping map[float64]uint32
+		if ins.as == AFLIS {
+			mapping = fimmMappingS
 		} else {
-			p.Ctxt.Diag("%v: unknown floating point immediate", fimm)
-			return nil
+			mapping = fimmMappingD
 		}
-		ins.rs2 = REG_ZERO + index
 
-	case AFLID:
-		fimm := p.From.Val.(float64)
-		var index uint32
 		// NaN is special as it can't be used in comparison.
 		if math.IsNaN(fimm) {
 			index = 31
-		} else if idx, ok := fimmMappingD[fimm]; ok {
+		} else if idx, ok := mapping[fimm]; ok {
 			index = idx
 		} else {
 			p.Ctxt.Diag("%v: unknown floating point immediate", fimm)
