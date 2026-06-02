@@ -212,7 +212,7 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 					p.As = AFLIS
 					break
 				}
-				if _, ok := fimmMapping[float64(f32)]; ok {
+				if _, ok := fimmMappingS[float64(f32)]; ok {
 					p.As = AFLIS
 					break
 				}
@@ -236,7 +236,7 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 					p.As = AFLID
 					break
 				}
-				if _, ok := fimmMapping[f64]; ok {
+				if _, ok := fimmMappingD[f64]; ok {
 					p.As = AFLID
 					break
 				}
@@ -4704,9 +4704,43 @@ func instructionsForRotate(p *obj.Prog, ins *instruction) []*instruction {
 	}
 }
 
-var fimmMapping = map[float64]uint32{
+var fimmMappingS = map[float64]uint32{
 	-1.0:               0,
-	1.1754943508222875e-38: 1,
+	1.1754943508222875e-38: 1, // min positive normal float32
+	1.52587890625e-05:  2,
+	3.0517578125e-05:   3,
+	0.00390625:         4,
+	0.0078125:          5,
+	0.0625:             6,
+	0.125:              7,
+	0.25:               8,
+	0.3125:             9,
+	0.375:              10,
+	0.4375:             11,
+	0.5:                12,
+	0.625:              13,
+	0.75:               14,
+	0.875:              15,
+	1.0:                16,
+	1.25:               17,
+	1.5:                18,
+	1.75:               19,
+	2.0:                20,
+	2.5:                21,
+	3.0:                22,
+	4.0:                23,
+	8.0:                24,
+	16.0:               25,
+	128.0:              26,
+	256.0:              27,
+	32768.0:            28,
+	65536.0:            29,
+	math.Inf(1):        30,
+}
+
+var fimmMappingD = map[float64]uint32{
+	-1.0:               0,
+	2.2250738585072014e-308: 1, // min positive normal float64
 	1.52587890625e-05:  2,
 	3.0517578125e-05:   3,
 	0.00390625:         4,
@@ -4918,13 +4952,13 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 		}
 		ins.rs2 = obj.REG_NONE
 
-	case AFLIS, AFLID:
+	case AFLIS:
 		fimm := p.From.Val.(float64)
 		var index uint32
 		// NaN is special as it can't be used in comparison.
 		if math.IsNaN(fimm) {
 			index = 31
-		} else if idx, ok := fimmMapping[fimm]; ok {
+		} else if idx, ok := fimmMappingS[fimm]; ok {
 			index = idx
 		} else {
 			p.Ctxt.Diag("%v: unknown floating point immediate", fimm)
@@ -4932,6 +4966,19 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 		}
 		ins.rs2 = REG_ZERO + index
 
+	case AFLID:
+		fimm := p.From.Val.(float64)
+		var index uint32
+		// NaN is special as it can't be used in comparison.
+		if math.IsNaN(fimm) {
+			index = 31
+		} else if idx, ok := fimmMappingD[fimm]; ok {
+			index = idx
+		} else {
+			p.Ctxt.Diag("%v: unknown floating point immediate", fimm)
+			return nil
+		}
+		ins.rs2 = REG_ZERO + index
 	case AFENCE:
 		ins.rd, ins.rs1, ins.rs2 = REG_ZERO, REG_ZERO, obj.REG_NONE
 		ins.imm = 0x0ff
