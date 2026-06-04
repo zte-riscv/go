@@ -550,18 +550,18 @@
 (B(EQ|NE)Z (AND x (SLLI [c] (MOVDconst [1]))) yes no) && c < 64 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
 (B(EQ|NE)Z (AND x (SLLIW [c] (MOVDconst [1]))) yes no) && c < 31 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
 
-// Pattern: 32-bit bit test with variable shift wrapped in MOVWUreg/MOVWreg
-// Matches: if uint32(x)&(1<<y) != 0 or int32(x)&(1<<y) != 0
-(B(EQ|NE)Z (MOVWUreg (AND x (SLL (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
-(B(EQ|NE)Z (MOVWreg (AND x (SLL (MOVDconst [1]) y))) yes no) && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
-
-// Pattern: 32-bit bit test with constant left shift wrapped in MOVWUreg/MOVWreg
-// Note: For SLLI (64-bit shift) wrapped in MOVWUreg/MOVWreg, only bits 0-31 are meaningful
-// because the 32-bit wrapper discards higher bits.
+// Pattern: 32-bit bit test with shift wrapped in MOVWUreg/MOVWreg
+// NOTE: Variable-shift without bounds guard is intentionally omitted because
+// MOVWUreg/MOVWreg truncates high bits when y >= 32, but BEXT reads the full 64-bit value.
+// For example: int32(x & (1 << 33)) always gives 0 (high bits truncated),
+// but BEXT x 33 returns bit 33 of x, producing incorrect results.
 (B(EQ|NE)Z (MOVWUreg (AND x (SLLI [c] (MOVDconst [1])))) yes no) && c < 32 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
 (B(EQ|NE)Z (MOVWUreg (AND x (SLLIW [c] (MOVDconst [1])))) yes no) && c < 31 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
 (B(EQ|NE)Z (MOVWreg (AND x (SLLI [c] (MOVDconst [1])))) yes no) && c < 32 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
 (B(EQ|NE)Z (MOVWreg (AND x (SLLIW [c] (MOVDconst [1])))) yes no) && c < 31 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
+// ANDI [c]-guarded variable shift: c <= 31 guarantees y & c < 32, so BEXT is safe.
+(B(EQ|NE)Z (MOVWUreg (AND x (SLL (MOVDconst [1]) (ANDI [c] y)))) yes no) && c >= 0 && c <= 31 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXT <typ.UInt64> x (ANDI <typ.UInt64> [c] y)) yes no)
+(B(EQ|NE)Z (MOVWreg (AND x (SLL (MOVDconst [1]) (ANDI [c] y)))) yes no) && c >= 0 && c <= 31 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXT <typ.UInt64> x (ANDI <typ.UInt64> [c] y)) yes no)
 
 // Pattern: Shift-right and test bit 0
 // Matches: if (x>>c)&1 != 0 with constant shift

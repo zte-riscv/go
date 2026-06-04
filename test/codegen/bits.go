@@ -569,6 +569,52 @@ func bitBEXTBool32Var(a, b uint32) bool {
 	return a&(1<<(b&31)) != 0
 }
 
+func bitBEXTBool32Var2(a, b uint32) bool {
+	//  riscv64/rva22u64,riscv64/rva23u64:-"BEXT"
+	return a&(1<<b) != 0
+}
+
+func bitBEXTBool32Var4(a, b uint64) bool {
+	//  riscv64/rva22u64,riscv64/rva23u64:-"BEXT"
+	return uint32(a&(1<<(b&63))) != 0
+}
+
+func bitBEXTBool64Var4(x int, y uint) bool {
+	if y < 64 {
+		//  riscv64/rva22u64,riscv64/rva23u64:-"BEXT"
+		return int32(x&(1<<y)) != 0
+	}
+	return false
+}
+
+func bitcheck32FromUint64(x uint64, y uint32) int {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXT"
+	if uint32(x)&(1<<(y&31)) != 0 {
+		return 1
+	}
+	return 0
+}
+
+// Unsafe version WITHOUT inner MOVWUreg protection:
+// uint64(x) & (1 << y) where x is uint64 with high bits set.
+// This should use AND + SLL directly (no MOVWUreg), NOT BEXT,
+// because BEXT reads from the original 64-bit x.
+// We expect the compiler to generate AND + SLL (no BEXT).
+func bitcheck64Direct(x uint64, y uint32) int {
+	//  riscv64/rva22u64,riscv64/rva23u64: -"BEXT"
+	if x&(1<<y) != 0 {
+		return 1
+	}
+	return 0
+}
+
+func bitcheck64Direct2(x uint64, y uint32) int {
+	//  riscv64/rva22u64,riscv64/rva23u64: -"BEXT"
+	if int32(x&(1<<y)) != 0 {
+		return 1
+	}
+	return 0
+}
 func issue48467(x, y uint64) uint64 {
 	// arm64: -"NEG"
 	d, borrow := bits.Sub64(x, y, 0)
