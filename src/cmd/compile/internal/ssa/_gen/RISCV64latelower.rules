@@ -86,13 +86,13 @@
 (SNEZ (AND x (MOVDconst [c]))) && isUint64PowerOfTwo(c) && log64(c) >= 10 && buildcfg.GORISCV64 >= 22 => (BEXTI [log64(c)] x)
 
 // Pattern: 32-bit wrapped patterns for BEXT
-// Note: No boundary check on y - hardware handles it correctly
-(SNEZ (MOVWUreg (AND x (SLL (MOVDconst [1]) y)))) && buildcfg.GORISCV64 >= 22 => (BEXT x y)
 (SNEZ (MOVWUreg (AND x (SLLI [c] (MOVDconst [1]))))) && c < 32 && buildcfg.GORISCV64 >= 22 => (BEXTI [c] x)
 (SNEZ (MOVWUreg (AND x (SLLIW [c] (MOVDconst [1]))))) && c < 31 && buildcfg.GORISCV64 >= 22 => (BEXTI [c] x)
-(SNEZ (MOVWreg (AND x (SLL (MOVDconst [1]) y)))) && buildcfg.GORISCV64 >= 22 => (BEXT x y)
 (SNEZ (MOVWreg (AND x (SLLI [c] (MOVDconst [1]))))) && c < 32 && buildcfg.GORISCV64 >= 22 => (BEXTI [c] x)
 (SNEZ (MOVWreg (AND x (SLLIW [c] (MOVDconst [1]))))) && c < 31 && buildcfg.GORISCV64 >= 22 => (BEXTI [c] x)
+// ANDI [c]-guarded variable shift: c <= 31 guarantees y & c < 32, so BEXT is safe.
+(SNEZ (MOVWUreg (AND x (SLL (MOVDconst [1]) (ANDI [c] y))))) && c >= 0 && c <= 31 && buildcfg.GORISCV64 >= 22 => (BEXT x (ANDI <typ.UInt64> [c] y))
+(SNEZ (MOVWreg (AND x (SLL (MOVDconst [1]) (ANDI [c] y))))) && c >= 0 && c <= 31 && buildcfg.GORISCV64 >= 22 => (BEXT x (ANDI <typ.UInt64> [c] y))
 
 // Pattern: SEQZ for testing if bit is clear
 // Only convert to BEXTI if bit position >= 10, as ANDI with direct immediate is more efficient
