@@ -34,4 +34,5 @@ jobs:
 
             # build toolchain
             cd "$GITHUB_WORKSPACE/src"
+            export GORISCV64=rva23u64
             ./all.bash
