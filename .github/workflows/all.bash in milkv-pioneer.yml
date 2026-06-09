@@ -21,6 +21,20 @@ jobs:
             fi
             gcc --version
 
+      - name: Check CPU ISA extensions
+        run: |
+            set -euxo pipefail
+            echo "=== /proc/cpuinfo (isa) ==="
+            grep -E 'isa|hart|model name|cpu' /proc/cpuinfo || true
+            echo "=== lscpu ==="
+            lscpu || true
+            echo "=== ISA extensions ==="
+            ISA=$(grep -m1 '^isa' /proc/cpuinfo | awk '{print $2}')
+            echo "Full ISA string: $ISA"
+            echo "Has Vector (V): $(echo "$ISA" | grep -q '_v' && echo YES || echo NO)"
+            echo "Has Zicbom:    $(echo "$ISA" | grep -q '_zicbom' && echo YES || echo NO)"
+            echo "Has Zicboz:    $(echo "$ISA" | grep -q '_zicboz' && echo YES || echo NO)"
+
       - name: Build toolchain (host riscv64)
         run: |
             # install bootstrap Go
@@ -34,5 +48,5 @@ jobs:
 
             # build toolchain
             cd "$GITHUB_WORKSPACE/src"
-            export GORISCV64=rva23u64
+            export GORISCV64=rva22u64
             ./all.bash
