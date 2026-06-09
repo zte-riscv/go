@@ -985,3 +985,6 @@
 
 (PrefetchCache ...)   => (PREFETCH ...)
 (PrefetchCacheStreamed ...) => (PREFETCHNT ...)
+
+(FMOVWstore [off] {sym} ptr (FMVSX (MOVDconst [0])) mem) => (MOVWstorezero [off] {sym} ptr mem)
+(FMOVDstore [off] {sym} ptr (FMVDX (MOVDconst [0])) mem) => (MOVDstorezero [off] {sym} ptr mem)
