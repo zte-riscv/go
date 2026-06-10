@@ -1,11 +1,11 @@
-name: all.bash in milkv-pioneer
+name: all.bash in banana-pi-f3
 on:
   pull_request:
   workflow_dispatch:
 
 jobs:
-  build-toolchain-in-milkv-pioneer:
-    runs-on: milkv-pioneer
+  build-toolchain-in-banana-pi-f3:
+    runs-on: banana-pi-f3
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -48,5 +48,5 @@ jobs:
 
             # build toolchain
             cd "$GITHUB_WORKSPACE/src"
-            export GORISCV64=rva22u64
+            export GORISCV64=rva23u64
             ./all.bash
