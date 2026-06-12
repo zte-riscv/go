@@ -13,15 +13,18 @@ TEXT runtime·memclrNoHeapPointers<ABIInternal>(SB),NOSPLIT,$0-16
 	// X10 = ptr
 	// X11 = n
 
+#ifndef EnableSmallSizeMemVector
 	// If less than 8 bytes, do single byte zeroing.
 	MOV	$8, X9
 	BLT	X11, X9, check4
+#endif
 
 #ifndef hasV
 	MOVB	internal∕cpu·RISCV64+const_offsetRISCV64HasV(SB), X5
 	BEQZ	X5, memclr_scalar
 #endif
 
+#ifndef EnableSmallSizeMemVector
 	// Use vector if not 8 byte aligned.
 	AND	$7, X10, X5
 	BNEZ	X5, vector_start
@@ -29,11 +32,53 @@ TEXT runtime·memclrNoHeapPointers<ABIInternal>(SB),NOSPLIT,$0-16
 	// Use scalar if 8 byte aligned and <= 64 bytes.
 	SUB	$64, X11, X6
 	BLEZ	X6, aligned
+#endif
 
 	PCALIGN	$16
 vector_start:
 	VSETVLI	X0, E8, M8, TA, MA, X5
 	VMVVI	  $0, V8
+
+#ifdef EnableSmallSizeMemVector
+	PCALIGN	$16
+vector_dispatch:
+	MOV		$16, X6
+#ifdef VLen_256
+	SLLI	$1, X6
+#endif
+#ifdef VLen_512
+	SLLI	$2, X6
+#endif
+	BGEU	X6, X11, vector_single
+	SLLI	$2, X6
+	BGTU	X11, X6, vector_loop
+	SRLI	$1, X6
+	BGTU	X11, X6, vector_quarter
+
+// Zero (vlen+1)..(2*vlen) bytes
+	PCALIGN	$16
+vector_double:
+	VSETVLI	X11, E8, M2, TA, MA, X5
+	VSE8V	   V8, (X10)
+	RET
+
+// Zero 1..(vlen) bytes
+	PCALIGN	$16
+vector_single:
+	VSETVLI	X11, E8, M1, TA, MA, X5
+	VSE8V	   V8, (X10)
+	RET
+
+// Zero (2*vlen+1)..(4*vlen) bytes
+	PCALIGN	$16
+vector_quarter:
+	VSETVLI	X11, E8, M4, TA, MA, X5
+	VSE8V	   V8, (X10)
+	RET
+#endif
+
+// Zero (4*vlen+1).. bytes
+	PCALIGN	$16
 vector_loop:
 	VSETVLI	X11, E8, M8, TA, MA, X5
 	VSE8V	   V8, (X10) 
@@ -42,6 +87,7 @@ vector_loop:
 	BNEZ	X11, vector_loop
 	RET
 
+#ifndef hasV
 memclr_scalar:
 	// Check alignment
 	AND	$7, X10, X5
@@ -55,7 +101,9 @@ align:
 	MOVB	ZERO, 0(X10)
 	ADD	$1, X10
 	BNEZ	X5, align
+#endif
 
+#ifndef EnableSmallSizeMemVector
 aligned:
 	// X9 already contains $8
 	BLT	X11, X9, check4
@@ -129,6 +177,7 @@ loop1:
 	ADD	$1, X10
 	SUB	$1, X11
 	JMP	loop1
+#endif
 
 done:
 	RET
