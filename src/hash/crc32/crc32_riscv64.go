@@ -1,25 +1,13 @@
-// Copyright 2025 The Go Authors. All rights reserved.
+// Copyright 2026 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-
-// RISC-V 64-bit CRC32 algorithms using carry-less multiplication (Zbc extension).
-// See crc32.go for a description of the interface that each architecture-specific
-// file implements.
 
 package crc32
 
 import "internal/cpu"
 
-// ieeeUpdateCLMUL is defined in crc32_riscv64.s and uses the Zbc
-// carry-less multiplication instructions for CRC32-IEEE.
-//
-//go:noescape
 func ieeeUpdateCLMUL(crc uint32, p []byte) uint32
 
-// castagnoliUpdateCLMUL is defined in crc32_riscv64.s and uses the Zbc
-// carry-less multiplication instructions for CRC32-C (Castagnoli).
-//
-//go:noescape
 func castagnoliUpdateCLMUL(crc uint32, p []byte) uint32
 
 func archAvailableIEEE() bool {
@@ -41,7 +29,7 @@ func archUpdateIEEE(crc uint32, p []byte) uint32 {
 		panic("arch-specific zbc instruction for IEEE not available")
 	}
 
-	if len(p) >= 64 {
+	if len(p) >= 16 {
 		left := len(p) & 15
 		do := len(p) - left
 		crc = ^ieeeUpdateCLMUL(^crc, p[:do])
@@ -72,7 +60,7 @@ func archUpdateCastagnoli(crc uint32, p []byte) uint32 {
 		panic("arch-specific zbc instruction for Castagnoli not available")
 	}
 
-	if len(p) >= 64 {
+	if len(p) >= 16 {
 		left := len(p) & 15
 		do := len(p) - left
 		crc = ^castagnoliUpdateCLMUL(^crc, p[:do])
