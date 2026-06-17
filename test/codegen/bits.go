@@ -507,6 +507,175 @@ func bitsIssue48467(x, y uint64) uint64 {
 	return x - d&(-borrow)
 }
 
+// RISCV64 Zbs threshold: bit 0-9 → ANDI/ORI/XORI (fits 12-bit signed immediate),
+// bit >=10 → BEXTI/BSETI/BINVI (immediate requires multiple instructions).
+
+func bitcheckThresholdBEXTI(a uint64) int {
+	//  riscv64/rva22u64,riscv64/rva23u64:"ANDI [$]512"
+	if a&(1<<9) != 0 {
+		return 1
+	}
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXTI [$]10"
+	if a&(1<<10) != 0 {
+		return 1
+	}
+	return 0
+}
+
+func bitonThreshold(a, b uint64) (uint64, uint64) {
+	//  riscv64/rva22u64,riscv64/rva23u64:"ORI [$]512"
+	a |= 1 << 9
+	//  riscv64/rva22u64,riscv64/rva23u64:"BSETI [$]10"
+	b |= 1 << 10
+	return a, b
+}
+
+func bitcomplThreshold(a, b uint64) (uint64, uint64) {
+	//  riscv64/rva22u64,riscv64/rva23u64:"XORI [$]512"
+	a ^= 1 << 9
+	//  riscv64/rva22u64,riscv64/rva23u64:"BINVI [$]10"
+	b ^= 1 << 10
+	return a, b
+}
+
+func bitoffThreshold(a, b uint64) (uint64, uint64) {
+	//  riscv64/rva22u64,riscv64/rva23u64:"ANDI"
+	a &= ^(uint64(1) << 9)
+	//  riscv64/rva22u64,riscv64/rva23u64:"BCLRI [$]11"
+	b &= ^(uint64(1) << 11)
+	return a, b
+}
+
+func bitcheckShiftMask(a uint64) int {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXTI [$]5"
+	if (a>>3)&4 != 0 {
+		return 1
+	}
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXTI [$]12"
+	if (a>>10)&4 != 0 {
+		return 1
+	}
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXTI [$]16"
+	if (a>>12)&16 != 0 {
+		return 1
+	}
+	return 0
+}
+
+func bitBEXTValue(a, b uint64) uint64 {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXT"
+	return (a >> b) & 1
+}
+
+func bitBEXTValue32(a, b uint32) uint32 {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXT"
+	return (a >> b) & 1
+}
+
+func bitcheck32Boundary(a uint32) int {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXTI [$]30"
+	if a&(1<<30) != 0 {
+		return 1
+	}
+	return 0
+}
+
+// (x<<c)&1 is always 0 when c>0 (left shift fills low bits with zero).
+func bitcheckLeftShiftAnd1(a uint64) int {
+	//  riscv64/rva22u64,riscv64/rva23u64:-"SLLI"
+	if (a<<3)&1 != 0 {
+		return 1
+	}
+	return 0
+}
+
+// ((x>>y)&const)&1 with odd constant mask → BEXT.
+func bitcheckMaskedShift(a, b uint64) int {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXT"
+	if ((a>>b)&3)&1 != 0 {
+		return 1
+	}
+	return 0
+}
+
+// Bool-returning tests exercise SNEZ/SEQZ value-context Zbs rules.
+func bitBEXTBoolConst(a uint64) bool {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXTI [$]10"
+	return a&(1<<10) != 0
+}
+
+func bitBEXTBoolConstZero(a uint64) bool {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXTI [$]10"
+	return a&(1<<10) == 0
+}
+
+func bitBEXTBoolVar(a, b uint64) bool {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXT"
+	return a&(1<<(b&63)) != 0
+}
+
+func bitBEXTBoolVarZero(a, b uint64) bool {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXT"
+	return a&(1<<(b&63)) == 0
+}
+
+func bitBEXTBool32Const(a uint32) bool {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXTI [$]10"
+	return a&(1<<10) != 0
+}
+
+func bitBEXTBool32Var(a, b uint32) bool {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXT"
+	return a&(1<<(b&31)) != 0
+}
+
+func bitBEXTBool32Var2(a, b uint32) bool {
+	//  riscv64/rva22u64,riscv64/rva23u64:-"BEXT"
+	return a&(1<<b) != 0
+}
+
+func bitBEXTBool32Var4(a, b uint64) bool {
+	//  riscv64/rva22u64,riscv64/rva23u64:-"BEXT"
+	return uint32(a&(1<<(b&63))) != 0
+}
+
+func bitBEXTBool64Var4(x int, y uint) bool {
+	if y < 64 {
+		//  riscv64/rva22u64,riscv64/rva23u64:-"BEXT"
+		return int32(x&(1<<y)) != 0
+	}
+	return false
+}
+
+func bitcheck32FromUint64(x uint64, y uint32) int {
+	//  riscv64/rva22u64,riscv64/rva23u64:"BEXT"
+	if uint32(x)&(1<<(y&31)) != 0 {
+		return 1
+	}
+	return 0
+}
+
+// Unsafe version WITHOUT inner MOVWUreg protection:
+// uint64(x) & (1 << y) where x is uint64 with high bits set.
+// This should use AND + SLL directly (no MOVWUreg), NOT BEXT,
+// because BEXT reads from the original 64-bit x.
+// We expect the compiler to generate AND + SLL (no BEXT).
+func bitcheck64Direct(x uint64, y uint32) int {
+	//  riscv64/rva22u64,riscv64/rva23u64: -"BEXT"
+	if x&(1<<y) != 0 {
+		return 1
+	}
+	return 0
+}
+
+func bitcheck64Direct2(x uint64, y uint32) int {
+	//  riscv64/rva22u64,riscv64/rva23u64: -"BEXT"
+	if int32(x&(1<<y)) != 0 {
+		return 1
+	}
+	return 0
+}
+
 func bitsFoldConst(x, y uint64) uint64 {
 	// arm64: "ADDS [$]7" -"MOVD [$]7"
 	// ppc64x: "ADDC [$]7,"
