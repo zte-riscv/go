@@ -618,6 +618,10 @@ func rewriteValueRISCV64(v *Value) bool {
 		return rewriteValueRISCV64_OpRISCV64MOVWstore(v)
 	case OpRISCV64MOVWstorezero:
 		return rewriteValueRISCV64_OpRISCV64MOVWstorezero(v)
+	case OpRISCV64MUL:
+		return rewriteValueRISCV64_OpRISCV64MUL(v)
+	case OpRISCV64MULW:
+		return rewriteValueRISCV64_OpRISCV64MULW(v)
 	case OpRISCV64NEG:
 		return rewriteValueRISCV64_OpRISCV64NEG(v)
 	case OpRISCV64NEGW:
@@ -7126,6 +7130,441 @@ func rewriteValueRISCV64_OpRISCV64MOVWstorezero(v *Value) bool {
 		v.Aux = symToAux(sym)
 		v.AddArg2(base, mem)
 		return true
+	}
+	return false
+}
+func rewriteValueRISCV64_OpRISCV64MUL(v *Value) bool {
+	v_1 := v.Args[1]
+	v_0 := v.Args[0]
+	b := v.Block
+	// match: (MUL x (MOVDconst [3]))
+	// cond: buildcfg.GORISCV64 >= 22
+	// result: (SH1ADD <x.Type> x x)
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst || auxIntToInt64(v_1.AuxInt) != 3 || !(buildcfg.GORISCV64 >= 22) {
+				continue
+			}
+			v.reset(OpRISCV64SH1ADD)
+			v.Type = x.Type
+			v.AddArg2(x, x)
+			return true
+		}
+		break
+	}
+	// match: (MUL x (MOVDconst [5]))
+	// cond: buildcfg.GORISCV64 >= 22
+	// result: (SH2ADD <x.Type> x x)
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst || auxIntToInt64(v_1.AuxInt) != 5 || !(buildcfg.GORISCV64 >= 22) {
+				continue
+			}
+			v.reset(OpRISCV64SH2ADD)
+			v.Type = x.Type
+			v.AddArg2(x, x)
+			return true
+		}
+		break
+	}
+	// match: (MUL x (MOVDconst [9]))
+	// cond: buildcfg.GORISCV64 >= 22
+	// result: (SH3ADD <x.Type> x x)
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst || auxIntToInt64(v_1.AuxInt) != 9 || !(buildcfg.GORISCV64 >= 22) {
+				continue
+			}
+			v.reset(OpRISCV64SH3ADD)
+			v.Type = x.Type
+			v.AddArg2(x, x)
+			return true
+		}
+		break
+	}
+	// match: (MUL x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && c%3==0 && isPowerOfTwo(c/3) && c>3
+	// result: (SLLI <x.Type> [int64(log64(c/3))] (SH1ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && c%3 == 0 && isPowerOfTwo(c/3) && c > 3) {
+				continue
+			}
+			v.reset(OpRISCV64SLLI)
+			v.Type = x.Type
+			v.AuxInt = int64ToAuxInt(int64(log64(c / 3)))
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH1ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MUL x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && c%5==0 && isPowerOfTwo(c/5) && c>5
+	// result: (SLLI <x.Type> [int64(log64(c/5))] (SH2ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && c%5 == 0 && isPowerOfTwo(c/5) && c > 5) {
+				continue
+			}
+			v.reset(OpRISCV64SLLI)
+			v.Type = x.Type
+			v.AuxInt = int64ToAuxInt(int64(log64(c / 5)))
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH2ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MUL x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && c%9==0 && isPowerOfTwo(c/9) && c>9
+	// result: (SLLI <x.Type> [int64(log64(c/9))] (SH3ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && c%9 == 0 && isPowerOfTwo(c/9) && c > 9) {
+				continue
+			}
+			v.reset(OpRISCV64SLLI)
+			v.Type = x.Type
+			v.AuxInt = int64ToAuxInt(int64(log64(c / 9)))
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH3ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MUL x (MOVDconst [-3]))
+	// cond: buildcfg.GORISCV64 >= 22
+	// result: (NEG (SH1ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst || auxIntToInt64(v_1.AuxInt) != -3 || !(buildcfg.GORISCV64 >= 22) {
+				continue
+			}
+			v.reset(OpRISCV64NEG)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH1ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MUL x (MOVDconst [-5]))
+	// cond: buildcfg.GORISCV64 >= 22
+	// result: (NEG (SH2ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst || auxIntToInt64(v_1.AuxInt) != -5 || !(buildcfg.GORISCV64 >= 22) {
+				continue
+			}
+			v.reset(OpRISCV64NEG)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH2ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MUL x (MOVDconst [-9]))
+	// cond: buildcfg.GORISCV64 >= 22
+	// result: (NEG (SH3ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst || auxIntToInt64(v_1.AuxInt) != -9 || !(buildcfg.GORISCV64 >= 22) {
+				continue
+			}
+			v.reset(OpRISCV64NEG)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH3ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MUL x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && c%3==0 && isPowerOfTwo((-c)/3) && c < -3
+	// result: (NEG (SLLI <x.Type> [int64(log64((-c)/3))] (SH1ADD <x.Type> x x)))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && c%3 == 0 && isPowerOfTwo((-c)/3) && c < -3) {
+				continue
+			}
+			v.reset(OpRISCV64NEG)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SLLI, x.Type)
+			v0.AuxInt = int64ToAuxInt(int64(log64((-c) / 3)))
+			v1 := b.NewValue0(v.Pos, OpRISCV64SH1ADD, x.Type)
+			v1.AddArg2(x, x)
+			v0.AddArg(v1)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MUL x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && c%5==0 && isPowerOfTwo((-c)/5) && c < -5
+	// result: (NEG (SLLI <x.Type> [int64(log64((-c)/5))] (SH2ADD <x.Type> x x)))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && c%5 == 0 && isPowerOfTwo((-c)/5) && c < -5) {
+				continue
+			}
+			v.reset(OpRISCV64NEG)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SLLI, x.Type)
+			v0.AuxInt = int64ToAuxInt(int64(log64((-c) / 5)))
+			v1 := b.NewValue0(v.Pos, OpRISCV64SH2ADD, x.Type)
+			v1.AddArg2(x, x)
+			v0.AddArg(v1)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MUL x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && c%9==0 && isPowerOfTwo((-c)/9) && c < -9
+	// result: (NEG (SLLI <x.Type> [int64(log64((-c)/9))] (SH3ADD <x.Type> x x)))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && c%9 == 0 && isPowerOfTwo((-c)/9) && c < -9) {
+				continue
+			}
+			v.reset(OpRISCV64NEG)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SLLI, x.Type)
+			v0.AuxInt = int64ToAuxInt(int64(log64((-c) / 9)))
+			v1 := b.NewValue0(v.Pos, OpRISCV64SH3ADD, x.Type)
+			v1.AddArg2(x, x)
+			v0.AddArg(v1)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	return false
+}
+func rewriteValueRISCV64_OpRISCV64MULW(v *Value) bool {
+	v_1 := v.Args[1]
+	v_0 := v.Args[0]
+	b := v.Block
+	// match: (MULW x (MOVDconst [3]))
+	// cond: buildcfg.GORISCV64 >= 22
+	// result: (MOVWreg (SH1ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst || auxIntToInt64(v_1.AuxInt) != 3 || !(buildcfg.GORISCV64 >= 22) {
+				continue
+			}
+			v.reset(OpRISCV64MOVWreg)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH1ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MULW x (MOVDconst [5]))
+	// cond: buildcfg.GORISCV64 >= 22
+	// result: (MOVWreg (SH2ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst || auxIntToInt64(v_1.AuxInt) != 5 || !(buildcfg.GORISCV64 >= 22) {
+				continue
+			}
+			v.reset(OpRISCV64MOVWreg)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH2ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MULW x (MOVDconst [9]))
+	// cond: buildcfg.GORISCV64 >= 22
+	// result: (MOVWreg (SH3ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst || auxIntToInt64(v_1.AuxInt) != 9 || !(buildcfg.GORISCV64 >= 22) {
+				continue
+			}
+			v.reset(OpRISCV64MOVWreg)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH3ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MULW x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && int32(c)%3==0 && isPowerOfTwo(int32(c)/3) && int32(c)>3
+	// result: (SLLIW <x.Type> [int64(log64(int64(int32(c)/3)))] (SH1ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && int32(c)%3 == 0 && isPowerOfTwo(int32(c)/3) && int32(c) > 3) {
+				continue
+			}
+			v.reset(OpRISCV64SLLIW)
+			v.Type = x.Type
+			v.AuxInt = int64ToAuxInt(int64(log64(int64(int32(c) / 3))))
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH1ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MULW x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && int32(c)%5==0 && isPowerOfTwo(int32(c)/5) && int32(c)>5
+	// result: (SLLIW <x.Type> [int64(log64(int64(int32(c)/5)))] (SH2ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && int32(c)%5 == 0 && isPowerOfTwo(int32(c)/5) && int32(c) > 5) {
+				continue
+			}
+			v.reset(OpRISCV64SLLIW)
+			v.Type = x.Type
+			v.AuxInt = int64ToAuxInt(int64(log64(int64(int32(c) / 5))))
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH2ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MULW x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && int32(c)%9==0 && isPowerOfTwo(int32(c)/9) && int32(c)>9
+	// result: (SLLIW <x.Type> [int64(log64(int64(int32(c)/9)))] (SH3ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && int32(c)%9 == 0 && isPowerOfTwo(int32(c)/9) && int32(c) > 9) {
+				continue
+			}
+			v.reset(OpRISCV64SLLIW)
+			v.Type = x.Type
+			v.AuxInt = int64ToAuxInt(int64(log64(int64(int32(c) / 9))))
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH3ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MULW x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && int32(c)==-3
+	// result: (NEGW (SH1ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && int32(c) == -3) {
+				continue
+			}
+			v.reset(OpRISCV64NEGW)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH1ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MULW x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && int32(c)==-5
+	// result: (NEGW (SH2ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && int32(c) == -5) {
+				continue
+			}
+			v.reset(OpRISCV64NEGW)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH2ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
+	}
+	// match: (MULW x (MOVDconst [c]))
+	// cond: buildcfg.GORISCV64 >= 22 && int32(c)==-9
+	// result: (NEGW (SH3ADD <x.Type> x x))
+	for {
+		for _i0 := 0; _i0 <= 1; _i0, v_0, v_1 = _i0+1, v_1, v_0 {
+			x := v_0
+			if v_1.Op != OpRISCV64MOVDconst {
+				continue
+			}
+			c := auxIntToInt64(v_1.AuxInt)
+			if !(buildcfg.GORISCV64 >= 22 && int32(c) == -9) {
+				continue
+			}
+			v.reset(OpRISCV64NEGW)
+			v0 := b.NewValue0(v.Pos, OpRISCV64SH3ADD, x.Type)
+			v0.AddArg2(x, x)
+			v.AddArg(v0)
+			return true
+		}
+		break
 	}
 	return false
 }

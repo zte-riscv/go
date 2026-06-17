@@ -985,3 +985,46 @@
 
 (PrefetchCache ...)   => (PREFETCH ...)
 (PrefetchCacheStreamed ...) => (PREFETCHNT ...)
+
+// Strength reduction: multiply by small constants (Zba SH*ADD on RVA22+).
+// Generic Mul(64|32) rules handle const-fold, by-0/1/-1, and power-of-two
+// cases; these only cover RISC-V-specific patterns.
+
+(MUL x (MOVDconst [3])) && buildcfg.GORISCV64 >= 22 => (SH1ADD <x.Type> x x)
+(MUL x (MOVDconst [5])) && buildcfg.GORISCV64 >= 22 => (SH2ADD <x.Type> x x)
+(MUL x (MOVDconst [9])) && buildcfg.GORISCV64 >= 22 => (SH3ADD <x.Type> x x)
+(MULW x (MOVDconst [3])) && buildcfg.GORISCV64 >= 22 => (MOVWreg (SH1ADD <x.Type> x x))
+(MULW x (MOVDconst [5])) && buildcfg.GORISCV64 >= 22 => (MOVWreg (SH2ADD <x.Type> x x))
+(MULW x (MOVDconst [9])) && buildcfg.GORISCV64 >= 22 => (MOVWreg (SH3ADD <x.Type> x x))
+
+// Generic patterns: c = (2^n+1) * 2^m where n∈{1,2,3}, m≥1 (covers 6,10,12,18,20,24,...).
+(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%3==0 && isPowerOfTwo(c/3) && c>3 =>
+	(SLLI <x.Type> [int64(log64(c/3))] (SH1ADD <x.Type> x x))
+(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%5==0 && isPowerOfTwo(c/5) && c>5 =>
+	(SLLI <x.Type> [int64(log64(c/5))] (SH2ADD <x.Type> x x))
+(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%9==0 && isPowerOfTwo(c/9) && c>9 =>
+	(SLLI <x.Type> [int64(log64(c/9))] (SH3ADD <x.Type> x x))
+
+// Negative SH*ADD constants for MUL.
+(MUL x (MOVDconst [-3])) && buildcfg.GORISCV64 >= 22 => (NEG (SH1ADD <x.Type> x x))
+(MUL x (MOVDconst [-5])) && buildcfg.GORISCV64 >= 22 => (NEG (SH2ADD <x.Type> x x))
+(MUL x (MOVDconst [-9])) && buildcfg.GORISCV64 >= 22 => (NEG (SH3ADD <x.Type> x x))
+(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%3==0 && isPowerOfTwo((-c)/3) && c < -3 =>
+	(NEG (SLLI <x.Type> [int64(log64((-c)/3))] (SH1ADD <x.Type> x x)))
+(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%5==0 && isPowerOfTwo((-c)/5) && c < -5 =>
+	(NEG (SLLI <x.Type> [int64(log64((-c)/5))] (SH2ADD <x.Type> x x)))
+(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%9==0 && isPowerOfTwo((-c)/9) && c < -9 =>
+	(NEG (SLLI <x.Type> [int64(log64((-c)/9))] (SH3ADD <x.Type> x x)))
+
+// MULW generic SH*ADD+SLLIW patterns (positive).
+(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)%3==0 && isPowerOfTwo(int32(c)/3) && int32(c)>3 =>
+	(SLLIW <x.Type> [int64(log64(int64(int32(c)/3)))] (SH1ADD <x.Type> x x))
+(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)%5==0 && isPowerOfTwo(int32(c)/5) && int32(c)>5 =>
+	(SLLIW <x.Type> [int64(log64(int64(int32(c)/5)))] (SH2ADD <x.Type> x x))
+(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)%9==0 && isPowerOfTwo(int32(c)/9) && int32(c)>9 =>
+	(SLLIW <x.Type> [int64(log64(int64(int32(c)/9)))] (SH3ADD <x.Type> x x))
+
+// Negative SH*ADD constants for MULW.
+(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-3 => (NEGW (SH1ADD <x.Type> x x))
+(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-5 => (NEGW (SH2ADD <x.Type> x x))
+(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-9 => (NEGW (SH3ADD <x.Type> x x))
