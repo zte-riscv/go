@@ -174,3 +174,325 @@ func BenchmarkSimplifyNegDiv(b *testing.B) {
 		globl = s
 	}
 }
+
+func BenchmarkMul64Const3(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 3
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64Const5(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 5
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64Const6(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 6
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64Const8(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 8
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64Const9(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 9
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64Const10(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 10
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64Const12(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 12
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul32Const3(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 3
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
+
+func BenchmarkMul32Const6(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 6
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
+
+func BenchmarkMul32Const10(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 10
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
+
+func BenchmarkMul64Const18(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 18
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64Const20(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 20
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64Const24(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 24
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64Const36(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 36
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64Const40(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 40
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64Const72(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 72
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+// 64-bit negative SH*ADD patterns.
+
+func BenchmarkMul64ConstNeg3(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * -3
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64ConstNeg5(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * -5
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64ConstNeg6(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * -6
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64ConstNeg9(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * -9
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64ConstNeg10(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * -10
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64ConstNeg12(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * -12
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul64ConstNeg18(b *testing.B) {
+	var s, x int64
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * -18
+		x = (s ^ int64(i)) & 0xfff
+	}
+	globl = s
+}
+
+func BenchmarkMul32Const5(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 5
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
+
+func BenchmarkMul32Const9(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 9
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
+
+func BenchmarkMul32Const12(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 12
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
+
+func BenchmarkMul32Const18(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 18
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
+
+func BenchmarkMul32Const20(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 20
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
+
+func BenchmarkMul32Const36(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * 36
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
+
+func BenchmarkMul32ConstNeg3(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * -3
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
+
+func BenchmarkMul32ConstNeg5(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * -5
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
+
+func BenchmarkMul32ConstNeg9(b *testing.B) {
+	var s, x int32
+	x = 7
+	for i := 0; i < b.N; i++ {
+		s += x * -9
+		x = int32((int64(s) ^ int64(i)) & 0xfff)
+	}
+	globl32 = s
+}
