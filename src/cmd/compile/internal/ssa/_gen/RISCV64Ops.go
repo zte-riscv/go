@@ -319,8 +319,8 @@ func init() {
 			needIntTemp:    true,
 			faultOnNilArg0: true,
 			reg: regInfo{
-				inputs:   []regMask{regNamed["X5"]},
-				clobbers: regNamed["X5"],
+				inputs:   []regMask{regNamed["X25"]},
+				clobbers: regNamed["X25"],
 			},
 		},
 
@@ -338,8 +338,8 @@ func init() {
 			aux:       "SymValAndOff",
 			argLength: 3,
 			reg: regInfo{
-				inputs:   []regMask{regNamed["X6"], regNamed["X7"]},
-				clobbers: regNamed["X5"] | regNamed["X6"] | regNamed["X7"],
+				inputs:   []regMask{regNamed["X28"], regNamed["X29"]},
+				clobbers: regNamed["X25"] | regNamed["X28"] | regNamed["X29"],
 			},
 			typ:            "Mem",
 			symEffect:      "Write",
@@ -360,14 +360,14 @@ func init() {
 		//	...rest 7 mov...
 		//	ADD	$sz, Rarg0
 		//	ADD	$sz, Rarg1
-		//	BNE	X6, Rarg1, loop
+		//	BNE	X28, Rarg1, loop
 		{
 			name:      "LoweredMoveLoop",
 			aux:       "SymValAndOff",
 			argLength: 3,
 			reg: regInfo{
-				inputs:   []regMask{regNamed["X7"], regNamed["X8"]},
-				clobbers: regNamed["X5"] | regNamed["X6"] | regNamed["X7"] | regNamed["X8"],
+				inputs:   []regMask{regNamed["X29"], regNamed["X30"]},
+				clobbers: regNamed["X25"] | regNamed["X28"] | regNamed["X29"] | regNamed["X30"],
 			},
 			typ:            "Mem",
 			symEffect:      "Write",

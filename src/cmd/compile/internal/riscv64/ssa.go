@@ -864,7 +864,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		mov, sz := largestMove(sa.Off64())
 
 		var off int64
-		tmp := int16(riscv.REG_X5)
+		tmp := int16(riscv.REG_X25)
 		if buildcfg.GORISCV64EXT.MisalignedFast {
 			emitDynamicMoves(s, dst, src, tmp, off, n)
 		} else {
@@ -895,7 +895,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		sc := v.AuxValAndOff()
 		n := sc.Val64()
 		mov, sz := largestMove(sc.Off64())
-		tmp := int16(riscv.REG_X5)
+		tmp := int16(riscv.REG_X25)
 
 		if buildcfg.GORISCV64EXT.MisalignedFast {
 			//   n < 64:        fully unrolled with dynamic 8/4/2/1 moves
@@ -917,7 +917,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			p.From.Offset = n - n%chunk
 			p.Reg = src
 			p.To.Type = obj.TYPE_REG
-			p.To.Reg = riscv.REG_X6
+			p.To.Reg = riscv.REG_X28
 
 			loopHead := s.Prog(obj.ANOP)
 			emitDynamicMoves(s, dst, src, tmp, 0, chunk)
@@ -935,7 +935,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 			p2.To.Reg = dst
 
 			p3 := s.Prog(riscv.ABNE)
-			p3.From.Reg = riscv.REG_X6
+			p3.From.Reg = riscv.REG_X28
 			p3.From.Type = obj.TYPE_REG
 			p3.Reg = src
 			p3.To.Type = obj.TYPE_BRANCH
@@ -958,7 +958,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.From.Offset = n - n%chunk
 		p.Reg = src
 		p.To.Type = obj.TYPE_REG
-		p.To.Reg = riscv.REG_X6
+		p.To.Reg = riscv.REG_X28
 
 		for i := int64(0); i < 8; i++ {
 			moveOp(s, mov, dst, src, tmp, sz*i)
@@ -977,7 +977,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p2.To.Reg = dst
 
 		p3 := s.Prog(riscv.ABNE)
-		p3.From.Reg = riscv.REG_X6
+		p3.From.Reg = riscv.REG_X28
 		p3.From.Type = obj.TYPE_REG
 		p3.Reg = src
 		p3.To.Type = obj.TYPE_BRANCH

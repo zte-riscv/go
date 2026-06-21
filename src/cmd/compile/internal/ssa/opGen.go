@@ -34565,9 +34565,9 @@ var opcodeTable = [...]opInfo{
 		symEffect:      SymWrite,
 		reg: regInfo{
 			inputs: []inputInfo{
-				{0, 16}, // X5
+				{0, 16777216}, // X25
 			},
-			clobbers: 16, // X5
+			clobbers: 16777216, // X25
 		},
 	},
 	{
@@ -34579,10 +34579,10 @@ var opcodeTable = [...]opInfo{
 		symEffect:      SymWrite,
 		reg: regInfo{
 			inputs: []inputInfo{
-				{0, 32}, // X6
-				{1, 64}, // X7
+				{0, 134217728}, // X28
+				{1, 268435456}, // X29
 			},
-			clobbers: 112, // X5 X6 X7
+			clobbers: 419430400, // X25 X28 X29
 		},
 	},
 	{
@@ -34594,10 +34594,10 @@ var opcodeTable = [...]opInfo{
 		symEffect:      SymWrite,
 		reg: regInfo{
 			inputs: []inputInfo{
-				{0, 64},  // X7
-				{1, 128}, // X8
+				{0, 268435456}, // X29
+				{1, 536870912}, // X30
 			},
-			clobbers: 240, // X5 X6 X7 X8
+			clobbers: 956301312, // X25 X28 X29 X30
 		},
 	},
 	{
