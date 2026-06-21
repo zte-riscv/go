@@ -34548,6 +34548,7 @@ var opcodeTable = [...]opInfo{
 		name:           "LoweredZero",
 		auxType:        auxSymValAndOff,
 		argLen:         2,
+		needIntTemp:    true,
 		faultOnNilArg0: true,
 		symEffect:      SymWrite,
 		reg: regInfo{
@@ -34565,9 +34566,9 @@ var opcodeTable = [...]opInfo{
 		symEffect:      SymWrite,
 		reg: regInfo{
 			inputs: []inputInfo{
-				{0, 16}, // X5
+				{0, 16777216}, // X25
 			},
-			clobbers: 16, // X5
+			clobbers: 956301312, // X25 X28 X29 X30
 		},
 	},
 	{

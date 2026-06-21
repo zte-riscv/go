@@ -300,6 +300,7 @@ func init() {
 			typ:            "Mem",
 			argLength:      2,
 			symEffect:      "Write",
+			needIntTemp:    true,
 			faultOnNilArg0: true,
 			reg: regInfo{
 				inputs: []regMask{gpMask},
@@ -319,8 +320,8 @@ func init() {
 			needIntTemp:    true,
 			faultOnNilArg0: true,
 			reg: regInfo{
-				inputs:   []regMask{regNamed["X5"]},
-				clobbers: regNamed["X5"],
+				inputs:   []regMask{regNamed["X25"]},
+				clobbers: regNamed["X25"] | regNamed["X28"] | regNamed["X29"] | regNamed["X30"],
 			},
 		},
 

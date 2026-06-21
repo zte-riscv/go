@@ -724,6 +724,77 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		sc := v.AuxValAndOff()
 		n := sc.Val64()
 
+		// CBOZERO optimization for fixed-size zeroing (LoweredZero).
+		// Conditions:
+		//   1. GORISCV64 >= 22 (supports Zicboz extension)
+		//   2. n is a multiple of 64 (required for CBOZERO which clears 64-byte cache blocks)
+		//   3. Address must be 64-byte aligned (checked at runtime)
+		useCBOZero := buildcfg.GORISCV64 >= 22 && n%64 == 0
+
+		var pBranch *obj.Prog
+		var pSkip *obj.Prog
+		if useCBOZero {
+			alignTmp := v.RegTmp()
+
+			// ANDI $63, ptr, alignTmp  // alignTmp = ptr & 63 (0 if aligned)
+			pCheck := s.Prog(riscv.AAND)
+			pCheck.From.Type = obj.TYPE_CONST
+			pCheck.From.Offset = 63
+			pCheck.Reg = ptr
+			pCheck.To.Type = obj.TYPE_REG
+			pCheck.To.Reg = alignTmp
+
+			// BNEZ alignTmp, fallback  // jump to original path if misaligned
+			// Target is patched later when fallback entry is emitted.
+			pBranch = s.Prog(riscv.ABNEZ)
+			pBranch.From.Type = obj.TYPE_REG
+			pBranch.From.Reg = alignTmp
+			pBranch.To.Type = obj.TYPE_BRANCH
+
+			blockCount := n / 64
+
+			// MOV ptr, alignTmp  // Keep ptr unchanged (LoweredZero contract)
+			pInitPtr := s.Prog(riscv.AMOV)
+			pInitPtr.From.Type = obj.TYPE_REG
+			pInitPtr.From.Reg = ptr
+			pInitPtr.To.Type = obj.TYPE_REG
+			pInitPtr.To.Reg = alignTmp
+
+			// Unroll CBOZERO: generate blockCount CBOZERO instructions
+			//   CBOZERO (alignTmp)      ; clear 64-byte cache block
+			//   ADDI $64, alignTmp, alignTmp  ; advance (if not last)
+			for i := int64(0); i < blockCount; i++ {
+				pCbo := s.Prog(riscv.ACBOZERO)
+				pCbo.From.Type = obj.TYPE_REG
+				pCbo.From.Reg = alignTmp
+
+				if i+1 < blockCount {
+					pAdvance := s.Prog(riscv.AADDI)
+					pAdvance.From.Type = obj.TYPE_CONST
+					pAdvance.From.Offset = 64
+					pAdvance.Reg = alignTmp
+					pAdvance.To.Type = obj.TYPE_REG
+					pAdvance.To.Reg = alignTmp
+				}
+			}
+
+			// JAL X0, skipTarget  // skip original path (X0 = no return)
+			// Target is patched later when fast-path end is emitted.
+			pSkip = s.Prog(riscv.AJAL)
+			pSkip.From.Type = obj.TYPE_REG
+			pSkip.From.Reg = riscv.REG_X0
+			pSkip.To.Type = obj.TYPE_BRANCH
+
+		}
+
+		// Set fallback label if using CBOZERO (start of original path)
+		if useCBOZero && pBranch != nil {
+			// Create the actual fallback label here (start of original path)
+			actualFallbackLabel := s.Prog(obj.ANOP)
+			// Update the branch target to point to the actual fallback label
+			pBranch.To.SetTarget(actualFallbackLabel)
+		}
+
 		mov, sz := largestMove(sc.Off64())
 
 		// mov	ZERO, (offset)(Rarg0)
@@ -746,6 +817,14 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 				off += tsz
 				n -= tsz
 			}
+		}
+
+		// Set skip label if using CBOZERO (end of original path)
+		if useCBOZero && pSkip != nil {
+			// Create the actual skip label here (end of original path)
+			actualSkipLabel := s.Prog(obj.ANOP)
+			// Update the jump target to point to the actual skip label
+			pSkip.To.SetTarget(actualSkipLabel)
 		}
 
 	case ssa.OpRISCV64LoweredZeroLoop:
@@ -804,6 +883,201 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 
 		if n <= 3*chunk {
 			v.Fatalf("ZeroLoop too small:%d, expect:%d", n, 3*chunk)
+		}
+
+		// CBOZERO optimization for large unaligned zeroing (LoweredZeroLoop).
+		// This implements a three-phase approach:
+		//   Phase 1 (prolog): Zero bytes from ptr to next 64-byte aligned address using MOV
+		//   Phase 2 (middle): Zero aligned 64-byte blocks using CBOZERO loop
+		//   Phase 3 (epilog): Zero remaining bytes from last aligned address to endPtr using MOV
+		//
+		// Conditions:
+		//   1. GORISCV64 >= 22 (supports Zicboz extension)
+		//   2. n >= 128 (ensures useful aligned middle region exists)
+		//   3. n is a multiple of sz
+		//
+		// Register usage (fixed to avoid conflicts):
+		//   X28 = counter (temporary calculations and loop counters)
+		//   X29 = endPtr (ptr + n, end address)
+		//   X30 = endAligned (last 64-byte aligned address before endPtr)
+		//   ptr = walking pointer (modified during execution)
+		useCBOZero := buildcfg.GORISCV64 >= 22 && n >= 128 && n%sz == 0
+
+		if useCBOZero {
+			counter := int16(riscv.REG_X28)
+
+			// === Phase 0: Setup ===
+			// ADDI $n, ptr, X29  // X29 = endPtr = ptr + n
+			pEnd := s.Prog(riscv.AADD)
+			pEnd.From.Type = obj.TYPE_CONST
+			pEnd.From.Offset = n
+			pEnd.Reg = ptr
+			pEnd.To.Type = obj.TYPE_REG
+			pEnd.To.Reg = riscv.REG_X29
+
+			// ANDI $-64, X29, X30  // X30 = endAligned = endPtr & -64
+			pEndAligned := s.Prog(riscv.AAND)
+			pEndAligned.From.Type = obj.TYPE_CONST
+			pEndAligned.From.Offset = -64
+			pEndAligned.Reg = riscv.REG_X29
+			pEndAligned.To.Type = obj.TYPE_REG
+			pEndAligned.To.Reg = riscv.REG_X30
+
+			// ANDI $63, ptr, X28  // X28 = ptr & 63 (0 if aligned)
+			pAlignCheck := s.Prog(riscv.AAND)
+			pAlignCheck.From.Type = obj.TYPE_CONST
+			pAlignCheck.From.Offset = 63
+			pAlignCheck.Reg = ptr
+			pAlignCheck.To.Type = obj.TYPE_REG
+			pAlignCheck.To.Reg = counter
+
+			// BEQZ X28, cbozeroPhase  // skip prolog if already aligned
+			pAlignedToCbo := s.Prog(riscv.ABEQZ)
+			pAlignedToCbo.From.Type = obj.TYPE_REG
+			pAlignedToCbo.From.Reg = counter
+			pAlignedToCbo.To.Type = obj.TYPE_BRANCH
+
+			// ADDI $63, ptr, X28; ANDI $-64, X28, X28  // X28 = alignedPtr = (ptr + 63) & -64
+			pAlignedAdd := s.Prog(riscv.AADDI)
+			pAlignedAdd.From.Type = obj.TYPE_CONST
+			pAlignedAdd.From.Offset = 63
+			pAlignedAdd.Reg = ptr
+			pAlignedAdd.To.Type = obj.TYPE_REG
+			pAlignedAdd.To.Reg = counter
+
+			pAlignedMask := s.Prog(riscv.AAND)
+			pAlignedMask.From.Type = obj.TYPE_CONST
+			pAlignedMask.From.Offset = -64
+			pAlignedMask.Reg = counter
+			pAlignedMask.To.Type = obj.TYPE_REG
+			pAlignedMask.To.Reg = counter
+
+			// === Phase 1: Prolog ===
+			// SUB ptr, X28, X28  // X28 = alignedPtr - ptr (bytes to zero)
+			pPrologCnt := s.Prog(riscv.ASUB)
+			pPrologCnt.From.Type = obj.TYPE_REG
+			pPrologCnt.From.Reg = ptr
+			pPrologCnt.Reg = counter
+			pPrologCnt.To.Type = obj.TYPE_REG
+			pPrologCnt.To.Reg = counter
+
+			// BLEZ X28, cbozeroPhase  // skip if already aligned
+			pSkipProlog := s.Prog(riscv.ABLEZ)
+			pSkipProlog.From.Type = obj.TYPE_REG
+			pSkipProlog.From.Reg = counter
+			pSkipProlog.To.Type = obj.TYPE_BRANCH
+
+			// prolog_loop: MOV ZERO, (ptr); ADDI $sz, ptr, ptr; ADDI $-sz, X28, X28; BGTZ X28, prolog_loop
+			prologLoop := s.Prog(obj.ANOP)
+			zeroOp(s, mov, ptr, 0)
+
+			pPrologPtrInc := s.Prog(riscv.AADDI)
+			pPrologPtrInc.From.Type = obj.TYPE_CONST
+			pPrologPtrInc.From.Offset = sz
+			pPrologPtrInc.Reg = ptr
+			pPrologPtrInc.To.Type = obj.TYPE_REG
+			pPrologPtrInc.To.Reg = ptr
+
+			pPrologDec := s.Prog(riscv.AADDI)
+			pPrologDec.From.Type = obj.TYPE_CONST
+			pPrologDec.From.Offset = -sz
+			pPrologDec.Reg = counter
+			pPrologDec.To.Type = obj.TYPE_REG
+			pPrologDec.To.Reg = counter
+
+			pPrologLoop := s.Prog(riscv.ABGTZ)
+			pPrologLoop.From.Type = obj.TYPE_REG
+			pPrologLoop.From.Reg = counter
+			pPrologLoop.To.Type = obj.TYPE_BRANCH
+			pPrologLoop.To.SetTarget(prologLoop)
+
+			// === Phase 2: CBOZERO loop ===
+			// SUB ptr, X30, X28  // X28 = endAligned - ptr (aligned region size)
+			pCboCnt := s.Prog(riscv.ASUB)
+			pCboCnt.From.Type = obj.TYPE_REG
+			pCboCnt.From.Reg = ptr
+			pCboCnt.Reg = riscv.REG_X30
+			pCboCnt.To.Type = obj.TYPE_REG
+			pCboCnt.To.Reg = counter
+			pAlignedToCbo.To.SetTarget(pCboCnt)
+			pSkipProlog.To.SetTarget(pCboCnt)
+
+			// BLEZ X28, epilogPhase  // skip if no aligned region
+			pSkipCbo := s.Prog(riscv.ABLEZ)
+			pSkipCbo.From.Type = obj.TYPE_REG
+			pSkipCbo.From.Reg = counter
+			pSkipCbo.To.Type = obj.TYPE_BRANCH
+
+			// cbozero_loop: CBOZERO (ptr); ADDI $64, ptr, ptr; ADDI $-64, X28, X28; BGTZ X28, cbozero_loop
+			cbozeroLoop := s.Prog(riscv.ACBOZERO)
+			cbozeroLoop.From.Type = obj.TYPE_REG
+			cbozeroLoop.From.Reg = ptr
+
+			pCboPtrInc := s.Prog(riscv.AADDI)
+			pCboPtrInc.From.Type = obj.TYPE_CONST
+			pCboPtrInc.From.Offset = 64
+			pCboPtrInc.Reg = ptr
+			pCboPtrInc.To.Type = obj.TYPE_REG
+			pCboPtrInc.To.Reg = ptr
+
+			pCboDec := s.Prog(riscv.AADDI)
+			pCboDec.From.Type = obj.TYPE_CONST
+			pCboDec.From.Offset = -64
+			pCboDec.Reg = counter
+			pCboDec.To.Type = obj.TYPE_REG
+			pCboDec.To.Reg = counter
+
+			pCboLoop := s.Prog(riscv.ABGTZ)
+			pCboLoop.From.Type = obj.TYPE_REG
+			pCboLoop.From.Reg = counter
+			pCboLoop.To.Type = obj.TYPE_BRANCH
+			pCboLoop.To.SetTarget(cbozeroLoop)
+
+			// === Phase 3: Epilog ===
+			// SUB ptr, X29, X28  // X28 = endPtr - ptr (remaining bytes)
+			pEpilogCnt := s.Prog(riscv.ASUB)
+			pEpilogCnt.From.Type = obj.TYPE_REG
+			pEpilogCnt.From.Reg = ptr
+			pEpilogCnt.Reg = riscv.REG_X29
+			pEpilogCnt.To.Type = obj.TYPE_REG
+			pEpilogCnt.To.Reg = counter
+			pSkipCbo.To.SetTarget(pEpilogCnt)
+
+			// BLEZ X28, doneLabel  // skip if no tail
+			pDoneIfNoTail := s.Prog(riscv.ABLEZ)
+			pDoneIfNoTail.From.Type = obj.TYPE_REG
+			pDoneIfNoTail.From.Reg = counter
+			pDoneIfNoTail.To.Type = obj.TYPE_BRANCH
+
+			// epilog_loop: MOV ZERO, (ptr); ADDI $sz, ptr, ptr; ADDI $-sz, X28, X28; BGTZ X28, epilog_loop
+			epilogLoop := s.Prog(obj.ANOP)
+			zeroOp(s, mov, ptr, 0)
+
+			pEpilogPtrInc := s.Prog(riscv.AADDI)
+			pEpilogPtrInc.From.Type = obj.TYPE_CONST
+			pEpilogPtrInc.From.Offset = sz
+			pEpilogPtrInc.Reg = ptr
+			pEpilogPtrInc.To.Type = obj.TYPE_REG
+			pEpilogPtrInc.To.Reg = ptr
+
+			pEpilogDec := s.Prog(riscv.AADDI)
+			pEpilogDec.From.Type = obj.TYPE_CONST
+			pEpilogDec.From.Offset = -sz
+			pEpilogDec.Reg = counter
+			pEpilogDec.To.Type = obj.TYPE_REG
+			pEpilogDec.To.Reg = counter
+
+			pEpilogLoop := s.Prog(riscv.ABGTZ)
+			pEpilogLoop.From.Type = obj.TYPE_REG
+			pEpilogLoop.From.Reg = counter
+			pEpilogLoop.To.Type = obj.TYPE_BRANCH
+			pEpilogLoop.To.SetTarget(epilogLoop)
+
+			doneLabel := s.Prog(obj.ANOP)
+			pDoneIfNoTail.To.SetTarget(doneLabel)
+
+			// Fast path fully handles this op; do not emit legacy zero loop.
+			break
 		}
 
 		tmp := v.RegTmp()
