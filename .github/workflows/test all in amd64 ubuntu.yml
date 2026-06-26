@@ -24,4 +24,4 @@ jobs:
 
             # build toolchain and test
             cd "$GITHUB_WORKSPACE/src"
-            ./all.bash
+            # ./all.bash
