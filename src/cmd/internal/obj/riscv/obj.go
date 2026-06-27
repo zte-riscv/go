@@ -1051,19 +1051,19 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 	// unnecessarily. See issue #35470.
 	p = ctxt.StartUnsafePoint(p, newprog)
 
-	var to_more, to_more_big *obj.Prog
+	var to_done, to_more *obj.Prog
 
 	if framesize <= abi.StackSmall {
 		// small stack
-		//	// if SP <= stackguard { goto label-of-call-to-morestack }
-		//	BLEU	SP, stackguard, label-of-call-to-morestack
+		//	// if SP > stackguard { goto done }
+		//	BLTU	stackguard, SP, done
 		p = obj.Appendp(p, newprog)
-		p.As = ABLEU
+		p.As = ABLTU
 		p.From.Type = obj.TYPE_REG
-		p.From.Reg = REG_SP
-		p.Reg = REG_X6
+		p.From.Reg = REG_X6
+		p.Reg = REG_SP
 		p.To.Type = obj.TYPE_BRANCH
-		to_more = p
+		to_done = p
 	} else {
 		// large stack: SP-framesize < stackguard-StackSmall
 		offset := framesize - abi.StackSmall
@@ -1091,13 +1091,13 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 			p.From.Reg = REG_SP
 			p.Reg = REG_X7
 			p.To.Type = obj.TYPE_BRANCH
-			to_more_big = p
+			to_more = p
 		}
 
 		// Check against the stack guard. We've ensured this won't underflow.
 		//	ADD	$-(framesize-StackSmall), SP, X7
-		//	// if X7 <= stackguard { goto label-of-call-to-morestack }
-		//	BLEU	X7, stackguard, label-of-call-to-morestack
+		//	// if X7 > stackguard { goto done }
+		//	BLTU	stackguard, X7, done
 		p = obj.Appendp(p, newprog)
 		p.As = AADDI
 		p.From.Type = obj.TYPE_CONST
@@ -1107,37 +1107,17 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 		p.To.Reg = REG_X7
 
 		p = obj.Appendp(p, newprog)
-		p.As = ABLEU
+		p.As = ABLTU
 		p.From.Type = obj.TYPE_REG
-		p.From.Reg = REG_X7
-		p.Reg = REG_X6
+		p.From.Reg = REG_X6
+		p.Reg = REG_X7
 		p.To.Type = obj.TYPE_BRANCH
-		to_more = p
+		to_done = p
 	}
-
-	end := ctxt.EndUnsafePoint(p, newprog, -1)
-
-	var last *obj.Prog
-	for last = cursym.Func().Text; last.Link != nil; last = last.Link {
-	}
-
-	// Now we are at the end of the function, but logically
-	// we are still in function prologue. We need to fix the
-	// SP data and PCDATA.
-	p = obj.Appendp(last, newprog)
-	p.As = obj.ANOP
-	p.Spadj = -int32(framesize)
-
-	p = ctxt.EmitEntryStackMap(cursym, p, newprog)
-	p = ctxt.StartUnsafePoint(p, newprog)
-
-	if to_more_big != nil {
-		to_more_big.To.SetTarget(p)
-	}
-	to_more.To.SetTarget(p)
 
 	// Spill the register args that could be clobbered by the
 	// morestack code
+	p = ctxt.EmitEntryStackMap(cursym, p, newprog)
 	p = cursym.Func().SpillRegisterArgs(p, newprog)
 
 	// CALL runtime.morestack(SB)
@@ -1152,8 +1132,12 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 	} else {
 		p.To.Sym = ctxt.Lookup("runtime.morestack")
 	}
+	if to_more != nil {
+		to_more.To.SetTarget(p)
+	}
 	jalToSym(ctxt, p, REG_X5)
 
+	// The instructions which unspill regs should be preemptible.
 	p = ctxt.EndUnsafePoint(p, newprog, -1)
 	p = cursym.Func().UnspillRegisterArgs(p, newprog)
 
@@ -1163,9 +1147,13 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 	p.To = obj.Addr{Type: obj.TYPE_BRANCH}
 	p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_ZERO}
 	p.To.SetTarget(startPred.Link)
-	p.Spadj = int32(framesize)
 
-	return end
+	// placeholder for to_done's jump target
+	p = obj.Appendp(p, newprog)
+	p.As = obj.ANOP // zero-width place holder
+	to_done.To.SetTarget(p)
+
+	return p
 }
 
 // signExtend sign extends val starting at bit bit.
