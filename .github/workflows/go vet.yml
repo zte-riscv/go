@@ -24,7 +24,7 @@ jobs:
             
             # build toolchain
             cd "$GITHUB_WORKSPACE/src"
-            ./make.bash
+            # ./make.bash
             # run go vet only on packages with changed Go files under src/ relative to PR base
             export GOROOT="$GITHUB_WORKSPACE"
             cd "$GITHUB_WORKSPACE"
