@@ -34,11 +34,11 @@ jobs:
 
             # build toolchain
             cd "$GITHUB_WORKSPACE/src"
-            ./make.bash
-            ../bin/go test -run TestWriteAppend -v -count=10 bytes
+            # ./make.bash
+            # ../bin/go test -run TestWriteAppend -v -count=10 bytes
 
-            GODEBUG=efence=1 ../bin/go test -run TestWriteAppend -v -count=1 bytes
+            # GODEBUG=efence=1 ../bin/go test -run TestWriteAppend -v -count=1 bytes
 
-            GODEBUG=invalidptr=0 ../bin/go test -timeout 600s -skip "Mkmalloc|GdbPython" runtime 2>&1 | tail -30
+            # GODEBUG=invalidptr=0 ../bin/go test -timeout 600s -skip "Mkmalloc|GdbPython" runtime 2>&1 | tail -30
             
-            # ./all.bash
+            ./all.bash
