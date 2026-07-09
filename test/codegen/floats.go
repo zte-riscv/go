@@ -313,3 +313,33 @@ func isNegNormal(x float64) bool {
 	// riscv64:"FCLASSD"
 	return x <= -2.2250738585072014e-308
 }
+
+// Storing zero to *float32 / *float64 on riscv64 should use integer store-from-zero
+// (MOVW/MOV with X0) instead of moving zero through an FP register (FMVWX/FMVDX + MOVF/MOVD).
+// SSA names the op FMVSX, but cmd/internal/obj/riscv prints it as FMVWX ("FMVSX is the old name for FMVWX").
+// The assembler lists the zero register as X0, not $0.
+
+func StoreFloat32Zero(p *float32) {
+	// riscv64:"MOVW\\s+X0,",-"FMVWX",-"MOVF"
+	*p = 0
+}
+
+func StoreFloat64Zero(p *float64) {
+	// riscv64:"MOV\\s+X0,",-"FMVDX",-"MOVD"
+	*p = 0
+}
+
+// Storing -0.0 to *float32 / *float64 must NOT be lowered to the integer
+// store-from-zero optimization, because that would store +0.0 (all zero
+// bits), losing the sign bit. The literal -0.0 is a runtime concept (the
+// compiler front-end folds it to +0.0), but the bit pattern can be produced
+// at runtime via math.Float64frombits / math.Float32frombits and propagated
+// through to a store by SSA. For those cases, the rule must not match.
+
+func StoreFloat32NegZero(p *float32) {
+	*p = *p + math.Float32frombits(0x80000000) // uses -0.0 in computation, must preserve sign
+}
+
+func StoreFloat64NegZero(p *float64) {
+	*p = *p + math.Float64frombits(0x8000000000000000) // uses -0.0 in computation, must preserve sign
+}
