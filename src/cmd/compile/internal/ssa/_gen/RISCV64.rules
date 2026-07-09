@@ -1030,3 +1030,8 @@
 (MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-3 => (NEGW (SH1ADD <x.Type> x x))
 (MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-5 => (NEGW (SH2ADD <x.Type> x x))
 (MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-9 => (NEGW (SH3ADD <x.Type> x x))
+
+// Note: using val.AuxInt raw bit check instead of [0] float comparison because
+// IEEE 754 -0.0 == 0.0 would incorrectly match negative zero.
+(FMOVWstore [off] {sym} ptr val:(FMOVFconst) mem) && int32(val.AuxInt) == 0 => (MOVWstorezero [off] {sym} ptr mem)
+(FMOVDstore [off] {sym} ptr val:(FMOVDconst) mem) && val.AuxInt == 0 => (MOVDstorezero [off] {sym} ptr mem)
