@@ -1022,6 +1022,7 @@ var Anames = []string{
 	"BLEZ",
 	"BLTZ",
 	"BNEZ",
+	"CSEXTW",
 	"CSRC",
 	"CSRCI",
 	"CSRR",
