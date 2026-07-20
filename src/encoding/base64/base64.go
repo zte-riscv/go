@@ -153,17 +153,10 @@ func (enc *Encoding) Encode(dst, src []byte) {
 
 	di, si := 0, 0
 	n := (len(src) / 3) * 3
-	for si < n {
-		// Convert 3x 8bit source bytes into 4 bytes
-		val := uint(src[si+0])<<16 | uint(src[si+1])<<8 | uint(src[si+2])
-
-		dst[di+0] = enc.encode[val>>18&0x3F]
-		dst[di+1] = enc.encode[val>>12&0x3F]
-		dst[di+2] = enc.encode[val>>6&0x3F]
-		dst[di+3] = enc.encode[val&0x3F]
-
-		si += 3
-		di += 4
+	if n > 0 {
+		encodeChunk(&enc.encode, dst[di:], src[si:], n)
+		si += n
+		di += n / 3 * 4
 	}
 
 	remain := len(src) - si
