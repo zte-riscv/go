@@ -44,11 +44,14 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 
 	op := inst.Op.String()
 
+goSyntaxSwitch:
 	switch inst.Op {
 
 	case AMOADD_D, AMOADD_D_AQ, AMOADD_D_RL, AMOADD_D_AQRL, AMOADD_W, AMOADD_W_AQ,
 		AMOADD_W_RL, AMOADD_W_AQRL, AMOAND_D, AMOAND_D_AQ, AMOAND_D_RL, AMOAND_D_AQRL,
-		AMOAND_W, AMOAND_W_AQ, AMOAND_W_RL, AMOAND_W_AQRL, AMOMAXU_D, AMOMAXU_D_AQ,
+		AMOAND_W, AMOAND_W_AQ, AMOAND_W_RL, AMOAND_W_AQRL, AMOCAS_D, AMOCAS_D_AQ,
+		AMOCAS_D_AQRL, AMOCAS_D_RL, AMOCAS_Q, AMOCAS_Q_AQ, AMOCAS_Q_AQRL, AMOCAS_Q_RL,
+		AMOCAS_W, AMOCAS_W_AQ, AMOCAS_W_AQRL, AMOCAS_W_RL, AMOMAXU_D, AMOMAXU_D_AQ,
 		AMOMAXU_D_RL, AMOMAXU_D_AQRL, AMOMAXU_W, AMOMAXU_W_AQ, AMOMAXU_W_RL, AMOMAXU_W_AQRL,
 		AMOMAX_D, AMOMAX_D_AQ, AMOMAX_D_RL, AMOMAX_D_AQRL, AMOMAX_W, AMOMAX_W_AQ, AMOMAX_W_RL,
 		AMOMAX_W_AQRL, AMOMINU_D, AMOMINU_D_AQ, AMOMINU_D_RL, AMOMINU_D_AQRL, AMOMINU_W,
@@ -60,10 +63,8 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 		AMOXOR_W_AQ, AMOXOR_W_RL, AMOXOR_W_AQRL, AMOADD_B, AMOADD_B_AQ, AMOADD_B_AQRL,
 		AMOADD_B_RL, AMOADD_H, AMOADD_H_AQ, AMOADD_H_AQRL, AMOADD_H_RL, AMOAND_B,
 		AMOAND_B_AQ, AMOAND_B_AQRL, AMOAND_B_RL, AMOAND_H, AMOAND_H_AQ, AMOAND_H_AQRL,
-		AMOAND_H_RL, AMOCAS_B, AMOCAS_B_AQ, AMOCAS_B_AQRL, AMOCAS_B_RL, AMOCAS_D, AMOCAS_D_AQ,
-		AMOCAS_D_AQRL, AMOCAS_D_RL, AMOCAS_H, AMOCAS_H_AQ, AMOCAS_H_AQRL, AMOCAS_H_RL, AMOCAS_Q,
-		AMOCAS_Q_AQ, AMOCAS_Q_AQRL, AMOCAS_Q_RL, AMOCAS_W, AMOCAS_W_AQ,
-		AMOCAS_W_AQRL, AMOCAS_W_RL, AMOMAXU_B, AMOMAXU_B_AQ, AMOMAXU_B_AQRL,
+		AMOAND_H_RL, AMOCAS_B, AMOCAS_B_AQ, AMOCAS_B_AQRL, AMOCAS_B_RL, AMOCAS_H,
+		AMOCAS_H_AQ, AMOCAS_H_AQRL, AMOCAS_H_RL, AMOMAXU_B, AMOMAXU_B_AQ, AMOMAXU_B_AQRL,
 		AMOMAXU_B_RL, AMOMAXU_H, AMOMAXU_H_AQ, AMOMAXU_H_AQRL, AMOMAXU_H_RL, AMOMAX_B,
 		AMOMAX_B_AQ, AMOMAX_B_AQRL, AMOMAX_B_RL, AMOMAX_H, AMOMAX_H_AQ, AMOMAX_H_AQRL,
 		AMOMAX_H_RL, AMOMINU_B, AMOMINU_B_AQ, AMOMINU_B_AQRL, AMOMINU_B_RL, AMOMINU_H,
@@ -79,7 +80,6 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 
 	case ADD:
 		if inst.Args[0].(Reg) == X0 && inst.Args[1].(Reg) == X0 {
-			isZihintntl := true
 			switch inst.Args[2].(Reg) {
 			case X2:
 				op = "NTLP1"
@@ -90,11 +90,9 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 			case X5:
 				op = "NTLALL"
 			default:
-				isZihintntl = false
+				break goSyntaxSwitch
 			}
-			if isZihintntl {
-				args = args[:0]
-			}
+			args = nil
 		}
 
 	case ADDI:
@@ -105,8 +103,27 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 
 	case ADDIW:
 		if inst.Args[2].(Simm).Imm == 0 {
-			op = "MOVW"
+			op = "SEXTW"
 			args = args[:len(args)-1]
+		}
+
+	case ORI:
+		if inst.Args[0].(Reg) == X0 {
+			simm := inst.Args[2].(Simm)
+			switch simm.Imm & 0b11111 {
+			case 0:
+				op = "PREFETCHI"
+			case 1:
+				op = "PREFETCHR"
+			case 3:
+				op = "PREFETCHW"
+			default:
+				break goSyntaxSwitch
+			}
+			// compared to ORI, the lowest 5 bits of simm.Imm in PREFETCH should be zeros
+			simm.Imm = simm.Imm &^ 0b11111
+			args[0] = plan9Arg(&inst, pc, symname, RegOffset{inst.Args[1].(Reg), simm})
+			args = args[:len(args)-2]
 		}
 
 	case ANDI:
@@ -214,14 +231,26 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 			}
 		}
 
-	// Fence instruction in plan9 doesn't have any operands.
 	case FENCE:
-		//PAUSE is encoded as a FENCE instruction with pred=W, succ=0
-		if inst.Args[0].(MemOrder).String() == "w" &&
-			inst.Args[1].(MemOrder).String() == "" {
-			op = "PAUSE"
+		fm := inst.Enc >> 28
+		pred := inst.Args[0].(MemOrder).String()
+		succ := inst.Args[1].(MemOrder).String()
+		if fm == 0b1000 {
+			if pred == "rw" && succ == "rw" {
+				return "FENCE.TSO"
+			}
+			return op
 		}
-		args = nil
+		// PAUSE is encoded as a FENCE instruction with pred=W, succ=0.
+		if pred == "w" && succ == "" {
+			return "PAUSE"
+		}
+		if fm != 0 || pred == "" || succ == "" || (pred == "iorw" && succ == "iorw") {
+			// We've either got a full fence or a reserved encoding which should be
+			// treated as a full fence.
+			return op
+		}
+		args[0], args[1] = args[1], args[0]
 
 	case FMADD_D, FMADD_H, FMADD_Q, FMADD_S, FMSUB_D, FMSUB_H,
 		FMSUB_Q, FMSUB_S, FNMADD_D, FNMADD_H, FNMADD_Q, FNMADD_S,
@@ -325,28 +354,16 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 			args[0], args[1] = args[1], args[0]
 		}
 
-	case ORI:
-		if inst.Args[0].(Reg) == X0 {
-			imm := inst.Args[2].(Simm).Imm
-			switch imm & 0b11111 {
-			case 0:
-				op = "PREFETCHI"
-			case 1:
-				op = "PREFETCHR"
-			case 3:
-				op = "PREFETCHW"
-			}
-			// compared to ORI, the lowest 5 bits of imm in PREFETCH should be zeros
-			simm := inst.Args[2].(Simm)
-			simm.Imm = simm.Imm &^ 0b11111
-			args[0] = plan9Arg(&inst, pc, symname, RegOffset{inst.Args[1].(Reg), simm})
-			args = args[:len(args)-2]
-		}
-
 	case SUB:
 		if inst.Args[1].(Reg) == X0 {
 			op = "NEG"
 			args[1] = args[2]
+			args = args[:len(args)-1]
+		}
+
+	case ADD_UW:
+		if inst.Args[2].(Reg) == X0 {
+			op = "ZEXTW"
 			args = args[:len(args)-1]
 		}
 
@@ -405,6 +422,20 @@ func GoSyntax(inst Inst, pc uint64, symname func(uint64) (string, uint64), text 
 
 	case VSETVL:
 		args[0], args[2] = args[2], args[0]
+
+	case FLI_S, FLI_D, FLI_H, FLI_Q:
+		if len(args) > 1 {
+			switch inst.Op {
+			case FLI_S:
+				args[1] = fliSConstants[inst.Args[1].(Uimm).Imm]
+			case FLI_D:
+				args[1] = fliDConstants[inst.Args[1].(Uimm).Imm]
+			case FLI_H:
+				args[1] = fliHConstants[inst.Args[1].(Uimm).Imm]
+			case FLI_Q:
+				args[1] = fliQConstants[inst.Args[1].(Uimm).Imm]
+			}
+		}
 	}
 
 	// Reverse args, placing dest last.
@@ -511,4 +542,144 @@ func plan9VectorOp(inst Inst, args []string) string {
 
 	op = strings.Replace(op, ".", "", -1)
 	return op + " " + strings.Join(args, ", ")
+}
+
+var fliSConstants = [32]string{
+	"$(-1.0)",
+	"$(1.1754943508222875e-38)",
+	"$(1.52587890625e-05)",
+	"$(3.0517578125e-05)",
+	"$(0.00390625)",
+	"$(0.0078125)",
+	"$(0.0625)",
+	"$(0.125)",
+	"$(0.25)",
+	"$(0.3125)",
+	"$(0.375)",
+	"$(0.4375)",
+	"$(0.5)",
+	"$(0.625)",
+	"$(0.75)",
+	"$(0.875)",
+	"$(1.0)",
+	"$(1.25)",
+	"$(1.5)",
+	"$(1.75)",
+	"$(2.0)",
+	"$(2.5)",
+	"$(3.0)",
+	"$(4.0)",
+	"$(8.0)",
+	"$(16.0)",
+	"$(128.0)",
+	"$(256.0)",
+	"$(32768.0)",
+	"$(65536.0)",
+	"$(+Inf)",
+	"$(NaN)",
+}
+
+var fliDConstants = [32]string{
+	"$(-1.0)",
+	"$(2.2250738585072014e-308)",
+	"$(1.52587890625e-05)",
+	"$(3.0517578125e-05)",
+	"$(0.00390625)",
+	"$(0.0078125)",
+	"$(0.0625)",
+	"$(0.125)",
+	"$(0.25)",
+	"$(0.3125)",
+	"$(0.375)",
+	"$(0.4375)",
+	"$(0.5)",
+	"$(0.625)",
+	"$(0.75)",
+	"$(0.875)",
+	"$(1.0)",
+	"$(1.25)",
+	"$(1.5)",
+	"$(1.75)",
+	"$(2.0)",
+	"$(2.5)",
+	"$(3.0)",
+	"$(4.0)",
+	"$(8.0)",
+	"$(16.0)",
+	"$(128.0)",
+	"$(256.0)",
+	"$(32768.0)",
+	"$(65536.0)",
+	"$(+Inf)",
+	"$(NaN)",
+}
+
+var fliHConstants = [32]string{
+	"$(-1.0)",
+	"$(6.103515625e-05)",
+	"$(1.52587890625e-05)",
+	"$(3.0517578125e-05)",
+	"$(0.00390625)",
+	"$(0.0078125)",
+	"$(0.0625)",
+	"$(0.125)",
+	"$(0.25)",
+	"$(0.3125)",
+	"$(0.375)",
+	"$(0.4375)",
+	"$(0.5)",
+	"$(0.625)",
+	"$(0.75)",
+	"$(0.875)",
+	"$(1.0)",
+	"$(1.25)",
+	"$(1.5)",
+	"$(1.75)",
+	"$(2.0)",
+	"$(2.5)",
+	"$(3.0)",
+	"$(4.0)",
+	"$(8.0)",
+	"$(16.0)",
+	"$(128.0)",
+	"$(256.0)",
+	"$(32768.0)",
+	"$(65536.0)",
+	"$(+Inf)",
+	"$(NaN)",
+}
+
+var fliQConstants = [32]string{
+	"$(-1.0)",
+	"$(3.3621031431120935062626778173217526e-4932)",
+	"$(1.52587890625e-05)",
+	"$(3.0517578125e-05)",
+	"$(0.00390625)",
+	"$(0.0078125)",
+	"$(0.0625)",
+	"$(0.125)",
+	"$(0.25)",
+	"$(0.3125)",
+	"$(0.375)",
+	"$(0.4375)",
+	"$(0.5)",
+	"$(0.625)",
+	"$(0.75)",
+	"$(0.875)",
+	"$(1.0)",
+	"$(1.25)",
+	"$(1.5)",
+	"$(1.75)",
+	"$(2.0)",
+	"$(2.5)",
+	"$(3.0)",
+	"$(4.0)",
+	"$(8.0)",
+	"$(16.0)",
+	"$(128.0)",
+	"$(256.0)",
+	"$(32768.0)",
+	"$(65536.0)",
+	"$(+Inf)",
+	"$(NaN)",
 }

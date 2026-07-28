@@ -5,7 +5,6 @@
 package riscv64asm
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -30,8 +29,9 @@ func GNUSyntax(inst Inst) string {
 	}
 
 	op := strings.ToLower(inst.Op.String())
+gnuSyntaxSwitch:
 	switch inst.Op {
-	case ADDI, ADDIW, ANDI, ORI, SLLI, SLLIW, SRAI, SRAIW, SRLI, SRLIW, XORI:
+	case ADDI, ADDIW, ANDI, SLLI, SLLIW, SRAI, SRAIW, SRLI, SRLIW, XORI:
 		if inst.Op == ADDI {
 			if inst.Args[1].(Reg) == X0 && inst.Args[0].(Reg) != X0 {
 				op = "li"
@@ -66,31 +66,28 @@ func GNUSyntax(inst Inst) string {
 			args = args[:len(args)-1]
 		}
 
-		if inst.Op == ORI && inst.Args[0].(Reg) == X0 {
-			imm := inst.Args[2].(Simm).Imm
-			switch imm & 0b11111 {
+	case ORI:
+		if inst.Args[0].(Reg) == X0 {
+			simm := inst.Args[2].(Simm)
+			switch simm.Imm & 0b11111 {
 			case 0:
 				op = "prefetch.i"
 			case 1:
 				op = "prefetch.r"
 			case 3:
 				op = "prefetch.w"
+			default:
+				break gnuSyntaxSwitch
 			}
-			// compared to ORI, the lowest 5 bits of imm in PREFETCH should be zeros
-			simm := inst.Args[2].(Simm)
+			// compared to ORI, the lowest 5 bits of simm.Imm in PREFETCH should be zeros
 			simm.Imm = simm.Imm &^ 0b11111
-			if imm == 0 {
-				args[0] = fmt.Sprintf("(X%d)", inst.Args[1].(Reg))
-			} else {
-				args[0] = fmt.Sprintf("%s(X%d)", simm.String(), inst.Args[1].(Reg))
-			}
+			args[0] = RegOffset{inst.Args[1].(Reg), simm}.String()
 			args = args[:len(args)-2]
 		}
 
 	case ADD:
 		if inst.Args[1].(Reg) == X0 {
 			if inst.Args[0].(Reg) == X0 {
-				isZihintntl := true
 				switch inst.Args[2].(Reg) {
 				case X2:
 					op = "ntl.p1"
@@ -100,17 +97,21 @@ func GNUSyntax(inst Inst) string {
 					op = "ntl.s1"
 				case X5:
 					op = "ntl.all"
-				default:
-					isZihintntl = false
 				}
-				if isZihintntl {
-					args = args[:0]
+				if op != "add" {
+					args = nil
+					break gnuSyntaxSwitch
 				}
-			} else {
-				op = "mv"
-				args[1] = args[2]
-				args = args[:len(args)-1]
 			}
+			op = "mv"
+			args[1] = args[2]
+			args = args[:len(args)-1]
+		}
+
+	case ADD_UW:
+		if inst.Args[2].(Reg) == X0 {
+			op = "zext.w"
+			args = args[:len(args)-1]
 		}
 
 	case BEQ:
@@ -262,17 +263,25 @@ func GNUSyntax(inst Inst) string {
 			args = args[:len(args)-1]
 		}
 
-	// When both pred and succ equals to iorw, the GNU objdump will omit them.
 	case FENCE:
-		if inst.Args[0].(MemOrder).String() == "iorw" &&
-			inst.Args[1].(MemOrder).String() == "iorw" {
-			args = nil
+		fm := inst.Enc >> 28
+		pred := inst.Args[0].(MemOrder).String()
+		succ := inst.Args[1].(MemOrder).String()
+		if fm == 0b1000 {
+			if pred == "rw" && succ == "rw" {
+				return "fence.tso"
+			}
+			return op
 		}
-		//PAUSE is encoded as a FENCE instruction with pred=W, succ=0
-		if inst.Args[0].(MemOrder).String() == "w" &&
-			inst.Args[1].(MemOrder).String() == "" {
-			op = "pause"
-			args = nil
+		// PAUSE is encoded as a FENCE instruction with pred=W, succ=0.
+		if pred == "w" && succ == "" {
+			return "pause"
+		}
+		if fm != 0 || pred == "" || succ == "" || (pred == "iorw" && succ == "iorw") {
+			// We've either got a full fence or a reserved encoding which should be
+			// treated as a full fence. When both pred and succ equals to iorw, GNU
+			// objdump will omit them.
+			return op
 		}
 
 	case FSGNJX_D:
@@ -385,6 +394,18 @@ func GNUSyntax(inst Inst) string {
 
 	case VSETVL:
 		args[0], args[2] = args[2], args[0]
+
+	case FLI_S, FLI_D, FLI_H, FLI_Q:
+		if len(args) > 1 {
+			args[1] = fliConstants[inst.Args[1].(Uimm).Imm]
+		}
+
+	case FROUND_S, FROUND_D, FROUND_H, FROUND_Q,
+		FROUNDNX_S, FROUNDNX_D, FROUNDNX_H, FROUNDNX_Q:
+		args = append(args, frmName((inst.Enc>>12)&0x7))
+
+	case FCVTMOD_W_D:
+		args = append(args, "rtz")
 	}
 
 	if args != nil {
@@ -448,4 +469,63 @@ func gnuVectorOp(inst Inst, args []string) string {
 	op = strings.ToLower(op)
 
 	return op + " " + strings.Join(args, ",")
+}
+
+// frmName returns the GNU assembler rounding mode suffix for the given
+// funct3 rounding mode encoding.
+func frmName(funct3 uint32) string {
+	switch funct3 {
+	case 0:
+		return "rne"
+	case 1:
+		return "rtz"
+	case 2:
+		return "rdn"
+	case 3:
+		return "rup"
+	case 4:
+		return "rmm"
+	case 7:
+		return "dyn"
+	default:
+		return "unknown"
+	}
+}
+
+// fliConstants provides the objdump-format string for each of the 32 FLI
+// immediate values. The constants are the same for all precisions (S/D/H/Q)
+// except for index 1 (minimum positive normal), which objdump shows as "min".
+var fliConstants = [32]string{
+	"-0x1p+0",  // -1.0
+	"min",      // minimum positive normal
+	"0x1p-16",  // 2^-16
+	"0x1p-15",  // 2^-15
+	"0x1p-8",   // 2^-8
+	"0x1p-7",   // 2^-7
+	"0x1p-4",   // 2^-4
+	"0x1p-3",   // 2^-3
+	"0x1p-2",   // 0.25
+	"0x1.4p-2", // 0.3125
+	"0x1.8p-2", // 0.375
+	"0x1.cp-2", // 0.4375
+	"0x1p-1",   // 0.5
+	"0x1.4p-1", // 0.625
+	"0x1.8p-1", // 0.75
+	"0x1.cp-1", // 0.875
+	"0x1p+0",   // 1.0
+	"0x1.4p+0", // 1.25
+	"0x1.8p+0", // 1.5
+	"0x1.cp+0", // 1.75
+	"0x1p+1",   // 2.0
+	"0x1.4p+1", // 2.5
+	"0x1.8p+1", // 3.0
+	"0x1p+2",   // 4.0
+	"0x1p+3",   // 8.0
+	"0x1p+4",   // 16.0
+	"0x1p+7",   // 128.0
+	"0x1p+8",   // 256.0
+	"0x1p+15",  // 2^15
+	"0x1p+16",  // 2^16
+	"inf",      // +Inf
+	"nan",      // canonical NaN
 }
