@@ -153,4 +153,3 @@ golang.org/x/tools/refactor/satisfy
 # rsc.io/markdown v0.0.0-20240306144322-0bf8f97ee8ef
 ## explicit; go 1.20
 rsc.io/markdown
-# golang.org/x/arch => github.com/zte-riscv/arch v0.0.0-20260727074546-65b1e94b71bb
