@@ -19,3 +19,5 @@ require (
 	golang.org/x/text v0.32.0 // indirect
 	rsc.io/markdown v0.0.0-20240306144322-0bf8f97ee8ef // indirect
 )
+
+replace golang.org/x/arch v0.23.0 => github.com/zte-riscv/arch v0.0.0-20260727074546-65b1e94b71bb
