@@ -38,6 +38,31 @@ func TestHashTrieMapTruncHash(t *testing.T) {
 	})
 }
 
+func TestHashTrieMapHash63Collision(t *testing.T) {
+	m := isync.NewXor1HashTrieMap[string, int]("k1", "k2")
+	m.LoadOrStore("k1", 1)
+	m.LoadOrStore("k2", 2)
+}
+
+func TestHashTrieMapHash63CollisionDeleteCleanup(t *testing.T) {
+	m := isync.NewFinalBitCollisionHashTrieMap[string, int]("k1", "k2", "k3")
+	m.LoadOrStore("k1", 1)
+	m.LoadOrStore("k2", 2)
+	m.LoadOrStore("k3", 3)
+
+	expectPresent(t, "k3", 3)(m.Load("k3"))
+	expectLoadedFromDelete(t, "k1", 1)(m.LoadAndDelete("k1"))
+	expectPresent(t, "k2", 2)(m.Load("k2"))
+	expectDeleted(t, "k2", 2)(m.CompareAndDelete("k2", 2))
+	expectPresent(t, "k3", 3)(m.Load("k3"))
+
+	expectStored(t, "k1", 4)(m.LoadOrStore("k1", 4))
+	expectStored(t, "k2", 5)(m.LoadOrStore("k2", 5))
+	expectPresent(t, "k1", 4)(m.Load("k1"))
+	expectPresent(t, "k2", 5)(m.Load("k2"))
+	expectPresent(t, "k3", 3)(m.Load("k3"))
+}
+
 func testHashTrieMap(t *testing.T, newMap func() *isync.HashTrieMap[string, int]) {
 	t.Run("LoadEmpty", func(t *testing.T) {
 		m := newMap()

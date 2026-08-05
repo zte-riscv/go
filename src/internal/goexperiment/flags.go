@@ -128,4 +128,7 @@ type Flags struct {
 
 	// RuntimeSecret enables the runtime/secret package.
 	RuntimeSecret bool
+
+	// WideTrie uses larger children group in sync.hashtriemap
+	WideTrie bool
 }
