@@ -6,5 +6,13 @@
 
 package base64
 
+import (
+	"internal/cpu"
+	"unsafe"
+)
+
+// Offsets into internal/cpu records for use in assembly.
+const offsetRISCV64HasZbb = unsafe.Offsetof(cpu.RISCV64.HasZbb)
+
 //go:noescape
 func encodeChunk(encode *[64]byte, dst, src []byte, n int)
