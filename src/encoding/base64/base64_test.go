@@ -123,6 +123,17 @@ func TestEncode(t *testing.T) {
 	}
 }
 
+func TestEncodeShortDst(t *testing.T) {
+	src := make([]byte, 12)
+	dst := make([]byte, 1)
+	defer func() {
+		if recover() == nil {
+			t.Error("Encode with short dst did not panic")
+		}
+	}()
+	StdEncoding.Encode(dst, src)
+}
+
 func TestEncoder(t *testing.T) {
 	for _, p := range pairs {
 		bb := &strings.Builder{}

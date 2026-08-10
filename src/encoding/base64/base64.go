@@ -154,6 +154,9 @@ func (enc *Encoding) Encode(dst, src []byte) {
 	di, si := 0, 0
 	n := (len(src) / 3) * 3
 	if n > 0 {
+		// encodeChunk does not check the destination length; validate it
+		// here so a short dst panics like the Go loop below would.
+		_ = dst[di+n/3*4-1]
 		encodeChunk(&enc.encode, dst[di:], src[si:], n)
 		si += n
 		di += n / 3 * 4
