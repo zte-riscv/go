@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build !purego
 #include "textflag.h"
 
 // func extractHeapBitsSmall(hbits *byte, spanBase, addr, elemsize uintptr) uintptr
@@ -16,7 +17,7 @@
 //
 // Inputs:  A0=hbits, A1=spanBase, A2=addr, A3=elemsize
 // Output:  A0=heap bits
-TEXT runtime·extractHeapBitsSmall<ABIInternal>(SB), NOSPLIT|NOFRAME, $0-32
+TEXT runtime·extractHeapBitsSmall<ABIInternal>(SB), NOSPLIT|NOFRAME, $0-40
 
 	// diff = addr - spanBase
 	SUB	A1, A2			// A2 = diff
@@ -54,7 +55,7 @@ one_read:
 	AND	T4, T5			// T5 = (*word0 >> j) & mask
 
 one_read_done:
-	MOV	T5, A0			// A0 = result (return register)
+	MOV	T5, X10			// X10 = result (return register)
 	JMP	done
 
 two_read:
@@ -67,7 +68,7 @@ two_read:
 
 	// read = *word0 >> j
 	MOV	(T3), A2		// A2 = *word0
-	SRL	T1, A2, A0		// A0 = *word0 >> j
+	SRL	T1, A2, X10		// X10 = *word0 >> j
 
 	// Advance to word1 pointer
 	ADD	$8, T3			// T3 = &word1
@@ -81,7 +82,7 @@ two_read:
 	SLL	T4, A2, A2		// A2 = (*word1 & mask1) << bits0
 
 	// read |= (*word1 & mask1) << bits0
-	OR	A2, A0			// A0 = A0 | A2
+	OR	A2, X10			// X10 = X10 | A2
 
 done:
 	RET
