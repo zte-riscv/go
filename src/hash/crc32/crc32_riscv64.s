@@ -11,6 +11,10 @@
 //   2. Fold each subsequent 16-byte block using carry-less multiplication
 //   3. Final fold: reduce 128-bit accumulator to 64 bits
 //   4. Barrett reduction: reduce 64 bits to 32-bit CRC
+//
+// Register usage (frame-pointer compatible):
+//   X5-X7, X9-X28 = general purpose / temporary registers
+//   X8 (S0/FP) is NOT used to avoid conflict with frame pointer
 
 #include "textflag.h"
 
@@ -60,20 +64,21 @@ TEXT ·ieeeUpdateCLMUL(SB), NOSPLIT, $0-36
 	MOV	p_len+16(FP), X7	// len(p)
 
 	// Load first 16 bytes of data
-	MOV	(X6), X8		// t0 = low 64 bits
+	// Note: Using X28 instead of X8 to avoid conflict with frame pointer (S0/X8)
+	MOV	(X6), X28		// t0 = low 64 bits
 	MOV	8(X6), X9		// t1 = high 64 bits
 	ADD	$16, X6
 	ADD	$-16, X7
 
 	// XOR CRC seed into the low word of the first block
-	XOR	X5, X8, X8
+	XOR	X5, X28, X28
 
 	// Load fold constants: K2 (high), K1 (low)
 	MOV	ieee_fold<>+0(SB), X10		// K2
 	MOV	ieee_fold<>+8(SB), X11		// K1
 
 	// Main fold loop: process 16 bytes per iteration.
-	// We fold the 128-bit accumulator (X8, X9) with each new 16-byte block.
+	// We fold the 128-bit accumulator (X28, X9) with each new 16-byte block.
 	MOV	$16, X12
 ieee_fold_loop:
 	BLT	X7, X12, ieee_fold_done
@@ -87,21 +92,21 @@ ieee_fold_loop:
 	// Carry-less multiply fold:
 	//   new_low  = clmul(K1, t0)  XOR clmul(K2, t1)  XOR d0
 	//   new_high = clmulh(K1, t0) XOR clmulh(K2, t1) XOR d1
-	CLMUL	X11, X8, X15		// clmul(K1, t0) → low result
-	CLMULH	X11, X8, X16		// clmulh(K1, t0) → high result
+	CLMUL	X11, X28, X15		// clmul(K1, t0) → low result
+	CLMULH	X11, X28, X16		// clmulh(K1, t0) → high result
 	CLMUL	X10, X9, X17		// clmul(K2, t1) → low result
 	CLMULH	X10, X9, X18		// clmulh(K2, t1) → high result
 
 	// Combine fold results with new data
-	XOR	X15, X17, X8		// t0 = fold_low
-	XOR	X8, X13, X8		// t0 ^= d0
+	XOR	X15, X17, X28		// t0 = fold_low
+	XOR	X28, X13, X28		// t0 ^= d0
 	XOR	X16, X18, X9		// t1 = fold_high
 	XOR	X9, X14, X9		// t1 ^= d1
 
 	JMP	ieee_fold_loop
 
 ieee_fold_done:
-	// (X8, X9) = (t0, t1) holds the folded 128-bit accumulator.
+	// (X28, X9) = (t0, t1) holds the folded 128-bit accumulator.
 	// Now reduce 128 bits → 64 bits → 32 bits.
 
 	// Load final reduction constants
@@ -117,8 +122,8 @@ ieee_fold_done:
 	//   high32 = t1 >> 32
 	//   f = clmul(low32, const_low)
 	//   result = (t3h << 32) XOR high32 XOR f
-	CLMUL	X11, X8, X12		// t4 = clmul(t0, const_high)
-	CLMULH	X11, X8, X13		// t3h = clmulh(t0, const_high)
+	CLMUL	X11, X28, X12		// t4 = clmul(t0, const_high)
+	CLMULH	X11, X28, X13		// t3h = clmulh(t0, const_high)
 	XOR	X9, X12, X9		// t1 = t1 XOR t4
 
 	// Extract low 32 and high 32 bits from t1
@@ -158,13 +163,14 @@ TEXT ·castagnoliUpdateCLMUL(SB), NOSPLIT, $0-36
 	MOV	p_len+16(FP), X7	// len(p)
 
 	// Load first 16 bytes of data
-	MOV	(X6), X8		// t0 = low 64 bits
+	// Note: Using X28 instead of X8 to avoid conflict with frame pointer (S0/X8)
+	MOV	(X6), X28		// t0 = low 64 bits
 	MOV	8(X6), X9		// t1 = high 64 bits
 	ADD	$16, X6
 	ADD	$-16, X7
 
 	// XOR CRC seed into the low word of the first block
-	XOR	X5, X8, X8
+	XOR	X5, X28, X28
 
 	// Load fold constants: K2 (high), K1 (low)
 	MOV	cast_fold<>+0(SB), X10		// K2
@@ -182,14 +188,14 @@ cast_fold_loop:
 	ADD	$-16, X7
 
 	// Carry-less multiply fold
-	CLMUL	X11, X8, X15		// clmul(K1, t0)
-	CLMULH	X11, X8, X16		// clmulh(K1, t0)
+	CLMUL	X11, X28, X15		// clmul(K1, t0)
+	CLMULH	X11, X28, X16		// clmulh(K1, t0)
 	CLMUL	X10, X9, X17		// clmul(K2, t1)
 	CLMULH	X10, X9, X18		// clmulh(K2, t1)
 
 	// Combine fold results with new data
-	XOR	X15, X17, X8		// t0 = fold_low
-	XOR	X8, X13, X8		// t0 ^= d0
+	XOR	X15, X17, X28		// t0 = fold_low
+	XOR	X28, X13, X28		// t0 ^= d0
 	XOR	X16, X18, X9		// t1 = fold_high
 	XOR	X9, X14, X9		// t1 ^= d1
 
@@ -201,8 +207,8 @@ cast_fold_done:
 	MOV	cast_reduce<>+8(SB), X11	// const_high
 
 	// 128-bit → 64-bit folding
-	CLMUL	X11, X8, X12		// t4 = clmul(t0, const_high)
-	CLMULH	X11, X8, X13		// t3h = clmulh(t0, const_high)
+	CLMUL	X11, X28, X12		// t4 = clmul(t0, const_high)
+	CLMULH	X11, X28, X13		// t3h = clmulh(t0, const_high)
 	XOR	X9, X12, X9		// t1 = t1 XOR t4
 
 	MOV	mask32<>(SB), X20	// X20 = 0xFFFFFFFF
