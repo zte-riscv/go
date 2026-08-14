@@ -5,7 +5,6 @@
 package riscv64asm
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -66,51 +65,11 @@ func GNUSyntax(inst Inst) string {
 			args = args[:len(args)-1]
 		}
 
-		if inst.Op == ORI && inst.Args[0].(Reg) == X0 {
-			imm := inst.Args[2].(Simm).Imm
-			switch imm & 0b11111 {
-			case 0:
-				op = "prefetch.i"
-			case 1:
-				op = "prefetch.r"
-			case 3:
-				op = "prefetch.w"
-			}
-			// compared to ORI, the lowest 5 bits of imm in PREFETCH should be zeros
-			simm := inst.Args[2].(Simm)
-			simm.Imm = simm.Imm &^ 0b11111
-			if imm == 0 {
-				args[0] = fmt.Sprintf("(X%d)", inst.Args[1].(Reg))
-			} else {
-				args[0] = fmt.Sprintf("%s(X%d)", simm.String(), inst.Args[1].(Reg))
-			}
-			args = args[:len(args)-2]
-		}
-
 	case ADD:
 		if inst.Args[1].(Reg) == X0 {
-			if inst.Args[0].(Reg) == X0 {
-				isZihintntl := true
-				switch inst.Args[2].(Reg) {
-				case X2:
-					op = "ntl.p1"
-				case X3:
-					op = "ntl.pall"
-				case X4:
-					op = "ntl.s1"
-				case X5:
-					op = "ntl.all"
-				default:
-					isZihintntl = false
-				}
-				if isZihintntl {
-					args = args[:0]
-				}
-			} else {
-				op = "mv"
-				args[1] = args[2]
-				args = args[:len(args)-1]
-			}
+			op = "mv"
+			args[1] = args[2]
+			args = args[:len(args)-1]
 		}
 
 	case BEQ:
@@ -266,12 +225,6 @@ func GNUSyntax(inst Inst) string {
 	case FENCE:
 		if inst.Args[0].(MemOrder).String() == "iorw" &&
 			inst.Args[1].(MemOrder).String() == "iorw" {
-			args = nil
-		}
-		//PAUSE is encoded as a FENCE instruction with pred=W, succ=0
-		if inst.Args[0].(MemOrder).String() == "w" &&
-			inst.Args[1].(MemOrder).String() == "" {
-			op = "pause"
 			args = nil
 		}
 

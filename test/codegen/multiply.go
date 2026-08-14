@@ -19,38 +19,30 @@ func m2(x int64) int64 {
 	// amd64: "ADDQ"
 	// arm64: "ADD"
 	// loong64: "ADDVU"
-	// riscv64:"SLLI [$]1"
 	return x * 2
 }
 func m3(x int64) int64 {
 	// amd64: "LEAQ .*[*]2"
 	// arm64: "ADD R[0-9]+<<1,"
 	// loong64: "ALSLV [$]1,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH1ADD ", -"MUL "
 	return x * 3
 }
 func m4(x int64) int64 {
 	// amd64: "SHLQ [$]2,"
 	// arm64: "LSL [$]2,"
 	// loong64: "SLLV [$]2,"
-	// riscv64:"SLLI [$]2"
 	return x * 4
 }
 func m5(x int64) int64 {
 	// amd64: "LEAQ .*[*]4"
 	// arm64: "ADD R[0-9]+<<2,"
 	// loong64: "ALSLV [$]2,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH2ADD ", -"MUL "
 	return x * 5
 }
 func m6(x int64) int64 {
 	// amd64: "LEAQ .*[*]1", "LEAQ .*[*]2"
 	// arm64: "ADD R[0-9]+,", "ADD R[0-9]+<<1,"
 	// loong64: "ADDVU", "ADDVU", "ADDVU"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH1ADD ", "SLLI [$]1", -"MUL "
 	return x * 6
 }
 func m7(x int64) int64 {
@@ -63,23 +55,18 @@ func m8(x int64) int64 {
 	// amd64: "SHLQ [$]3,"
 	// arm64: "LSL [$]3,"
 	// loong64: "SLLV [$]3,"
-	// riscv64:"SLLI [$]3"
 	return x * 8
 }
 func m9(x int64) int64 {
 	// amd64: "LEAQ .*[*]8"
 	// arm64: "ADD R[0-9]+<<3,"
 	// loong64: "ALSLV [$]3,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH3ADD ", -"MUL "
 	return x * 9
 }
 func m10(x int64) int64 {
 	// amd64: "LEAQ .*[*]1", "LEAQ .*[*]4"
 	// arm64: "ADD R[0-9]+,", "ADD R[0-9]+<<2,"
 	// loong64: "ADDVU", "ALSLV [$]2,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH2ADD ", "SLLI [$]1", -"MUL "
 	return x * 10
 }
 func m11(x int64) int64 {
@@ -92,8 +79,6 @@ func m12(x int64) int64 {
 	// amd64: "LEAQ .*[*]2", "SHLQ [$]2,"
 	// arm64: "LSL [$]2,", "ADD R[0-9]+<<1,"
 	// loong64: "SLLV", "ALSLV [$]1,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH1ADD ", "SLLI [$]2", -"MUL "
 	return x * 12
 }
 func m13(x int64) int64 {
@@ -130,8 +115,6 @@ func m18(x int64) int64 {
 	// amd64: "LEAQ .*[*]1", "LEAQ .*[*]8"
 	// arm64: "ADD R[0-9]+,", "ADD R[0-9]+<<3,"
 	// loong64: "ADDVU", "ALSLV [$]3,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH3ADD ", "SLLI [$]1", -"MUL "
 	return x * 18
 }
 func m19(x int64) int64 {
@@ -143,9 +126,7 @@ func m19(x int64) int64 {
 func m20(x int64) int64 {
 	// amd64: "LEAQ .*[*]4", "SHLQ [$]2,"
 	// arm64: "LSL [$]2,", "ADD R[0-9]+<<2,"
-	// loong64: "SLLV [$]2,", "ALSLV [$]2,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH2ADD ", "SLLI [$]2", -"MUL "
+	// loong64: "SLLV [$]2,", "ALSLV [$]2," 
 	return x * 20
 }
 func m21(x int64) int64 {
@@ -170,8 +151,6 @@ func m24(x int64) int64 {
 	// amd64: "LEAQ .*[*]2", "SHLQ [$]3,"
 	// arm64: "LSL [$]3,", "ADD R[0-9]+<<1,"
 	// loong64: "SLLV [$]3", "ALSLV [$]1,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH1ADD ", "SLLI [$]3", -"MUL "
 	return x * 24
 }
 func m25(x int64) int64 {
@@ -194,7 +173,7 @@ func m27(x int64) int64 {
 }
 func m28(x int64) int64 {
 	// amd64: "IMUL3Q [$]28,"
-	// arm64: "LSL [$]5,", "SUB R[0-9]+<<2,"
+	// arm64: "LSL [$]5, "SUB R[0-9]+<<2,"
 	// loong64: "ALSLV [$]1," "SLLV [$]2," "ALSLV [$]3,"
 	return x * 28
 }
@@ -244,8 +223,6 @@ func m36(x int64) int64 {
 	// amd64: "LEAQ .*[*]8", "SHLQ [$]2,"
 	// arm64: "LSL [$]2,", "ADD R[0-9]+<<3,"
 	// loong64: "SLLV [$]2,", "ALSLV [$]3,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH3ADD ", "SLLI [$]2", -"MUL "
 	return x * 36
 }
 func m37(x int64) int64 {
@@ -270,14 +247,7 @@ func m40(x int64) int64 {
 	// amd64: "LEAQ .*[*]4", "SHLQ [$]3,"
 	// arm64: "LSL [$]3,", "ADD R[0-9]+<<2,"
 	// loong64: "SLLV [$]3,", "ALSLV [$]2,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH2ADD ", "SLLI [$]3", -"MUL "
 	return x * 40
-}
-func m72(x int64) int64 {
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH3ADD ", "SLLI [$]3", -"MUL "
-	return x * 72
 }
 
 func mn1(x int64) int64 {
@@ -296,8 +266,6 @@ func mn3(x int64) int64 {
 	// amd64: "NEGQ", "LEAQ .*[*]2"
 	// arm64: "SUB R[0-9]+<<2,"
 	// loong64: "SUBVU", "ALSLV [$]1,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH1ADD ", "NEG ", -"MUL "
 	return x * -3
 }
 func mn4(x int64) int64 {
@@ -310,16 +278,12 @@ func mn5(x int64) int64 {
 	// amd64: "NEGQ", "LEAQ .*[*]4"
 	// arm64: "NEG R[0-9]+,", "ADD R[0-9]+<<2,"
 	// loong64: "SUBVU", "ALSLV [$]2,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH2ADD ", "NEG ", -"MUL "
 	return x * -5
 }
 func mn6(x int64) int64 {
 	// amd64: "IMUL3Q [$]-6,"
 	// arm64: "ADD R[0-9]+,", "SUB R[0-9]+<<2,"
 	// loong64: "ADDVU", "SUBVU", "ALSLV [$]3,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH1ADD ", "SLLI [$]1", "NEG "
 	return x * -6
 }
 func mn7(x int64) int64 {
@@ -338,16 +302,12 @@ func mn9(x int64) int64 {
 	// amd64: "NEGQ", "LEAQ .*[*]8"
 	// arm64: "NEG R[0-9]+,", "ADD R[0-9]+<<3,"
 	// loong64: "SUBVU", "ALSLV [$]3,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH3ADD ", "NEG ", -"MUL "
 	return x * -9
 }
 func mn10(x int64) int64 {
 	// amd64: "IMUL3Q [$]-10,"
 	// arm64: "MOVD [$]-10,", "MUL"
 	// loong64: "ADDVU", "ALSLV [$]3", "SUBVU"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH2ADD ", "SLLI [$]1", "NEG "
 	return x * -10
 }
 func mn11(x int64) int64 {
@@ -360,8 +320,6 @@ func mn12(x int64) int64 {
 	// amd64: "IMUL3Q [$]-12,"
 	// arm64: "LSL [$]2,", "SUB R[0-9]+<<2,"
 	// loong64: "SUBVU", "SLLV [$]2,", "ALSLV [$]4,"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH1ADD ", "SLLI [$]2", "NEG "
 	return x * -12
 }
 func mn13(x int64) int64 {
@@ -398,8 +356,6 @@ func mn18(x int64) int64 {
 	// amd64: "IMUL3Q [$]-18,"
 	// arm64: "MOVD [$]-18,", "MUL"
 	// loong64: "ADDVU", "ALSLV [$]4,", "SUBVU"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH3ADD ", "SLLI [$]1", "NEG "
 	return x * -18
 }
 func mn19(x int64) int64 {
@@ -412,90 +368,5 @@ func mn20(x int64) int64 {
 	// amd64: "IMUL3Q [$]-20,"
 	// arm64: "MOVD [$]-20,", "MUL"
 	// loong64: "SLLV [$]2,", "ALSLV [$]4,", "SUBVU"
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH2ADD ", "SLLI [$]2", "NEG "
 	return x * -20
-}
-func mn24(x int64) int64 {
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH1ADD ", "SLLI [$]3", "NEG "
-	return x * -24
-}
-func mn36(x int64) int64 {
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH3ADD ", "SLLI [$]2", "NEG "
-	return x * -36
-}
-func mn40(x int64) int64 {
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH2ADD ", "SLLI [$]3", "NEG "
-	return x * -40
-}
-func mn72(x int64) int64 {
-	// riscv64/rva20u64:"MUL "
-	// riscv64/rva22u64:"SH3ADD ", "SLLI [$]3", "NEG "
-	return x * -72
-}
-
-// 32-bit multiply strength reduction tests.
-
-func mul32By3(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH1ADD ", "MOVW ", -"MULW "
-	return x * 3
-}
-func mul32By5(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH2ADD ", "MOVW ", -"MULW "
-	return x * 5
-}
-func mul32By9(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH3ADD ", "MOVW ", -"MULW "
-	return x * 9
-}
-func mul32By6(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH1ADD ", "SLLIW [$]1", -"MULW "
-	return x * 6
-}
-func mul32By12(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH1ADD ", "SLLIW [$]2", -"MULW "
-	return x * 12
-}
-func mul32By10(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH2ADD ", "SLLIW [$]1", -"MULW "
-	return x * 10
-}
-func mul32By20(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH2ADD ", "SLLIW [$]2", -"MULW "
-	return x * 20
-}
-func mul32By18(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH3ADD ", "SLLIW [$]1", -"MULW "
-	return x * 18
-}
-func mul32By36(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH3ADD ", "SLLIW [$]2", -"MULW "
-	return x * 36
-}
-func mul32ByNeg3(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH1ADD ", "NEGW ", -"MULW "
-	return x * (-3)
-}
-func mul32ByNeg5(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH2ADD ", "NEGW ", -"MULW "
-	return x * (-5)
-}
-func mul32ByNeg9(x int32) int32 {
-	// riscv64/rva20u64:"MULW "
-	// riscv64/rva22u64:"SH3ADD ", "NEGW ", -"MULW "
-	return x * (-9)
 }

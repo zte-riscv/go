@@ -28,6 +28,7 @@ const (
 	riscv64REG_SP   = 2
 	riscv64REG_GP   = 3
 	riscv64REG_TP   = 4
+	riscv64REG_FP   = 8
 	riscv64REG_TMP  = 31
 	riscv64REG_ZERO = 0
 )
@@ -79,7 +80,7 @@ func init() {
 		// Add general purpose registers to gpMask.
 		switch r {
 		// ZERO, GP, TP and TMP are not in any gp mask.
-		case riscv64REG_ZERO, riscv64REG_GP, riscv64REG_TP, riscv64REG_TMP:
+		case riscv64REG_ZERO, riscv64REG_GP, riscv64REG_TP, riscv64REG_TMP, riscv64REG_FP:
 		case riscv64REG_G:
 			gpgMask |= mask
 			gpspsbgMask |= mask
@@ -118,7 +119,6 @@ func init() {
 	regCtxt := regNamed["X26"]
 	callerSave := gpMask | fpMask | regNamed["g"]
 	r5toR6 := regNamed["X5"] | regNamed["X6"]
-	regX5 := regNamed["X5"]
 
 	var (
 		gpstore  = regInfo{inputs: []regMask{gpspsbMask, gpspMask, 0}} // SB in first input so we can load from a global, but not in second to avoid using SB as a temporary register
@@ -143,14 +143,9 @@ func init() {
 		fpload  = regInfo{inputs: []regMask{gpspsbMask, 0}, outputs: []regMask{fpMask}}
 		fp2gp   = regInfo{inputs: []regMask{fpMask, fpMask}, outputs: []regMask{gpMask}}
 
-		call = regInfo{clobbers: callerSave}
-		// Avoid using X5 as the source register of calls. Using X5 here triggers
-		// RAS pop-then-push behavior which is not correct for function calls.
-		// Please refer to section 2.5.1 of the RISC-V ISA
-		// (https://docs.riscv.org/reference/isa/unpriv/rv32.html#rashints) for details.
-		callClosure = regInfo{inputs: []regMask{gpspMask ^ regX5, regCtxt, 0}, clobbers: callerSave}
-		callInter   = regInfo{inputs: []regMask{gpMask ^ regX5}, clobbers: callerSave}
-		prefreg     = regInfo{inputs: []regMask{gpspsbMask}}
+		call        = regInfo{clobbers: callerSave}
+		callClosure = regInfo{inputs: []regMask{gpspMask, regCtxt, 0}, clobbers: callerSave}
+		callInter   = regInfo{inputs: []regMask{gpMask}, clobbers: callerSave}
 	)
 
 	RISCV64ops := []opData{
@@ -233,16 +228,10 @@ func init() {
 		{name: "SRLI", argLength: 1, reg: gp11, asm: "SRLI", aux: "Int64"},   // arg0 >> auxint, shift amount 0-63, logical right shift
 		{name: "SRLIW", argLength: 1, reg: gp11, asm: "SRLIW", aux: "Int64"}, // arg0 >> auxint, shift amount 0-31, logical right shift of 32 bit value, sign extended to 64 bits
 
-		//B extension (Zba)
 		// Shift and add
-		{name: "SH1ADD", argLength: 2, reg: gp21, asm: "SH1ADD"},               // arg0 << 1 + arg1
-		{name: "SH2ADD", argLength: 2, reg: gp21, asm: "SH2ADD"},               // arg0 << 2 + arg1
-		{name: "SH3ADD", argLength: 2, reg: gp21, asm: "SH3ADD"},               // arg0 << 3 + arg1
-		{name: "ADDUW", argLength: 2, reg: gp21, asm: "ADDUW"},                 // ZeroExt32to64(Trunc64to32(arg0)) + arg1
-		{name: "SH1ADDUW", argLength: 2, reg: gp21, asm: "SH1ADDUW"},           // ZeroExt32to64(Trunc64to32(arg0))<<1 + arg1
-		{name: "SH2ADDUW", argLength: 2, reg: gp21, asm: "SH2ADDUW"},           // ZeroExt32to64(Trunc64to32(arg0))<<2 + arg1
-		{name: "SH3ADDUW", argLength: 2, reg: gp21, asm: "SH3ADDUW"},           // ZeroExt32to64(Trunc64to32(arg0))<<3 + arg1
-		{name: "SLLIUW", argLength: 1, reg: gp11, asm: "SLLIUW", aux: "Int64"}, // ZeroExt32to64(Trunc64to32(arg0))<<auxint
+		{name: "SH1ADD", argLength: 2, reg: gp21, asm: "SH1ADD"}, // arg0 << 1 + arg1
+		{name: "SH2ADD", argLength: 2, reg: gp21, asm: "SH2ADD"}, // arg0 << 2 + arg1
+		{name: "SH3ADD", argLength: 2, reg: gp21, asm: "SH3ADD"}, // arg0 << 3 + arg1
 
 		// Bitwise ops
 		{name: "AND", argLength: 2, reg: gp21, asm: "AND", commutative: true},   // arg0 & arg1
@@ -396,7 +385,6 @@ func init() {
 
 		// Atomic exchange.
 		// store arg1 to *arg0. arg2=mem. returns <old content of *arg0, memory>.
-		{name: "LoweredAtomicExchange8", argLength: 3, reg: gpxchg, resultNotInArgs: true, faultOnNilArg0: true, hasSideEffects: true},
 		{name: "LoweredAtomicExchange32", argLength: 3, reg: gpxchg, resultNotInArgs: true, faultOnNilArg0: true, hasSideEffects: true},
 		{name: "LoweredAtomicExchange64", argLength: 3, reg: gpxchg, resultNotInArgs: true, faultOnNilArg0: true, hasSideEffects: true},
 
@@ -421,11 +409,6 @@ func init() {
 		// MOV  $1, Rout
 		{name: "LoweredAtomicCas32", argLength: 4, reg: gpcas, resultNotInArgs: true, faultOnNilArg0: true, hasSideEffects: true, unsafePoint: true},
 		{name: "LoweredAtomicCas64", argLength: 4, reg: gpcas, resultNotInArgs: true, faultOnNilArg0: true, hasSideEffects: true, unsafePoint: true},
-
-		// Atomic 8 bit AND/OR.
-		// *arg0 &= (|=) arg1. arg2=mem. returns nil.
-		{name: "LoweredAtomicAnd8", argLength: 3, reg: gpatomic, asm: "AMOANDB", faultOnNilArg0: true, hasSideEffects: true},
-		{name: "LoweredAtomicOr8", argLength: 3, reg: gpatomic, asm: "AMOORB", faultOnNilArg0: true, hasSideEffects: true},
 
 		// Atomic 32 bit AND/OR.
 		// *arg0 &= (|=) arg1. arg2=mem. returns nil.
@@ -541,23 +524,6 @@ func init() {
 		//   ====+=============================
 		{name: "FCLASSS", argLength: 1, reg: fpgp, asm: "FCLASSS", typ: "Int64"}, // classify float32
 		{name: "FCLASSD", argLength: 1, reg: fpgp, asm: "FCLASSD", typ: "Int64"}, // classify float64
-
-		// Single-bit instructions (Zbs)
-		{name: "BCLR", argLength: 2, reg: gp21, asm: "BCLR"},                 // clear the arg1-th bit of arg0
-		{name: "BCLRI", argLength: 1, reg: gp11, asm: "BCLRI", aux: "Int64"}, // clear the auxint-th bit of arg0
-		{name: "BEXT", argLength: 2, reg: gp21, asm: "BEXT"},                 // extract the arg1-th bit of arg0
-		{name: "BEXTI", argLength: 1, reg: gp11, asm: "BEXTI", aux: "Int64"}, // extract the auxint-th bit of arg0
-		{name: "BINV", argLength: 2, reg: gp21, asm: "BINV"},                 // invert the arg1-th bit of arg0
-		{name: "BINVI", argLength: 1, reg: gp11, asm: "BINVI", aux: "Int64"}, // invert the auxint-th bit of arg0
-		{name: "BSET", argLength: 2, reg: gp21, asm: "BSET"},                 // set the arg1-th bit of arg0
-		{name: "BSETI", argLength: 1, reg: gp11, asm: "BSETI", aux: "Int64"}, // set the auxint-th bit of arg0
-
-		// RISC-V Integer Conditional (Zicond) operations extension
-		{name: "CZEROEQZ", argLength: 2, reg: gp21, asm: "CZEROEQZ"},
-		{name: "CZERONEZ", argLength: 2, reg: gp21, asm: "CZERONEZ"},
-
-		{name: "PREFETCH", argLength: 2, reg: prefreg, asm: "PREFETCHR", hasSideEffects: true},
-		{name: "PREFETCHNT", argLength: 2, reg: prefreg, asm: "PREFETCHR", hasSideEffects: true},
 	}
 
 	RISCV64blocks := []blockData{
@@ -574,11 +540,6 @@ func init() {
 		{name: "BGEZ", controls: 1},
 		{name: "BLTZ", controls: 1},
 		{name: "BGTZ", controls: 1},
-		// JUMPTABLE implements jump tables.
-		// Aux is the symbol (an *obj.LSym) for the jump table.
-		// control[0] is the index into the jump table.
-		// control[1] is the address of the jump table (the address of the symbol stored in Aux).
-		{name: "JUMPTABLE", controls: 2, aux: "Sym"},
 	}
 
 	archs = append(archs, arch{
@@ -590,9 +551,9 @@ func init() {
 		regnames:        regNamesRISCV64,
 		gpregmask:       gpMask,
 		fpregmask:       fpMask,
-		framepointerreg: -1, // not used
-		// Integer parameters passed in register X10-X17, X8-X9, X18-X23
-		ParamIntRegNames: "X10 X11 X12 X13 X14 X15 X16 X17 X8 X9 X18 X19 X20 X21 X22 X23",
+		framepointerreg: 7, // Frame Pointer of RISCV is X8
+		// Integer parameters passed in register X10-X17, X9, X18-X23
+		ParamIntRegNames: "X10 X11 X12 X13 X14 X15 X16 X17 X9 X18 X19 X20 X21 X22 X23",
 		// Float parameters passed in register F10-F17, F8-F9, F18-F23
 		ParamFloatRegNames: "F10 F11 F12 F13 F14 F15 F16 F17 F8 F9 F18 F19 F20 F21 F22 F23",
 	})

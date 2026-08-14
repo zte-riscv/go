@@ -241,9 +241,9 @@ func initIntrinsics(cfg *intrinsicBuildConfig) {
 	// Make Prefetch intrinsics for supported platforms
 	// On the unsupported platforms stub function will be eliminated
 	addF("internal/runtime/sys", "Prefetch", makePrefetchFunc(ssa.OpPrefetchCache),
-		sys.AMD64, sys.ARM64, sys.Loong64, sys.PPC64, sys.RISCV64)
+		sys.AMD64, sys.ARM64, sys.Loong64, sys.PPC64)
 	addF("internal/runtime/sys", "PrefetchStreamed", makePrefetchFunc(ssa.OpPrefetchCacheStreamed),
-		sys.AMD64, sys.ARM64, sys.Loong64, sys.PPC64, sys.RISCV64)
+		sys.AMD64, sys.ARM64, sys.Loong64, sys.PPC64)
 
 	/******** internal/runtime/atomic ********/
 	type atomicOpEmitter func(s *state, n *ir.CallExpr, args []*ssa.Value, op ssa.Op, typ types.Kind, needReturn bool)
@@ -405,16 +405,6 @@ func initIntrinsics(cfg *intrinsicBuildConfig) {
 			return s.newValue1(ssa.OpSelect0, types.Types[types.TUINT64], v)
 		},
 		sys.AMD64, sys.Loong64, sys.MIPS64, sys.PPC64, sys.RISCV64, sys.S390X)
-
-	if buildcfg.GORISCV64EXT.Zabha {
-		addF("internal/runtime/atomic", "Xchg8",
-			func(s *state, n *ir.CallExpr, args []*ssa.Value) *ssa.Value {
-				v := s.newValue3(ssa.OpRISCV64LoweredAtomicExchange8, types.NewTuple(types.Types[types.TUINT8], types.TypeMem), args[0], args[1], s.mem())
-				s.vars[memVar] = s.newValue1(ssa.OpSelect1, types.TypeMem, v)
-				return s.newValue1(ssa.OpSelect0, types.Types[types.TUINT8], v)
-			},
-			sys.RISCV64)
-	}
 
 	makeAtomicGuardedIntrinsicARM64common := func(op0, op1 ssa.Op, typ types.Kind, emit atomicOpEmitter, needReturn bool) intrinsicBuilder {
 
@@ -1623,10 +1613,6 @@ func initIntrinsics(cfg *intrinsicBuildConfig) {
 	/******** crypto/internal/constanttime ********/
 	// We implement a superset of the Select promise:
 	// Select returns x if v != 0 and y if v == 0.
-	hasCMOV := []*sys.Arch{sys.ArchAMD64, sys.ArchARM64, sys.ArchLoong64, sys.ArchPPC64, sys.ArchPPC64LE, sys.ArchWasm}
-	if cfg.goriscv64 >= 23 {
-		hasCMOV = append(hasCMOV, sys.ArchRISCV64)
-	}
 	add("crypto/internal/constanttime", "Select",
 		func(s *state, n *ir.CallExpr, args []*ssa.Value) *ssa.Value {
 			v, x, y := args[0], args[1], args[2]
@@ -1646,25 +1632,13 @@ func initIntrinsics(cfg *intrinsicBuildConfig) {
 			check := s.newValue2(checkOp, types.Types[types.TBOOL], zero, v)
 
 			return s.newValue3(ssa.OpCondSelect, types.Types[types.TINT], x, y, check)
-		}, hasCMOV...) // all with CMOV support.
+		},
+		sys.ArchAMD64, sys.ArchARM64, sys.ArchLoong64, sys.ArchPPC64, sys.ArchPPC64LE, sys.ArchWasm) // all with CMOV support.
 	add("crypto/internal/constanttime", "boolToUint8",
 		func(s *state, n *ir.CallExpr, args []*ssa.Value) *ssa.Value {
 			return s.newValue1(ssa.OpCvtBoolToUint8, types.Types[types.TUINT8], args[0])
 		},
 		all...)
-
-	/******** crypto/internal/fips140/nistec/fiat ********/
-	// p256CmovznzU64 implements conditional move: out1 = (if arg1 == 0 then arg2 else arg3)
-	add("crypto/internal/fips140/nistec/fiat", "p256CmovznzU64",
-		func(s *state, n *ir.CallExpr, args []*ssa.Value) *ssa.Value {
-			out1, arg1, arg2, arg3 := args[0], args[1], args[2], args[3]
-
-			arg1Uint64 := s.conv(n, arg1, arg1.Type, types.Types[types.TUINT64])
-			result := s.newValue3(ssa.OpCondSelect, types.Types[types.TUINT64], arg3, arg2, arg1Uint64)
-			s.store(types.Types[types.TUINT64], out1, result)
-
-			return s.mem()
-		}, hasCMOV...) // all with CMOV support.
 
 	if buildcfg.Experiment.SIMD {
 		// Only enable intrinsics, if SIMD experiment.

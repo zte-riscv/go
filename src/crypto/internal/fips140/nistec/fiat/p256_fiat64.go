@@ -85,7 +85,7 @@ func p256CmovznzU64(out1 *uint64, arg1 p256Uint1, arg2 uint64, arg3 uint64) {
 //
 //	eval (from_montgomery out1) mod m = (eval (from_montgomery arg1) * eval (from_montgomery arg2)) mod m
 //	0 ≤ eval out1 < m
-func p256MulGeneric(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement, arg2 *p256MontgomeryDomainFieldElement) {
+func p256Mul(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement, arg2 *p256MontgomeryDomainFieldElement) {
 	x1 := arg1[1]
 	x2 := arg1[2]
 	x3 := arg1[3]
@@ -362,7 +362,7 @@ func p256MulGeneric(out1 *p256MontgomeryDomainFieldElement, arg1 *p256Montgomery
 	out1[3] = x187
 }
 
-// p256SquareGeneric squares a field element in the Montgomery domain.
+// p256Square squares a field element in the Montgomery domain.
 //
 // Preconditions:
 //
@@ -372,7 +372,7 @@ func p256MulGeneric(out1 *p256MontgomeryDomainFieldElement, arg1 *p256Montgomery
 //
 //	eval (from_montgomery out1) mod m = (eval (from_montgomery arg1) * eval (from_montgomery arg1)) mod m
 //	0 ≤ eval out1 < m
-func p256SquareGeneric(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement) {
+func p256Square(out1 *p256MontgomeryDomainFieldElement, arg1 *p256MontgomeryDomainFieldElement) {
 	x1 := arg1[1]
 	x2 := arg1[2]
 	x3 := arg1[3]

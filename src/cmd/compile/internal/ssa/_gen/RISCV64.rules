@@ -39,8 +39,6 @@
 (Select1 (Sub64borrow x y c)) =>
 	(OR (SLTU <typ.UInt64> x s:(SUB <typ.UInt64> x y)) (SLTU <typ.UInt64> s (SUB <typ.UInt64> s c)))
 
-(JumpTable idx) => (JUMPTABLE {makeJumpTableSym(b)} idx (MOVaddr <typ.Uintptr> {makeJumpTableSym(b)} (SB)))
-
 // (x + y) / 2 => (x / 2) + (y / 2) + (x & y & 1)
 (Avg64u <t> x y) => (ADD (ADD <t> (SRLI <t> [1] x) (SRLI <t> [1] y)) (ANDI <t> [1] (AND <t> x y)))
 
@@ -488,11 +486,8 @@
 (AtomicStore(PtrNoWB|64|32|8) ...) => (LoweredAtomicStore(64|64|32|8) ...)
 (AtomicAdd(64|32) ...) => (LoweredAtomicAdd(64|32) ...)
 
-// RVA23 AtomicAnd8 => LoweredAtomicAnd8
-(AtomicAnd8 ptr val mem) && buildcfg.GORISCV64EXT.Zabha => (LoweredAtomicAnd8 ptr val mem)
-
 // AtomicAnd8(ptr,val) => LoweredAtomicAnd32(ptr&^3, ^((uint8(val) ^ 0xff) << ((ptr & 3) * 8)))
-(AtomicAnd8 ptr val mem) && !buildcfg.GORISCV64EXT.Zabha =>
+(AtomicAnd8 ptr val mem) =>
 	(LoweredAtomicAnd32 (ANDI <typ.Uintptr> [^3] ptr)
 		(NOT <typ.UInt32> (SLL <typ.UInt32> (XORI <typ.UInt32> [0xff] (ZeroExt8to32 val))
 			(SLLI <typ.UInt64> [3] (ANDI <typ.UInt64> [3] ptr)))) mem)
@@ -504,11 +499,8 @@
 
 (AtomicExchange(64|32) ...) => (LoweredAtomicExchange(64|32) ...)
 
-// RVA23 AtomicOr8 => LoweredAtomicOr8
-(AtomicOr8 ptr val mem) && buildcfg.GORISCV64EXT.Zabha => (LoweredAtomicOr8 ptr val mem)
-
 // AtomicOr8(ptr,val)  => LoweredAtomicOr32(ptr&^3, uint32(val)<<((ptr&3)*8))
-(AtomicOr8 ptr val mem) && !buildcfg.GORISCV64EXT.Zabha =>
+(AtomicOr8 ptr val mem) =>
 	(LoweredAtomicOr32 (ANDI <typ.Uintptr> [^3] ptr)
 		(SLL <typ.UInt32> (ZeroExt8to32 val)
 			(SLLI <typ.UInt64> [3] (ANDI <typ.UInt64> [3] ptr))) mem)
@@ -547,77 +539,6 @@
 (BNEZ (SLTI [x] y) yes no) => (BLT y (MOVDconst [x]) yes no)
 (BEQZ (SLTIU [x] y) yes no) => (BGEU y (MOVDconst [x]) yes no)
 (BNEZ (SLTIU [x] y) yes no) => (BLTU y (MOVDconst [x]) yes no)
-
-// Bit Test Branch Optimizations (BEQZ/BNEZ with Zbs)
-
-// Pattern: AND with constant mask (single bit)
-// Matches: if x&mask != 0 where mask is a power of two
-// Note: SSA canonicalizes commutative operations, so we only need one pattern
-(B(EQ|NE)Z (AND x (MOVDconst [c])) yes no) && isUnsignedPowerOfTwo(uint64(c)) && log64(c) >= 10 && buildcfg.GORISCV64 >= 22
-    => (B(EQ|NE)Z (BEXTI <typ.UInt64> [log64(c)] x) yes no)
-
-// Pattern: AND with variable shift (x & (1 << y))
-// Matches: if x&(1<<y) != 0
-(B(EQ|NE)Z (AND x (SLL (MOVDconst [1]) y)) yes no) && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
-
-// Pattern: AND with constant left shift (x & (1 << c))
-// Matches: if x&(1<<c) != 0 where c is a constant
-(B(EQ|NE)Z (AND x (SLLI [c] (MOVDconst [1]))) yes no) && c < 64 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
-(B(EQ|NE)Z (AND x (SLLIW [c] (MOVDconst [1]))) yes no) && c < 31 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
-
-// Pattern: 32-bit bit test with shift wrapped in MOVWUreg/MOVWreg
-// NOTE: Variable-shift without bounds guard is intentionally omitted because
-// MOVWUreg/MOVWreg truncates high bits when y >= 32, but BEXT reads the full 64-bit value.
-// For example: int32(x & (1 << 33)) always gives 0 (high bits truncated),
-// but BEXT x 33 returns bit 33 of x, producing incorrect results.
-(B(EQ|NE)Z (MOVWUreg (AND x (SLLI [c] (MOVDconst [1])))) yes no) && c < 32 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
-(B(EQ|NE)Z (MOVWUreg (AND x (SLLIW [c] (MOVDconst [1])))) yes no) && c < 31 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
-(B(EQ|NE)Z (MOVWreg (AND x (SLLI [c] (MOVDconst [1])))) yes no) && c < 32 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
-(B(EQ|NE)Z (MOVWreg (AND x (SLLIW [c] (MOVDconst [1])))) yes no) && c < 31 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
-// ANDI [c]-guarded variable shift: c <= 31 guarantees y & c < 32, so BEXT is safe.
-(B(EQ|NE)Z (MOVWUreg (AND x (SLL (MOVDconst [1]) (ANDI [c] y)))) yes no) && c >= 0 && c <= 31 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXT <typ.UInt64> x (ANDI <typ.UInt64> [c] y)) yes no)
-(B(EQ|NE)Z (MOVWreg (AND x (SLL (MOVDconst [1]) (ANDI [c] y)))) yes no) && c >= 0 && c <= 31 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXT <typ.UInt64> x (ANDI <typ.UInt64> [c] y)) yes no)
-
-// Pattern: Shift-right and test bit 0
-// Matches: if (x>>c)&1 != 0 with constant shift
-// This must come before the more general ANDI rules to match (x>>c)&1 patterns correctly
-(B(EQ|NE)Z (ANDI [1] (SRLI [c] x)) yes no) && c < 64 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
-(B(EQ|NE)Z (ANDI [1] (SRLIW [c] x)) yes no) && c < 32 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
-
-// Pattern: Variable shift-right and test bit 0
-// Matches: if (x>>y)&1 != 0 with variable shift
-(B(EQ|NE)Z (ANDI [1] (SRL x y)) yes no) && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
-(B(EQ|NE)Z (ANDI [1] (SRLW x y)) yes no) && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
-
-// Pattern: 32-bit bit test patterns with MOVWUreg wrapper
-// Note: For SRLI (64-bit shift) wrapped in MOVWUreg, only bits 0-31 are meaningful
-(B(EQ|NE)Z (MOVWUreg (ANDI [1] (SRLI [c] x))) yes no) && c < 32 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
-(B(EQ|NE)Z (MOVWUreg (ANDI [1] (SRLIW [c] x))) yes no) && c < 32 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c] x) yes no)
-(B(EQ|NE)Z (MOVWUreg (ANDI [1] (SRL x y))) yes no) && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
-(B(EQ|NE)Z (MOVWUreg (ANDI [1] (SRLW x y))) yes no) && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXT <typ.UInt64> x y) yes no)
-
-// Pattern: (x << c) & 1 where c > 0 is always 0 (left shift fills low bits with zero).
-// Fold to constant branch to let later passes eliminate dead code.
-(B(EQ|NE)Z (ANDI [1] (SLLI [c] x)) yes no) && c > 0 => (B(EQ|NE)Z (MOVDconst [0]) yes no)
-(B(EQ|NE)Z (ANDI [1] (SLLIW [c] x)) yes no) && c > 0 => (B(EQ|NE)Z (MOVDconst [0]) yes no)
-
-// Optimize bit test patterns with mask after shift: (BEQZ|BNEZ) (ANDI [mask] (SRLI [c] x))
-// This matches patterns like "if (x>>c)&mask == 0" where mask is a power of two
-(B(EQ|NE)Z (ANDI [mask] (SRLI [c] x)) yes no) && isUnsignedPowerOfTwo(uint64(mask)) && c+log64(mask) < 64 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c+log64(mask)] x) yes no)
-(B(EQ|NE)Z (ANDI [mask] (SRLIW [c] x)) yes no) && isUnsignedPowerOfTwo(uint64(mask)) && c+log64(mask) < 32 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [c+log64(mask)] x) yes no)
-
-// Optimize bit test patterns: (BEQZ|BNEZ) (ANDI [c] x) when c is a power of two
-// Note: Only convert to BEXTI if bit position >= 10, as ANDI with direct immediate
-// is more efficient for smaller bit positions (12-bit signed immediate range)
-(B(EQ|NE)Z (ANDI [c] x) yes no) && isUnsignedPowerOfTwo(uint64(c)) && log64(c) >= 10 && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [log64(c)] x) yes no)
-
-// Optimize bit test patterns: (BEQZ|BNEZ) (SRLI [c] x) - check if bit c is set after shift
-// For c=63, x>>63 is 0 or 1, so we can use BEXTI to extract bit 63
-(B(EQ|NE)Z (SRLI [63] x) yes no) && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [63] x) yes no)
-
-// Optimize bit test patterns for 32-bit unsigned right shift by 31.
-// For uint32, x>>31 is 0 or 1, so we can use BEXTI to extract bit 31.
-(B(EQ|NE)Z (MOVWUreg (SRLIW [31] x)) yes no) && buildcfg.GORISCV64 >= 22 => (B(EQ|NE)Z (BEXTI <typ.UInt64> [31] x) yes no)
 
 // Convert branch with zero to more optimal branch zero.
 (BEQ  (MOVDconst [0]) cond yes no) => (BEQZ cond yes no)
@@ -781,19 +702,6 @@
 (SRLI [x] (MOVHUreg y)) && x >= 16 => (MOVDconst [0])
 (SRLI [x] (MOVWUreg y)) && x >= 32 => (MOVDconst [0])
 
-// Zbs bit manipulation: match single-bit constants before general constant folding
-// Note: Only convert to BSETI/BINVI/BCLRI if the bit position >= 10, as immediate
-// instructions (ORI/XORI/ANDI) are more efficient for smaller bit positions.
-// This is because RISC-V I-type instructions have 12-bit signed immediates,
-// and constructing larger constants requires multiple instructions.
-// See issue 61694 (AMD64) for similar reasoning.
-(OR  (MOVDconst [c]) x) && isUnsignedPowerOfTwo(uint64(c)) && log64(c) >= 10 && buildcfg.GORISCV64 >= 22 => (BSETI [log64(c)] x)
-(XOR (MOVDconst [c]) x) && isUnsignedPowerOfTwo(uint64(c)) && log64(c) >= 10 && buildcfg.GORISCV64 >= 22 => (BINVI [log64(c)] x)
-
-// Recognize bit clearing with constant: a &^ (1<<c) where c >= 10
-// For c < 10, the constant can be encoded in ANDI immediate field
-(AND (MOVDconst [c]) x) && isUnsignedPowerOfTwo(uint64(^c)) && log64(^c) >= 10 && buildcfg.GORISCV64 >= 22 => (BCLRI [log64(^c)] x)
-
 // Fold constant into immediate instructions where possible.
 (ADD (MOVDconst <t> [val]) x) && is32Bit(val) && !t.IsPtr() => (ADDI [val] x)
 (AND (MOVDconst [val]) x) && is32Bit(val) => (ANDI [val] x)
@@ -940,93 +848,14 @@
 //
 // Optimisations for rva22u64 and above.
 //
-// Fold left shift least significant word
-(SLLI [x] (MOVWUreg y)) && x < 64 && buildcfg.GORISCV64 >= 22 => (SLLIUW [x] y)
 
-// Fold the add with (left shift) least significant word
-(ADD (MOVWUreg x) y) && buildcfg.GORISCV64 >= 22 => (ADDUW x y)
-(ADD (SLLIUW [1] x) y) && buildcfg.GORISCV64 >= 22 => (SH1ADDUW x y)
-(ADD (SLLIUW [2] x) y) && buildcfg.GORISCV64 >= 22 => (SH2ADDUW x y)
-(ADD (SLLIUW [3] x) y) && buildcfg.GORISCV64 >= 22 => (SH3ADDUW x y)
+// Combine left shift and addition.
+(ADD (SLLI [1] x) y) && buildcfg.GORISCV64 >= 22 => (SH1ADD x y)
+(ADD (SLLI [2] x) y) && buildcfg.GORISCV64 >= 22 => (SH2ADD x y)
+(ADD (SLLI [3] x) y) && buildcfg.GORISCV64 >= 22 => (SH3ADD x y)
 
 // Integer minimum and maximum.
 (Min64  x y) && buildcfg.GORISCV64 >= 22 => (MIN  x y)
 (Max64  x y) && buildcfg.GORISCV64 >= 22 => (MAX  x y)
 (Min64u x y) && buildcfg.GORISCV64 >= 22 => (MINU x y)
 (Max64u x y) && buildcfg.GORISCV64 >= 22 => (MAXU x y)
-
-// Zicond Extension for Integer Conditional Operations
-(CondSelect <t> x y cond) && buildcfg.GORISCV64 >= 23 =>
-	(OR (CZEROEQZ <t> x (MOVBUreg <typ.UInt64> cond)) (CZERONEZ <t> y (MOVBUreg <typ.UInt64> cond)))
-(CZERO(EQ|NE)Z x (SNEZ y)) => (CZERO(EQ|NE)Z x y)
-(CZERO(EQ|NE)Z x (SEQZ y)) => (CZERO(NE|EQ)Z x y)
-(CZEROEQZ x x) => x
-(CZERONEZ x x) => (MOVDconst [0])
-(CZERO(EQ|NE)Z (MOVDconst [0]) _) => (MOVDconst [0])
-
-// Optimize conditional arithmetic operations
-(OR (CZERONEZ <t> ((ADD|SUB|OR|XOR|SUBW) x y) cond) (CZEROEQZ <t> x cond)) => ((ADD|SUB|OR|XOR|SUBW) x (CZERONEZ <t> y cond))
-(OR (CZEROEQZ <t> ((ADD|SUB|OR|XOR|SUBW) x y) cond) (CZERONEZ <t> x cond)) => ((ADD|SUB|OR|XOR|SUBW) x (CZEROEQZ <t> y cond))
-(OR (CZERONEZ x:(AND z _) cond) y:(CZEROEQZ z cond)) => (OR x y)
-(OR (CZEROEQZ x:(AND z _) cond) y:(CZERONEZ z cond)) => (OR x y)
-(OR (CZERONEZ x:(ANDI <t> [c] z) cond) y:(CZEROEQZ z cond)) => (OR x y)
-(OR (CZEROEQZ x:(ANDI <t> [c] z) cond) y:(CZERONEZ z cond)) => (OR x y)
-(OR (CZERONEZ <t> ((ADDI|ORI|XORI) [c] x) cond) (CZEROEQZ <t> x cond)) => ((ADD|OR|XOR) x (CZERONEZ <t> (MOVDconst [c]) cond))
-(OR (CZEROEQZ <t> ((ADDI|ORI|XORI) [c] x) cond) (CZERONEZ <t> x cond)) => ((ADD|OR|XOR) x (CZEROEQZ <t> (MOVDconst [c]) cond))
-
-// Constant folding loads from read-only globals.
-// The resulting MOVDconst is a register-width constant that embeds the data
-// read at compile time, eliminating runtime memory accesses to .rodata.
-(MOVBUload [off] {sym} (SB) _) && symIsRO(sym) => (MOVDconst [int64(read8(sym, int64(off)))])
-(MOVHUload [off] {sym} (SB) _) && symIsRO(sym) => (MOVDconst [int64(read16(sym, int64(off), config.ctxt.Arch.ByteOrder))])
-(MOVWUload [off] {sym} (SB) _) && symIsRO(sym) => (MOVDconst [int64(read32(sym, int64(off), config.ctxt.Arch.ByteOrder))])
-(MOVDload  [off] {sym} (SB) _) && symIsRO(sym) => (MOVDconst [int64(read64(sym, int64(off), config.ctxt.Arch.ByteOrder))])
-(MOVBload  [off] {sym} (SB) _) && symIsRO(sym) => (MOVDconst [int64(int8(read8(sym, int64(off))))])
-(MOVHload  [off] {sym} (SB) _) && symIsRO(sym) => (MOVDconst [int64(int16(read16(sym, int64(off), config.ctxt.Arch.ByteOrder)))])
-(MOVWload  [off] {sym} (SB) _) && symIsRO(sym) => (MOVDconst [int64(int32(read32(sym, int64(off), config.ctxt.Arch.ByteOrder)))])
-
-(PrefetchCache ...)   => (PREFETCH ...)
-(PrefetchCacheStreamed ...) => (PREFETCHNT ...)
-
-// Strength reduction: multiply by small constants (Zba SH*ADD on RVA22+).
-// Generic Mul(64|32) rules handle const-fold, by-0/1/-1, and power-of-two
-// cases; these only cover RISC-V-specific patterns.
-
-(MUL x (MOVDconst [3])) && buildcfg.GORISCV64 >= 22 => (SH1ADD <x.Type> x x)
-(MUL x (MOVDconst [5])) && buildcfg.GORISCV64 >= 22 => (SH2ADD <x.Type> x x)
-(MUL x (MOVDconst [9])) && buildcfg.GORISCV64 >= 22 => (SH3ADD <x.Type> x x)
-(MULW x (MOVDconst [3])) && buildcfg.GORISCV64 >= 22 => (MOVWreg (SH1ADD <x.Type> x x))
-(MULW x (MOVDconst [5])) && buildcfg.GORISCV64 >= 22 => (MOVWreg (SH2ADD <x.Type> x x))
-(MULW x (MOVDconst [9])) && buildcfg.GORISCV64 >= 22 => (MOVWreg (SH3ADD <x.Type> x x))
-
-// Generic patterns: c = (2^n+1) * 2^m where n∈{1,2,3}, m≥1 (covers 6,10,12,18,20,24,...).
-(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%3==0 && isPowerOfTwo(c/3) && c>3 =>
-	(SLLI <x.Type> [int64(log64(c/3))] (SH1ADD <x.Type> x x))
-(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%5==0 && isPowerOfTwo(c/5) && c>5 =>
-	(SLLI <x.Type> [int64(log64(c/5))] (SH2ADD <x.Type> x x))
-(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%9==0 && isPowerOfTwo(c/9) && c>9 =>
-	(SLLI <x.Type> [int64(log64(c/9))] (SH3ADD <x.Type> x x))
-
-// Negative SH*ADD constants for MUL.
-(MUL x (MOVDconst [-3])) && buildcfg.GORISCV64 >= 22 => (NEG (SH1ADD <x.Type> x x))
-(MUL x (MOVDconst [-5])) && buildcfg.GORISCV64 >= 22 => (NEG (SH2ADD <x.Type> x x))
-(MUL x (MOVDconst [-9])) && buildcfg.GORISCV64 >= 22 => (NEG (SH3ADD <x.Type> x x))
-(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%3==0 && isPowerOfTwo((-c)/3) && c < -3 =>
-	(NEG (SLLI <x.Type> [int64(log64((-c)/3))] (SH1ADD <x.Type> x x)))
-(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%5==0 && isPowerOfTwo((-c)/5) && c < -5 =>
-	(NEG (SLLI <x.Type> [int64(log64((-c)/5))] (SH2ADD <x.Type> x x)))
-(MUL x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && c%9==0 && isPowerOfTwo((-c)/9) && c < -9 =>
-	(NEG (SLLI <x.Type> [int64(log64((-c)/9))] (SH3ADD <x.Type> x x)))
-
-// MULW generic SH*ADD+SLLIW patterns (positive).
-(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)%3==0 && isPowerOfTwo(int32(c)/3) && int32(c)>3 =>
-	(SLLIW <x.Type> [int64(log64(int64(int32(c)/3)))] (SH1ADD <x.Type> x x))
-(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)%5==0 && isPowerOfTwo(int32(c)/5) && int32(c)>5 =>
-	(SLLIW <x.Type> [int64(log64(int64(int32(c)/5)))] (SH2ADD <x.Type> x x))
-(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)%9==0 && isPowerOfTwo(int32(c)/9) && int32(c)>9 =>
-	(SLLIW <x.Type> [int64(log64(int64(int32(c)/9)))] (SH3ADD <x.Type> x x))
-
-// Negative SH*ADD constants for MULW.
-(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-3 => (NEGW (SH1ADD <x.Type> x x))
-(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-5 => (NEGW (SH2ADD <x.Type> x x))
-(MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-9 => (NEGW (SH3ADD <x.Type> x x))

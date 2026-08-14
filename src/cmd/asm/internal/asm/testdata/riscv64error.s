@@ -3,11 +3,6 @@
 // license that can be found in the LICENSE file.
 
 TEXT errors(SB),$0
-	CSRC	X5, TU				// ERROR "unknown CSR"
-	CSRC	(X5), CYCLE			// ERROR "integer register or immediate expected for 1st operand"
-	CSRC	$-1, TIME			// ERROR "immediate out of range 0 to 31"
-	CSRR	TU, X5				// ERROR "unknown CSR"
-	CSRR	CYCLE, (X5)			// ERROR "needs an integer register output"
 	CSRRC	(X10), CYCLE, X5		// ERROR "integer register or immediate expected for 1st operand"
 	CSRRC	X0, TU, X5			// ERROR "unknown CSR"
 	CSRRC	X0, CYCLE			// ERROR "missing CSR name"
@@ -29,14 +24,6 @@ TEXT errors(SB),$0
 	CSRRW	$-1, TIME, X15			// ERROR "immediate out of range 0 to 31"
 	CSRRWI	$32, TIME, X15			// ERROR "immediate out of range 0 to 31"
 	CSRRWI	$1, TIME, (X15)			// ERROR "needs an integer register output"
-	CSRW	X5, TU				// ERROR "unknown CSR"
-	CSRW	$-1, TIME			// ERROR "immediate out of range 0 to 31"
-	CSRWI	$32, TIME			// ERROR "immediate out of range 0 to 31"
-	CSRS	(X5), CYCLE			// ERROR "integer register or immediate expected for 1st operand"
-	CSRS	X5, TU				// ERROR "unknown CSR"
-	CSRS	$-1, TIME			// ERROR "immediate out of range 0 to 31"
-	CSRSI	$32, TIME			// ERROR "immediate out of range 0 to 31"
-	CSRW	(X5), CYCLE			// ERROR "integer register or immediate expected for 1st operand"
 	MOV	$errors(SB), (X5)		// ERROR "address load must target register"
 	MOV	$8(SP), (X5)			// ERROR "address load must target register"
 	MOVB	$8(SP), X5			// ERROR "unsupported address load"
@@ -80,11 +67,6 @@ TEXT errors(SB),$0
 	SRAIW	$-1, X5, X6			// ERROR "immediate out of range 0 to 31"
 	SD	X5, 4294967296(X6)		// ERROR "constant 4294967296 too large"
 	FNES	F1, (X5)			// ERROR "needs an integer register output"
-
-	// 19.6.3: Cache-Block Prefetch Instructions
-	PREFETCHI -65(X5)					// ERROR "The imm[4:0] of PREFETCH must equal 0b00000"
-	PREFETCHR 449(X5)					// ERROR "The imm[4:0] of PREFETCH must equal 0b00000"
-	PREFETCHW 451(X5)					// ERROR "The imm[4:0] of PREFETCH must equal 0b00000"
 
 	//
 	// "V" Standard Extension for Vector Operations, Version 1.0
@@ -434,25 +416,5 @@ TEXT errors(SB),$0
 	VRGATHEREI16VV	V1, V2, V4, V3			// ERROR "invalid vector mask register"
 	VRGATHERVX	X10, V2, V4, V3			// ERROR "invalid vector mask register"
 	VRGATHERVI	$16, V2, V4, V3			// ERROR "invalid vector mask register"
-	VANDNVV	V1, V2, V4, V3			// ERROR "invalid vector mask register"
-	VANDNVX	X10, V2, V4, V3			// ERROR "invalid vector mask register"
-	VROLVV V1, V2, V4, V3			// ERROR "invalid vector mask register"
-	VROLVX X10, V2, V4, V3			// ERROR "invalid vector mask register"
-	VWSLLVV V1, V2, V4, V3			// ERROR "invalid vector mask register"
-	VWSLLVX X10, V2, V4, V3			// ERROR "invalid vector mask register"
-	VWSLLVI $16, V2, V4, V3			// ERROR "invalid vector mask register"
-	VBREVV V2, V3, V4			// ERROR "invalid vector mask register"
-	VBREV8V V2, V3, V4			// ERROR "invalid vector mask register"
-	VREV8V V2, V3, V4			// ERROR "invalid vector mask register"
-	VCLZV V2, V3, V4			// ERROR "invalid vector mask register"
-	VCTZV V2, V3, V4			// ERROR "invalid vector mask register"
-	VCPOPV V2, V3, V4			// ERROR "invalid vector mask register"
-	VCLMULVV V1, V2, V4, V3			// ERROR "invalid vector mask register"
-	VCLMULVX X10, V2, V4, V3		// ERROR "invalid vector mask register"
-	VCLMULHVV V1, V2, V4, V3		// ERROR "invalid vector mask register"
-	VCLMULHVX X10, V2, V4, V3		// ERROR "invalid vector mask register"
-	VRORVV V1, V2, V4, V3			// ERROR "invalid vector mask register"
-	VRORVX X10, V2, V4, V3			// ERROR "invalid vector mask register"
-	VRORVI $16, V2, V4, V3			// ERROR "invalid vector mask register"
 
 	RET
