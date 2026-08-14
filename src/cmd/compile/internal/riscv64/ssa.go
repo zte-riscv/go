@@ -15,7 +15,6 @@ import (
 	"cmd/internal/obj"
 	"cmd/internal/obj/riscv"
 	"internal/abi"
-	"internal/buildcfg"
 )
 
 // ssaRegToReg maps ssa register numbers to obj register numbers.
@@ -295,10 +294,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		ssa.OpRISCV64FADDD, ssa.OpRISCV64FSUBD, ssa.OpRISCV64FMULD, ssa.OpRISCV64FDIVD,
 		ssa.OpRISCV64FEQD, ssa.OpRISCV64FNED, ssa.OpRISCV64FLTD, ssa.OpRISCV64FLED, ssa.OpRISCV64FSGNJD,
 		ssa.OpRISCV64MIN, ssa.OpRISCV64MAX, ssa.OpRISCV64MINU, ssa.OpRISCV64MAXU,
-		ssa.OpRISCV64SH1ADD, ssa.OpRISCV64SH2ADD, ssa.OpRISCV64SH3ADD,
-		ssa.OpRISCV64CZEROEQZ, ssa.OpRISCV64CZERONEZ,
-		ssa.OpRISCV64ADDUW, ssa.OpRISCV64SH1ADDUW, ssa.OpRISCV64SH2ADDUW, ssa.OpRISCV64SH3ADDUW,
-		ssa.OpRISCV64BCLR, ssa.OpRISCV64BEXT, ssa.OpRISCV64BINV, ssa.OpRISCV64BSET:
+		ssa.OpRISCV64SH1ADD, ssa.OpRISCV64SH2ADD, ssa.OpRISCV64SH3ADD:
 		r := v.Reg()
 		r1 := v.Args[0].Reg()
 		r2 := v.Args[1].Reg()
@@ -435,10 +431,9 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.To.Type = obj.TYPE_REG
 		p.To.Reg = v.Reg()
 	case ssa.OpRISCV64ADDI, ssa.OpRISCV64ADDIW, ssa.OpRISCV64XORI, ssa.OpRISCV64ORI, ssa.OpRISCV64ANDI,
-		ssa.OpRISCV64SLLI, ssa.OpRISCV64SLLIW, ssa.OpRISCV64SLLIUW, ssa.OpRISCV64SRAI, ssa.OpRISCV64SRAIW,
+		ssa.OpRISCV64SLLI, ssa.OpRISCV64SLLIW, ssa.OpRISCV64SRAI, ssa.OpRISCV64SRAIW,
 		ssa.OpRISCV64SRLI, ssa.OpRISCV64SRLIW, ssa.OpRISCV64SLTI, ssa.OpRISCV64SLTIU,
-		ssa.OpRISCV64RORI, ssa.OpRISCV64RORIW,
-		ssa.OpRISCV64BCLRI, ssa.OpRISCV64BEXTI, ssa.OpRISCV64BINVI, ssa.OpRISCV64BSETI:
+		ssa.OpRISCV64RORI, ssa.OpRISCV64RORIW:
 		p := s.Prog(v.Op.Asm())
 		p.From.Type = obj.TYPE_CONST
 		p.From.Offset = v.AuxInt
@@ -671,15 +666,6 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p2.To.Type = obj.TYPE_REG
 		p2.To.Reg = v.Reg0()
 
-	case ssa.OpRISCV64LoweredAtomicExchange8:
-		as := riscv.AAMOSWAPB
-		p := s.Prog(as)
-		p.From.Type = obj.TYPE_REG
-		p.From.Reg = v.Args[1].Reg()
-		p.To.Type = obj.TYPE_MEM
-		p.To.Reg = v.Args[0].Reg()
-		p.RegTo2 = v.Reg0()
-
 	case ssa.OpRISCV64LoweredAtomicExchange32, ssa.OpRISCV64LoweredAtomicExchange64:
 		as := riscv.AAMOSWAPW
 		if v.Op == ssa.OpRISCV64LoweredAtomicExchange64 {
@@ -693,58 +679,12 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.RegTo2 = v.Reg0()
 
 	case ssa.OpRISCV64LoweredAtomicCas32, ssa.OpRISCV64LoweredAtomicCas64:
-		if buildcfg.GORISCV64EXT.Zacas {
-			// MOV  Rarg1, Rtmp					// Move expected value to Rtmp
-			// AMOCAS.W/D Rarg2, (Rarg0), Rtmp  // AMOCAS writes (Rarg0) to Rtmp, regardless of success
-			// SUB  Rtmp, Rarg1, Rtmp			// If the expected value equals the old memory value, Rtmp becomes zero
-			// SEQZ Rtmp, Rout					// Set Rout to 1 if Rtmp is zero, otherwise 0
-
-			amocas := riscv.AAMOCASW
-			if v.Op == ssa.OpRISCV64LoweredAtomicCas64 {
-				amocas = riscv.AAMOCASD
-			}
-
-			r0 := v.Args[0].Reg() // address
-			r1 := v.Args[1].Reg() // expected value
-			r2 := v.Args[2].Reg() // new value
-			out := v.Reg0()
-
-			p := s.Prog(riscv.AMOV)
-			p.From.Type = obj.TYPE_REG
-			p.From.Reg = r1
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = riscv.REG_TMP
-
-			p1 := s.Prog(amocas)
-			p1.From.Type = obj.TYPE_REG
-			p1.From.Reg = r2
-			p1.To.Type = obj.TYPE_MEM
-			p1.To.Reg = r0
-			p1.RegTo2 = riscv.REG_TMP
-
-			p2 := s.Prog(riscv.ASUB)
-			p2.From.Type = obj.TYPE_REG
-			p2.From.Reg = r1
-			p2.Reg = riscv.REG_TMP
-			p2.To.Type = obj.TYPE_REG
-			p2.To.Reg = riscv.REG_TMP
-
-			p3 := s.Prog(riscv.ASEQZ)
-			p3.From.Type = obj.TYPE_REG
-			p3.From.Reg = riscv.REG_TMP
-			p3.To.Type = obj.TYPE_REG
-			p3.To.Reg = out
-
-			break
-		}
-
 		// MOV  ZERO, Rout
 		// LR	(Rarg0), Rtmp
-		// BNE	Rtmp, Rarg1, 4(PC)
+		// BNE	Rtmp, Rarg1, 3(PC)
 		// SC	Rarg2, (Rarg0), Rtmp
 		// BNE	Rtmp, ZERO, -3(PC)
 		// MOV	$1, Rout
-		// ANOP
 
 		lr := riscv.ALRW
 		sc := riscv.ASCW
@@ -799,8 +739,7 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p6 := s.Prog(obj.ANOP)
 		p2.To.SetTarget(p6)
 
-	case ssa.OpRISCV64LoweredAtomicAnd8, ssa.OpRISCV64LoweredAtomicOr8,
-		ssa.OpRISCV64LoweredAtomicAnd32, ssa.OpRISCV64LoweredAtomicOr32:
+	case ssa.OpRISCV64LoweredAtomicAnd32, ssa.OpRISCV64LoweredAtomicOr32:
 		p := s.Prog(v.Op.Asm())
 		p.From.Type = obj.TYPE_REG
 		p.From.Reg = v.Args[1].Reg()
@@ -817,24 +756,20 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 
 		// mov	ZERO, (offset)(Rarg0)
 		var off int64
-		if buildcfg.GORISCV64EXT.MisalignedFast {
-			emitDynamicZeros(s, ptr, off, n)
-		} else {
-			for n >= sz {
-				zeroOp(s, mov, ptr, off)
-				off += sz
-				n -= sz
-			}
+		for n >= sz {
+			zeroOp(s, mov, ptr, off)
+			off += sz
+			n -= sz
+		}
 
-			for i := len(fracMovOps) - 1; i >= 0; i-- {
-				tsz := int64(1 << i)
-				if n < tsz {
-					continue
-				}
-				zeroOp(s, fracMovOps[i], ptr, off)
-				off += tsz
-				n -= tsz
+		for i := len(fracMovOps) - 1; i >= 0; i-- {
+			tsz := int64(1 << i)
+			if n < tsz {
+				continue
 			}
+			zeroOp(s, fracMovOps[i], ptr, off)
+			off += tsz
+			n -= tsz
 		}
 
 	case ssa.OpRISCV64LoweredZeroLoop:
@@ -842,53 +777,6 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		sc := v.AuxValAndOff()
 		n := sc.Val64()
 		mov, sz := largestMove(sc.Off64())
-		if buildcfg.GORISCV64EXT.MisalignedFast {
-			// Misaligned-fast path:
-			//   n < 64:        fully unrolled with dynamic 8/4/2/1 zero stores
-			//   64 <= n < 128: unroll 64 bytes + unroll remainder
-			//   n >= 128:      loop by 64-byte chunks + unroll remainder
-			const chunk = int64(64)
-			if n < chunk {
-				emitDynamicZeros(s, ptr, 0, n)
-				break
-			}
-			if n < 2*chunk {
-				emitDynamicZeros(s, ptr, 0, chunk)
-				emitDynamicZeros(s, ptr, chunk, n-chunk)
-				break
-			}
-
-			tmp := v.RegTmp()
-
-			p := s.Prog(riscv.AADD)
-			p.From.Type = obj.TYPE_CONST
-			p.From.Offset = n - n%chunk
-			p.Reg = ptr
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = tmp
-
-			loopHead := s.Prog(obj.ANOP)
-			emitDynamicZeros(s, ptr, 0, chunk)
-
-			p2 := s.Prog(riscv.AADD)
-			p2.From.Type = obj.TYPE_CONST
-			p2.From.Offset = chunk
-			p2.To.Type = obj.TYPE_REG
-			p2.To.Reg = ptr
-
-			p3 := s.Prog(riscv.ABNE)
-			p3.From.Reg = tmp
-			p3.From.Type = obj.TYPE_REG
-			p3.Reg = ptr
-			p3.To.Type = obj.TYPE_BRANCH
-			p3.To.SetTarget(loopHead)
-
-			if rem := n % chunk; rem > 0 {
-				emitDynamicZeros(s, ptr, 0, rem)
-			}
-			break
-		}
-
 		chunk := 8 * sz
 
 		if n <= 3*chunk {
@@ -954,24 +842,20 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 
 		var off int64
 		tmp := int16(riscv.REG_X5)
-		if buildcfg.GORISCV64EXT.MisalignedFast {
-			emitDynamicMoves(s, dst, src, tmp, off, n)
-		} else {
-			for n >= sz {
-				moveOp(s, mov, dst, src, tmp, off)
-				off += sz
-				n -= sz
-			}
+		for n >= sz {
+			moveOp(s, mov, dst, src, tmp, off)
+			off += sz
+			n -= sz
+		}
 
-			for i := len(fracMovOps) - 1; i >= 0; i-- {
-				tsz := int64(1 << i)
-				if n < tsz {
-					continue
-				}
-				moveOp(s, fracMovOps[i], dst, src, tmp, off)
-				off += tsz
-				n -= tsz
+		for i := len(fracMovOps) - 1; i >= 0; i-- {
+			tsz := int64(1 << i)
+			if n < tsz {
+				continue
 			}
+			moveOp(s, fracMovOps[i], dst, src, tmp, off)
+			off += tsz
+			n -= tsz
 		}
 
 	case ssa.OpRISCV64LoweredMoveLoop:
@@ -984,63 +868,12 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		sc := v.AuxValAndOff()
 		n := sc.Val64()
 		mov, sz := largestMove(sc.Off64())
-		tmp := int16(riscv.REG_X5)
-
-		if buildcfg.GORISCV64EXT.MisalignedFast {
-			//   n < 64:        fully unrolled with dynamic 8/4/2/1 moves
-			//   64 <= n < 128: unroll 64 bytes + unroll remainder
-			//   n >= 128:      loop by 64-byte chunks + unroll remainder
-			const chunk = int64(64)
-			if n < chunk {
-				emitDynamicMoves(s, dst, src, tmp, 0, n)
-				break
-			}
-			if n < 2*chunk {
-				emitDynamicMoves(s, dst, src, tmp, 0, chunk)
-				emitDynamicMoves(s, dst, src, tmp, chunk, n-chunk)
-				break
-			}
-
-			p := s.Prog(riscv.AADD)
-			p.From.Type = obj.TYPE_CONST
-			p.From.Offset = n - n%chunk
-			p.Reg = src
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = riscv.REG_X6
-
-			loopHead := s.Prog(obj.ANOP)
-			emitDynamicMoves(s, dst, src, tmp, 0, chunk)
-
-			p1 := s.Prog(riscv.AADD)
-			p1.From.Type = obj.TYPE_CONST
-			p1.From.Offset = chunk
-			p1.To.Type = obj.TYPE_REG
-			p1.To.Reg = src
-
-			p2 := s.Prog(riscv.AADD)
-			p2.From.Type = obj.TYPE_CONST
-			p2.From.Offset = chunk
-			p2.To.Type = obj.TYPE_REG
-			p2.To.Reg = dst
-
-			p3 := s.Prog(riscv.ABNE)
-			p3.From.Reg = riscv.REG_X6
-			p3.From.Type = obj.TYPE_REG
-			p3.Reg = src
-			p3.To.Type = obj.TYPE_BRANCH
-			p3.To.SetTarget(loopHead)
-
-			if rem := n % chunk; rem > 0 {
-				emitDynamicMoves(s, dst, src, tmp, 0, rem)
-			}
-			break
-		}
-
 		chunk := 8 * sz
 
 		if n <= 3*chunk {
 			v.Fatalf("MoveLoop too small:%d, expect:%d", n, 3*chunk)
 		}
+		tmp := int16(riscv.REG_X5)
 
 		p := s.Prog(riscv.AADD)
 		p.From.Type = obj.TYPE_CONST
@@ -1134,19 +967,6 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 	case ssa.OpClobber, ssa.OpClobberReg:
 		// TODO: implement for clobberdead experiment. Nop is ok for now.
 
-	case ssa.OpRISCV64PREFETCH:
-		p := s.Prog(riscv.APREFETCHR)
-		p.From.Offset = v.AuxInt
-		p.From.Reg = v.Args[0].Reg()
-		p.From.Type = obj.TYPE_MEM
-
-	case ssa.OpRISCV64PREFETCHNT:
-		s.Prog(riscv.ANTLALL)
-		p := s.Prog(riscv.APREFETCHR)
-		p.From.Offset = v.AuxInt
-		p.From.Reg = v.Args[0].Reg()
-		p.From.Type = obj.TYPE_MEM
-
 	default:
 		v.Fatalf("Unhandled op %v", v.Op)
 	}
@@ -1219,46 +1039,6 @@ func ssaGenBlock(s *ssagen.State, b, next *ssa.Block) {
 			p.From.Reg = b.Controls[0].Reg()
 		}
 
-	case ssa.BlockRISCV64JUMPTABLE:
-		// Jump table:
-		// TMP = base + index*8 (SH3ADD if Zba else SLLI+ADD).
-		// Load slot into TMP, then indirect JMP through TMP.
-		var p *obj.Prog
-		if buildcfg.GORISCV64 >= 22 {
-			p = s.Prog(riscv.ASH3ADD)
-			p.From.Type = obj.TYPE_REG
-			p.From.Reg = b.Controls[1].Reg()
-			p.Reg = b.Controls[0].Reg()
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = riscv.REG_TMP
-		} else {
-			p = s.Prog(riscv.ASLLI)
-			p.From.Type = obj.TYPE_CONST
-			p.From.Offset = 3
-			p.Reg = b.Controls[0].Reg()
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = riscv.REG_TMP
-
-			p = s.Prog(riscv.AADD)
-			p.From.Type = obj.TYPE_REG
-			p.From.Reg = riscv.REG_TMP
-			p.Reg = b.Controls[1].Reg()
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = riscv.REG_TMP
-		}
-
-		p = s.Prog(riscv.AMOV)
-		p.From.Type = obj.TYPE_MEM
-		p.From.Reg = riscv.REG_TMP
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = riscv.REG_TMP
-
-		p = s.Prog(obj.AJMP)
-		p.To.Type = obj.TYPE_MEM
-		p.To.Reg = riscv.REG_TMP
-		// Save jump tables for later resolution of the target blocks.
-		s.JumpTables = append(s.JumpTables, b)
-
 	default:
 		b.Fatalf("Unhandled block: %s", b.LongString())
 	}
@@ -1307,53 +1087,6 @@ func moveOp(s *ssagen.State, mov obj.As, dst int16, src int16, tmp int16, off in
 	p1.To.Type = obj.TYPE_MEM
 	p1.To.Reg = dst
 	p1.To.Offset = off
-	return
-}
 
-func emitDynamicMoves(s *ssagen.State, dst int16, src int16, tmp int16, off int64, n int64) {
-	for n > 0 {
-		switch {
-		case n >= 8:
-			moveOp(s, riscv.AMOV, dst, src, tmp, off)
-			off += 8
-			n -= 8
-		case n >= 4:
-			moveOp(s, riscv.AMOVW, dst, src, tmp, off)
-			off += 4
-			n -= 4
-		case n >= 2:
-			moveOp(s, riscv.AMOVH, dst, src, tmp, off)
-			off += 2
-			n -= 2
-		default:
-			moveOp(s, riscv.AMOVB, dst, src, tmp, off)
-			off++
-			n--
-		}
-	}
-	return
-}
-
-func emitDynamicZeros(s *ssagen.State, ptr int16, off int64, n int64) {
-	for n > 0 {
-		switch {
-		case n >= 8:
-			zeroOp(s, riscv.AMOV, ptr, off)
-			off += 8
-			n -= 8
-		case n >= 4:
-			zeroOp(s, riscv.AMOVW, ptr, off)
-			off += 4
-			n -= 4
-		case n >= 2:
-			zeroOp(s, riscv.AMOVH, ptr, off)
-			off += 2
-			n -= 2
-		default:
-			zeroOp(s, riscv.AMOVB, ptr, off)
-			off++
-			n--
-		}
-	}
 	return
 }

@@ -412,12 +412,6 @@ const (
 	ACSRRSI
 	ACSRRCI
 
-	// 9: Zihintntl Extension
-	ANTLP1
-	ANTLPALL
-	ANTLS1
-	ANTLALL
-
 	// 12.3: Integer Conditional Operations (Zicond)
 	ACZEROEQZ
 	ACZERONEZ
@@ -464,45 +458,6 @@ const (
 	AAMOMAXUW
 	AAMOMINW
 	AAMOMINUW
-
-	// 15: Wait-on-Reservation-Set Instructions (Zawrs)
-	AWRSNTO
-	AWRSSTO
-
-	// 16: Extension for Atomic Compare-and-Swap (CAS) Instructions (Zacas)
-	AAMOCASW
-	AAMOCASD
-	AAMOCASQ
-
-	// 16.1: Byte and Halfword Atomic Memory Operation Instructions (Zabha)
-	AAMOSWAPB
-	AAMOADDB
-	AAMOXORB
-	AAMOANDB
-	AAMOORB
-	AAMOMINB
-	AAMOMAXB
-	AAMOMINUB
-	AAMOMAXUB
-	AAMOCASB
-	AAMOSWAPH
-	AAMOADDH
-	AAMOXORH
-	AAMOANDH
-	AAMOORH
-	AAMOMINH
-	AAMOMAXH
-	AAMOMINUH
-	AAMOMAXUH
-	AAMOCASH
-
-	// 19.6.1: Cache-Block Management Instructions (Zicbom)
-	ACBOCLEAN
-	ACBOFLUSH
-	ACBOINVAL
-
-	// 19.6.2: Cache-Block Zero Instructions (Zicboz)
-	ACBOZERO
 
 	// 20.5: Single-Precision Load and Store Instructions
 	AFLW
@@ -630,32 +585,6 @@ const (
 	// 22.5: Quad-Precision Floating-Point Classify Instruction
 	AFCLASSQ
 
-	// 24: "Zfa" Extension for Additional Floating-Point Instructions
-	// 24.1: Load-Immediate Instructions
-	AFLIS
-	AFLID
-
-	// 24.2: Minimum and Maximum Instructions
-	AFMAXMS
-	AFMINMS
-	AFMAXMD
-	AFMINMD
-
-	// 24.3: Round-to-Integer Instructions
-	AFROUNDS
-	AFROUNDNXS
-	AFROUNDD
-	AFROUNDNXD
-
-	// 24.4: Modular Convert-to-Integer Instruction
-	AFCVTMODWD
-
-	// 24.6: Comparison Instructions
-	AFLEQS
-	AFLTQS
-	AFLEQD
-	AFLTQD
-
 	//
 	// "C" Extension for Compressed Instructions
 	//
@@ -712,24 +641,6 @@ const (
 	ACEBREAK
 
 	//
-	// "Zc*" Extension for Code Size Reduction
-	//
-
-	// 27.8: "zcb" Extension for simple code-size saving instruction
-	ACLBU
-	ACLHU
-	ACLH
-	ACSB
-	ACSH
-	ACZEXTB
-	ACSEXTB
-	ACZEXTH
-	ACSEXTH
-	ACZEXTW
-	ACNOT
-	ACMUL
-
-	//
 	// "B" Extension for Bit Manipulation, Version 1.0.0
 	//
 
@@ -761,7 +672,7 @@ const (
 	ASEXTH
 	AZEXTH
 
-	// 28.4.2: Bitwise Rotation (Zbb)
+	// 28.4.3: Bitwise Rotation (Zbb)
 	AROL
 	AROLW
 	AROR
@@ -770,11 +681,6 @@ const (
 	ARORW
 	AORCB
 	AREV8
-
-	// 28.4.3: Carry-less multiplication (Zbc)
-	ACLMUL
-	ACLMULH
-	ACLMULR
 
 	// 28.4.4: Single-bit Instructions (Zbs)
 	ABCLR
@@ -1543,64 +1449,6 @@ const (
 	AVMV4RV
 	AVMV8RV
 
-	// 32. Cryptography Extensions: Vector Instructions, Version 1.0
-	// 32.2.1. Zvbb - Vector Basic Bit-manipulation
-	AVANDNVV
-	AVANDNVX
-	AVBREVV
-	AVBREV8V
-	AVREV8V
-	AVCLZV
-	AVCTZV
-	AVCPOPV
-	AVROLVV
-	AVROLVX
-	AVWSLLVV
-	AVWSLLVX
-	AVWSLLVI
-
-	// 32.2.2. Zvbc - Vector Carryless Multiplication
-	AVCLMULVV
-	AVCLMULVX
-	AVCLMULHVV
-	AVCLMULHVX
-
-	// 32.2.3. Zvkb - Vector Cryptography Bit-manipulation
-	AVRORVV
-	AVRORVX
-	AVRORVI
-
-	// 32.2.4. Zvkg - Vector GCM/GMAC
-	AVGHSHVV
-	AVGMULVV
-
-	// 32.2.5. Zvkned - NIST Suite: Vector AES Block Cipher
-	AVAESEFVV
-	AVAESEFVS
-	AVAESEMVV
-	AVAESEMVS
-	AVAESDFVV
-	AVAESDFVS
-	AVAESDMVV
-	AVAESDMVS
-	AVAESKF1VI
-	AVAESKF2VI
-	AVAESZVS
-
-	// 32.2.6. Zvknh[ab] - NIST Suite: Vector SHA-2 Secure Hash
-	AVSHA2MSVV
-	AVSHA2CHVV
-	AVSHA2CLVV
-
-	// 32.2.7. Zvksed - ShangMi Suite: SM4 Block Cipher
-	AVSM4KVI
-	AVSM4RVV
-	AVSM4RVS
-
-	// 32.2.8. Zvksh - ShangMi Suite: SM3 Secure Hash
-	AVSM3MEVV
-	AVSM3CVI
-
 	//
 	// Privileged ISA (version 20240411)
 	//
@@ -1637,13 +1485,6 @@ const (
 	ABLEZ
 	ABLTZ
 	ABNEZ
-	ACSRC
-	ACSRCI
-	ACSRR
-	ACSRS
-	ACSRSI
-	ACSRW
-	ACSRWI
 	AFABSD
 	AFABSS
 	AFNED
@@ -1662,10 +1503,6 @@ const (
 	ANEG
 	ANEGW
 	ANOT
-	APAUSE
-	APREFETCHI
-	APREFETCHR
-	APREFETCHW
 	ARDCYCLE
 	ARDINSTRET
 	ARDTIME
