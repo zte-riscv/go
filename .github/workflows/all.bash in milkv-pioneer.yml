@@ -27,18 +27,18 @@ jobs:
             set -euxo pipefail
             BOOT=/tmp/go-bootstrap
             rm -rf "$BOOT"
-            curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tar.gz
+            curl -fsSL https://go.dev/dl/go1.26.5.linux-riscv64.tar.gz -o /tmp/go.tar.gz
             tar -C /tmp -xzf /tmp/go.tar.gz
             mv /tmp/go "$BOOT"
             export GOROOT_BOOTSTRAP="$BOOT"
 
             # build toolchain
             cd "$GITHUB_WORKSPACE/src"
-            { set -x; ./all.bash -v; } 2>&1 | tee build.log
+            ./all.bash 2>&1 | tee build.log
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
-          path: ${{ github.workspace }}/build.log
-          retention-days: 7
+          path: src/build.log
+          retention-days: 2
