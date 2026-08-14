@@ -34,4 +34,11 @@ jobs:
 
             # build toolchain
             cd "$GITHUB_WORKSPACE/src"
-            ./all.bash
+            { set -x; ./all.bash -v; } 2>&1 | tee build.log
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: ${{ github.workspace }}/build.log
+          retention-days: 7
