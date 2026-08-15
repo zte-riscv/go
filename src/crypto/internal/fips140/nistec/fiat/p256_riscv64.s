@@ -23,8 +23,7 @@ GLOBL p256const1<>(SB), RODATA, $8
 //   X21-X24 = acc0-acc3 (accumulator low bits)
 //   X25-X26, X28-X29 = acc4-acc7 (accumulator high bits)
 //   X30 = const1 = 0xFFFFFFFF00000001
-//   X5-X7, X9, X12, X31 = temporary variables
-// Note: X8 (S0/FP) is reserved for frame pointer and not used as temporary
+//   X5-X9, X12 = temporary variables
 TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	MOV	out+0(FP), X10
 	MOV	a+8(FP), X11
@@ -77,7 +76,7 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	// =====================================
 	SLL	$32, X21, X5		// t0 = acc0 << 32
 	SRL	$32, X21, X7		// t1 = acc0 >> 32
-	MUL	X21, X30, X31		// t2 = lo(acc0 * const1)
+	MUL	X21, X30, X8		// t2 = lo(acc0 * const1)
 	MULHU	X21, X30, X21		// acc0 = hi(acc0 * const1)
 
 	ADD	X22, X5, X22
@@ -89,8 +88,8 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	SLTU	X6, X23, X5
 	ADD	X9, X5, X6
 
-	ADD	X24, X31, X24
-	SLTU	X31, X24, X9
+	ADD	X24, X8, X24
+	SLTU	X8, X24, X9
 	ADD	X24, X6, X24
 	SLTU	X6, X24, X5
 	ADD	X9, X5, X6
@@ -101,7 +100,7 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	// Round 1: y[1] * x
 	// =====================================
 	MULHU	X18, X13, X7
-	MULHU	X18, X14, X31
+	MULHU	X18, X14, X8
 	MULHU	X18, X15, X9
 	MULHU	X18, X16, X26
 
@@ -135,8 +134,8 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	ADD	X23, X7, X23
 	SLTU	X7, X23, X6
 
-	ADD	X24, X31, X24
-	SLTU	X31, X24, X5
+	ADD	X24, X8, X24
+	SLTU	X8, X24, X5
 	ADD	X24, X6, X24
 	SLTU	X6, X24, X12
 	ADD	X5, X12, X6
@@ -155,7 +154,7 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	// =====================================
 	SLL	$32, X22, X5
 	SRL	$32, X22, X7
-	MUL	X22, X30, X31
+	MUL	X22, X30, X8
 	MULHU	X22, X30, X22
 
 	ADD	X23, X5, X23
@@ -167,8 +166,8 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	SLTU	X6, X24, X5
 	ADD	X9, X5, X6
 
-	ADD	X21, X31, X21
-	SLTU	X31, X21, X9
+	ADD	X21, X8, X21
+	SLTU	X8, X21, X9
 	ADD	X21, X6, X21
 	SLTU	X6, X21, X5
 	ADD	X9, X5, X6
@@ -179,7 +178,7 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	// Round 2: y[2] * x
 	// =====================================
 	MULHU	X19, X13, X7
-	MULHU	X19, X14, X31
+	MULHU	X19, X14, X8
 	MULHU	X19, X15, X9
 	MULHU	X19, X16, X28
 
@@ -213,8 +212,8 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	ADD	X24, X7, X24
 	SLTU	X7, X24, X6
 
-	ADD	X25, X31, X25
-	SLTU	X31, X25, X5
+	ADD	X25, X8, X25
+	SLTU	X8, X25, X5
 	ADD	X25, X6, X25
 	SLTU	X6, X25, X12
 	ADD	X5, X12, X6
@@ -235,7 +234,7 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	// =====================================
 	SLL	$32, X23, X5
 	SRL	$32, X23, X7
-	MUL	X23, X30, X31
+	MUL	X23, X30, X8
 	MULHU	X23, X30, X23
 
 	ADD	X24, X5, X24
@@ -247,8 +246,8 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	SLTU	X6, X21, X5
 	ADD	X9, X5, X6
 
-	ADD	X22, X31, X22
-	SLTU	X31, X22, X9
+	ADD	X22, X8, X22
+	SLTU	X8, X22, X9
 	ADD	X22, X6, X22
 	SLTU	X6, X22, X5
 	ADD	X9, X5, X6
@@ -259,7 +258,7 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	// Round 3: y[3] * x
 	// =====================================
 	MULHU	X20, X13, X7
-	MULHU	X20, X14, X31
+	MULHU	X20, X14, X8
 	MULHU	X20, X15, X9
 	MULHU	X20, X16, X29
 
@@ -293,8 +292,8 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	ADD	X25, X7, X25
 	SLTU	X7, X25, X6
 
-	ADD	X26, X31, X26
-	SLTU	X31, X26, X5
+	ADD	X26, X8, X26
+	SLTU	X8, X26, X5
 	ADD	X26, X6, X26
 	SLTU	X6, X26, X7
 	ADD	X5, X7, X6
@@ -313,7 +312,7 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	// =====================================
 	SLL	$32, X24, X5
 	SRL	$32, X24, X7
-	MUL	X24, X30, X31
+	MUL	X24, X30, X8
 	MULHU	X24, X30, X24
 
 	ADD	X21, X5, X21
@@ -325,8 +324,8 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	SLTU	X6, X22, X5
 	ADD	X9, X5, X6
 
-	ADD	X23, X31, X23
-	SLTU	X31, X23, X9
+	ADD	X23, X8, X23
+	SLTU	X8, X23, X9
 	ADD	X23, X6, X23
 	SLTU	X6, X23, X5
 	ADD	X9, X5, X6
@@ -369,10 +368,10 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	SLTU	X6, X21, X7		// X7 = b0 = (acc0 < p0)
 
 	// Step 2: t1, b1 = Sub64(acc1, p1, b0)
-	SUB	X5, X22, X31		// X31 = tmp = acc1 - const0
+	SUB	X5, X22, X8		// X8 = tmp = acc1 - const0
 	SLTU	X5, X22, X9		// X9 = (acc1 < const0)
-	SUB	X7, X31, X14		// X14 = t1 = tmp - b0
-	SLTU	X7, X31, X12		// X12 = (tmp < b0)
+	SUB	X7, X8, X14		// X14 = t1 = tmp - b0
+	SLTU	X7, X8, X12		// X12 = (tmp < b0)
 	OR	X9, X12, X7		// X7 = b1
 
 	// Step 3: t2, b2 = Sub64(acc2, 0, b1)
@@ -380,33 +379,33 @@ TEXT ·p256Mul(SB),NOSPLIT,$0-24
 	SLTU	X7, X23, X7		// X7 = b2 = (acc2 < b1)
 
 	// Step 4: t3, b3 = Sub64(acc3, p3, b2)
-	SUB	X30, X24, X31		// X31 = tmp = acc3 - const1
+	SUB	X30, X24, X8		// X8 = tmp = acc3 - const1
 	SLTU	X30, X24, X9		// X9 = (acc3 < const1)
-	SUB	X7, X31, X16		// X16 = t3 = tmp - b2
-	SLTU	X7, X31, X12		// X12 = (tmp < b2)
+	SUB	X7, X8, X16		// X16 = t3 = tmp - b2
+	SLTU	X7, X8, X12		// X12 = (tmp < b2)
 	OR	X9, X12, X7		// X7 = b3
 
 	// Step 5: final_borrow = (carry < b3)
-	SLTU	X7, X25, X31		// X31 = (carry < b3) = final_borrow
+	SLTU	X7, X25, X8		// X8 = (carry < b3) = final_borrow
 
 	// Conditional select: mask = final_borrow ? -1 : 0
-	NEG	X31, X31			// X31 = mask
+	NEG	X8, X8			// X8 = mask
 
 	// Select result
 	XOR	X21, X13, X9
-	AND	X31, X9, X9
+	AND	X8, X9, X9
 	XOR	X9, X13, X13
 
 	XOR	X22, X14, X9
-	AND	X31, X9, X9
+	AND	X8, X9, X9
 	XOR	X9, X14, X14
 
 	XOR	X23, X15, X9
-	AND	X31, X9, X9
+	AND	X8, X9, X9
 	XOR	X9, X15, X15
 
 	XOR	X24, X16, X9
-	AND	X31, X9, X9
+	AND	X8, X9, X9
 	XOR	X9, X16, X16
 
 	// Write result
