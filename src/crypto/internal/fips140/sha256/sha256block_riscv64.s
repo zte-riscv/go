@@ -648,12 +648,11 @@ blockloop:
 	// Scalar load to avoid index ambiguity (corrected offsets)
 	// Layout in scratch: 0:f,4:e,8:b,12:a,16:h,20:g,24:d,28:c
 	// Use indexed gather to reorder scratch {f,e,b,a,h,g,d,c} -> {a,b,c,d,e,f,g,h}
-	// Note: Use X9 instead of X8 to avoid clobbering the frame pointer (S0/X8).
-	MOV  $index_final<>(SB), X9
-	VLE32V	(X9), V31
+	MOV  $index_final<>(SB), X8
+	VLE32V	(X8), V31
 	VLUXEI32V (X6), V31, V3	// V3 = {a,b,c,d}
-	MOV  $index_final<>+16(SB), X9
-	VLE32V	(X9), V31
+	MOV  $index_final<>+16(SB), X8
+	VLE32V	(X8), V31
 	VLUXEI32V (X6), V31, V4	// V4 = {e,f,g,h}
 
     VADDVV		V1, V3, V1
