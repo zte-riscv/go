@@ -27,7 +27,7 @@ jobs:
             set -euxo pipefail
             BOOT=/tmp/go-bootstrap
             rm -rf "$BOOT"
-            curl -fsSL https://go.dev/dl/go1.26.5.linux-riscv64.tar.gz -o /tmp/go.tar.gz
+            curl -fsSL https://go.dev/dl/go1.26.4.linux-riscv64.tar.gz -o /tmp/go.tar.gz
             tar -C /tmp -xzf /tmp/go.tar.gz
             mv /tmp/go "$BOOT"
             export GOROOT_BOOTSTRAP="$BOOT"
