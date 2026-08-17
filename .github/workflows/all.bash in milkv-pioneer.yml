@@ -31,6 +31,8 @@ jobs:
             tar -C /tmp -xzf /tmp/go.tar.gz
             mv /tmp/go "$BOOT"
             export GOROOT_BOOTSTRAP="$BOOT"
+            export GORISCV64=rva20u64,misaligned_fast
+            export GO_TEST_TIMEOUT_SCALE=10
 
             # build toolchain
             cd "$GITHUB_WORKSPACE/src"
