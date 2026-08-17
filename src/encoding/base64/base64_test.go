@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"reflect"
 	"runtime/debug"
 	"strconv"
@@ -120,6 +121,17 @@ func TestEncode(t *testing.T) {
 			testEqual(t, `AppendEncode("lead", %q) = %q, want %q`, p.decoded, string(dst), "lead"+tt.conv(p.encoded))
 		}
 	}
+}
+
+func TestEncodeShortDst(t *testing.T) {
+	src := make([]byte, 12)
+	dst := make([]byte, 1)
+	defer func() {
+		if recover() == nil {
+			t.Error("Encode with short dst did not panic")
+		}
+	}()
+	StdEncoding.Encode(dst, src)
 }
 
 func TestEncoder(t *testing.T) {
@@ -574,5 +586,39 @@ func TestDecoderRaw(t *testing.T) {
 	dec3, err := io.ReadAll(r)
 	if err != nil || !bytes.Equal(dec3, want) {
 		t.Errorf("reading NewDecoder(URLEncoding, %q) = %x, %v, want %x, nil", source+"==", dec3, err, want)
+	}
+}
+
+// TestEncodeAllLengths verifies the assembly encodeChunk across every
+// small input length: lengths 12 and up exercise the 4x loop (the REV8
+// wide-load path when built with misaligned_fast), lengths 3..9 the
+// tail loop, and the 1-2 byte remainder is handled in Go.
+func TestEncodeAllLengths(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	for n := 1; n <= 256; n++ {
+		src := make([]byte, n)
+		rng.Read(src)
+		enc := StdEncoding.EncodeToString(src)
+		dec, err := StdEncoding.DecodeString(enc)
+		if err != nil || !bytes.Equal(dec, src) {
+			t.Fatalf("len=%d: round-trip: %v", n, err)
+		}
+	}
+}
+
+// TestEncodeUnalignedOffsets checks that the result is independent of
+// the src slice's alignment. The REV8 fast path reads 12 bytes with
+// two 64-bit loads, MOV (X6) and MOV 4(X6), which are unaligned for
+// most offsets.
+func TestEncodeUnalignedOffsets(t *testing.T) {
+	data := make([]byte, 4096+8)
+	rand.New(rand.NewSource(2)).Read(data)
+	for off := 0; off < 8; off++ {
+		src := data[off : off+3072]
+		enc := StdEncoding.EncodeToString(src)
+		dec, err := StdEncoding.DecodeString(enc)
+		if err != nil || !bytes.Equal(dec, src) {
+			t.Fatalf("offset=%d: round-trip: %v", off, err)
+		}
 	}
 }
