@@ -1,0 +1,178 @@
+# Test for force inline feature (-d forceinline option)
+
+env GO111MODULE=on
+env GOCACHE=${WORK}${/}gocache
+env GOPATH=${WORK}${/}gopath
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Use -gcflags='-d forceinline=1', check default force inline function list worked.
+#
+
+go build -a -gcflags='all=-d forceinline=1 -d=forceinlinelog=2' .
+
+stderr -q 'force-inline enabled .* func=runtime.userArenaHeapBitsSetSliceType'
+stderr -q 'force-inline check allows `runtime\.\(\*mspan\)\.userArenaNextFree` inlining `runtime.userArenaHeapBitsSetSliceType`'
+
+stderr -q 'force-inline enabled .* func=runtime.mallocgcSmallScanNoHeader'
+stderr -q 'force-inline check allows `runtime.mallocgc` inlining `runtime.mallocgcSmallScanNoHeader`'
+
+stderr -q 'force-inline enabled .* func=runtime.mallocgc'
+stderr -q 'force-inline check allows `runtime.newobject` inlining `runtime.mallocgc`'
+
+stderr -q 'force-inline enabled .* func=runtime.scanObject'
+stderr -q 'force-inline check allows `runtime.gcDrain` inlining `runtime.scanObject`'
+
+stderr -q 'force-inline enabled .* func=runtime.findObject'
+stderr -q 'force-inline check allows `runtime.scanObject` inlining `runtime.findObject`'
+
+# Check the small functions be inlined.
+! stderr -q 'force-inline enabled .* func=test_module/nomain/sub.SmallFunc'
+
+# Check the big functions not inlined.
+! stderr -q 'force-inline enabled .* func=test_module/nomain/sub.BigFunc'
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Use -gcflags="-d forceinline=0" check disable force inline feature.
+#
+
+go build -a -gcflags='all=-d forceinline=0 -d forceinlinelog=2' .
+
+! stderr -q 'force-inline enabled'
+! stderr -q 'force-inline check allows'
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Use -gcflags="-d forceinline=2", it is illegal setting value, expect build failed.
+#
+
+! go build -a -gcflags='all=-d forceinline=2 -d forceinlinelog=2' .
+
+stderr -q '-forceinline does not support setting to 2'
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Use -gcflags='all=-l -d forceinline=1", all functions cannot be inlined.
+# this test is verify the priority of option forceinline is lower than gcflags -l
+#
+
+rm output
+go build -a -gcflags='all=-l -d forceinline=1 -d forceinlinelog=2' .
+
+! stderr -q 'force-inline enabled .* func=runtime.userArenaHeapBitsSetSliceType'
+! stderr -q 'force-inline enabled .* func=runtime.mallocgcSmallScanNoHeader'
+! stderr -q 'force-inline enabled .* func=runtime.mallocgc'
+! stderr -q 'force-inline enabled .* func=runtime.scanObject'
+! stderr -q 'force-inline enabled .* func=runtime.findObject'
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Use -gcflags='all=-d forceinline=1", check the Binary Equivalence (BEP).
+#
+
+go build -a -gcflags='all=-d forceinline=1 -d forceinlinelog=2' -o bin1 .
+go build -a -gcflags='all=-d forceinline=1 -d forceinlinelog=2' -o bin2 .
+
+cmp -q bin1 bin2
+
+-- go.mod --
+module test_module
+
+go 1.24
+-- main.go --
+package main
+
+import "test_module/nomain/sub"
+
+func main() {
+	sub.Test()
+	sub.Test2()
+	test()
+}
+
+func test() {
+	sub.SmallFunc()
+	sub.BigFunc()
+}
+-- nomain/sub/sub.go --
+package sub
+
+func Test() {
+	SmallFunc()
+	BigFunc()
+}
+
+func SmallFunc() {
+	println(1)
+}
+
+func BigFunc() {
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+	canInlineFunc()
+}
+
+// This function's inline cost is 70
+func canInlineFunc() {
+	println(1, 2, 3, 4, 5, 6, 7, 8, 9)
+	println(1, 2, 3, 4, 5, 6, 7, 8, 9)
+	println(1, 2, 3, 4, 5, 6, 7, 8, 9)
+	println(1, 2, 3, 4, 5, 6, 7, 8, 9)
+	println(1, 2, 3, 4, 5, 6, 7, 8, 9)
+	println(1, 2, 3, 4, 5, 6, 7, 8, 9)
+	println(1, 2, 3, 4, 5, 6, 7, 8, 9)
+}
+
+func Test2() {
+	useDeferFunc()
+	markNoInlineFunc()
+}
+
+func useDeferFunc() {
+	defer func() {
+		print(1)
+	}()
+}
+
+//go:noinline
+func markNoInlineFunc() {
+	println(1)
+}
