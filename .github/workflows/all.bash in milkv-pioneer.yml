@@ -40,4 +40,5 @@ jobs:
 
             # build toolchain
             cd "$GITHUB_WORKSPACE/src"
+            rm -f "$GITHUB_WORKSPACE/VERSION"
             ./all.bash
