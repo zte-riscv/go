@@ -35,6 +35,7 @@ jobs:
             export GO_TEST_TIMEOUT_SCALE=10
 
             # build toolchain
+            rm -rf "$HOME/.cache/go-build"
             cd "$GITHUB_WORKSPACE/src"
             ./all.bash 2>&1 | tee build.log
       - name: Upload build log on failure
