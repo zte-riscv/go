@@ -27,11 +27,21 @@ jobs:
             set -euxo pipefail
             BOOT=/tmp/go-bootstrap
             rm -rf "$BOOT"
-            curl -fsSL https://go.dev/dl/go1.25.0.linux-riscv64.tar.gz -o /tmp/go.tar.gz
+            curl -fsSL https://github.com/zte-riscv/go/releases/download/go1.26.4.202607/go1.26.4.202607.linux-riscv64.tar.gz -o /tmp/go.tar.gz
             tar -C /tmp -xzf /tmp/go.tar.gz
             mv /tmp/go "$BOOT"
             export GOROOT_BOOTSTRAP="$BOOT"
+            export GORISCV64=rva20u64,misaligned_fast
+            export GO_TEST_TIMEOUT_SCALE=10
 
             # build toolchain
+            rm -rf "$HOME/.cache/go-build"
             cd "$GITHUB_WORKSPACE/src"
-            ./all.bash
+            ./all.bash 2>&1 | tee build.log
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: src/build.log
+          retention-days: 2
