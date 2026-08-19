@@ -128,4 +128,7 @@ type Flags struct {
 
 	// RuntimeSecret enables the runtime/secret package.
 	RuntimeSecret bool
+
+	// ClearSpan enables clearing an entire span on first allocation.
+	ClearSpan bool
 }
