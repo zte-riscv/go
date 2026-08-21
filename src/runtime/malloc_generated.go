@@ -4327,7 +4327,7 @@ func mallocgcTinySize1(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	const constsize = 1
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -4380,9 +4380,7 @@ func mallocgcTinySize1(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -4393,9 +4391,7 @@ func mallocgcTinySize1(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -4404,8 +4400,16 @@ func mallocgcTinySize1(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -4483,7 +4487,7 @@ func mallocgcTinySize2(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	const constsize = 2
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -4536,9 +4540,7 @@ func mallocgcTinySize2(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -4549,9 +4551,7 @@ func mallocgcTinySize2(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -4560,8 +4560,16 @@ func mallocgcTinySize2(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -4639,7 +4647,7 @@ func mallocgcTinySize3(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	const constsize = 3
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -4692,9 +4700,7 @@ func mallocgcTinySize3(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -4705,9 +4711,7 @@ func mallocgcTinySize3(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -4716,8 +4720,16 @@ func mallocgcTinySize3(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -4795,7 +4807,7 @@ func mallocgcTinySize4(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	const constsize = 4
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -4848,9 +4860,7 @@ func mallocgcTinySize4(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -4861,9 +4871,7 @@ func mallocgcTinySize4(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -4872,8 +4880,16 @@ func mallocgcTinySize4(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -4951,7 +4967,7 @@ func mallocgcTinySize5(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	const constsize = 5
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -5004,9 +5020,7 @@ func mallocgcTinySize5(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -5017,9 +5031,7 @@ func mallocgcTinySize5(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -5028,8 +5040,16 @@ func mallocgcTinySize5(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -5107,7 +5127,7 @@ func mallocgcTinySize6(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	const constsize = 6
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -5160,9 +5180,7 @@ func mallocgcTinySize6(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -5173,9 +5191,7 @@ func mallocgcTinySize6(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -5184,8 +5200,16 @@ func mallocgcTinySize6(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -5263,7 +5287,7 @@ func mallocgcTinySize7(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	const constsize = 7
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -5316,9 +5340,7 @@ func mallocgcTinySize7(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -5329,9 +5351,7 @@ func mallocgcTinySize7(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -5340,8 +5360,16 @@ func mallocgcTinySize7(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -5419,7 +5447,7 @@ func mallocgcTinySize8(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	const constsize = 8
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -5472,9 +5500,7 @@ func mallocgcTinySize8(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -5485,9 +5511,7 @@ func mallocgcTinySize8(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -5496,8 +5520,16 @@ func mallocgcTinySize8(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -5575,7 +5607,7 @@ func mallocgcTinySize9(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	const constsize = 9
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -5628,9 +5660,7 @@ func mallocgcTinySize9(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -5641,9 +5671,7 @@ func mallocgcTinySize9(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -5652,8 +5680,16 @@ func mallocgcTinySize9(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -5731,7 +5767,7 @@ func mallocgcTinySize10(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 
 	const constsize = 10
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -5784,9 +5820,7 @@ func mallocgcTinySize10(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -5797,9 +5831,7 @@ func mallocgcTinySize10(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -5808,8 +5840,16 @@ func mallocgcTinySize10(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -5887,7 +5927,7 @@ func mallocgcTinySize11(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 
 	const constsize = 11
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -5940,9 +5980,7 @@ func mallocgcTinySize11(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -5953,9 +5991,7 @@ func mallocgcTinySize11(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -5964,8 +6000,16 @@ func mallocgcTinySize11(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -6043,7 +6087,7 @@ func mallocgcTinySize12(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 
 	const constsize = 12
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -6096,9 +6140,7 @@ func mallocgcTinySize12(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -6109,9 +6151,7 @@ func mallocgcTinySize12(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -6120,8 +6160,16 @@ func mallocgcTinySize12(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -6199,7 +6247,7 @@ func mallocgcTinySize13(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 
 	const constsize = 13
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -6252,9 +6300,7 @@ func mallocgcTinySize13(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -6265,9 +6311,7 @@ func mallocgcTinySize13(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -6276,8 +6320,16 @@ func mallocgcTinySize13(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -6355,7 +6407,7 @@ func mallocgcTinySize14(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 
 	const constsize = 14
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -6408,9 +6460,7 @@ func mallocgcTinySize14(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -6421,9 +6471,7 @@ func mallocgcTinySize14(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -6432,8 +6480,16 @@ func mallocgcTinySize14(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 
@@ -6511,7 +6567,7 @@ func mallocgcTinySize15(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 
 	const constsize = 15
 
-	const elemsize = 16
+	const elemsize = _TinySize
 
 	mp := acquirem()
 	if doubleCheckMalloc {
@@ -6564,9 +6620,7 @@ func mallocgcTinySize15(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 	span := c.alloc[tinySpanClass]
 
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) /
-		16,
-	)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache)
@@ -6577,9 +6631,7 @@ func mallocgcTinySize15(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*
-					16 +
-					span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}
@@ -6588,8 +6640,16 @@ func mallocgcTinySize15(size uintptr, typ *_type, needzero bool) unsafe.Pointer 
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0
-	(*[2]uint64)(x)[1] = 0
+
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
 

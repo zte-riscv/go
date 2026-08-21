@@ -358,7 +358,7 @@ func doubleCheckTiny(size uintptr, typ *_type, mp *m) {
 
 func tinyStub(size uintptr, typ *_type, needzero bool) (unsafe.Pointer, uintptr) {
 	const constsize = size_
-	const elemsize = elemsize_
+	const elemsize = _TinySize
 
 	// Set mp.mallocing to keep from being preempted by GC.
 	mp := acquirem()
@@ -431,8 +431,16 @@ func tinyStub(size uintptr, typ *_type, needzero bool) (unsafe.Pointer, uintptr)
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0 // Always zero
-	(*[2]uint64)(x)[1] = 0
+	// Always zero the whole tiny block.
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 	// See if we need to replace the existing tiny block with the new one
 	// based on amount of remaining free space.
 	if !raceenabled && (constsize < c.tinyoffset || c.tiny == 0) {
@@ -508,10 +516,11 @@ func tinyStub(size uintptr, typ *_type, needzero bool) (unsafe.Pointer, uintptr)
 }
 
 // TODO(matloob): Should we let the go compiler inline this instead of using mkmalloc?
-// We won't be able to use elemsize_ but that's probably ok.
+// The tiny size class is tunable via the tinysize experiment, so the object
+// size is taken from the runtime's _TinySize rather than an embedded literal.
 func nextFreeFastTiny(span *mspan) gclinkptr {
 	const nbytes = 8192
-	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / elemsize_)
+	const nelems = uint16((nbytes - unsafe.Sizeof(spanInlineMarkBits{})) / _TinySize)
 	var nextFreeFastResult gclinkptr
 	if span.allocCache != 0 {
 		theBit := sys.TrailingZeros64(span.allocCache) // Is there a free object in the allocCache?
@@ -522,7 +531,7 @@ func nextFreeFastTiny(span *mspan) gclinkptr {
 				span.allocCache >>= uint(theBit + 1)
 				span.freeindex = freeidx
 				span.allocCount++
-				nextFreeFastResult = gclinkptr(uintptr(result)*elemsize_ + span.base())
+				nextFreeFastResult = gclinkptr(uintptr(result)*_TinySize + span.base())
 			}
 		}
 	}

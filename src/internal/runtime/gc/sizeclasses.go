@@ -3,6 +3,8 @@
 
 package gc
 
+import "internal/goexperiment"
+
 // class  bytes/obj  bytes/span  objects  tail waste  max waste  min align
 //     1          8        8192     1024           0     87.50%          8
 //     2         16        8192      512           0     43.75%         16
@@ -91,8 +93,8 @@ const (
 	PageShift          = 13
 	MaxObjsPerSpan     = 1024
 	MaxSizeClassNPages = 10
-	TinySize           = 16
-	TinySizeClass      = 2
+	TinySize           = 16 * (1 + goexperiment.TinySizeInt)
+	TinySizeClass      = 2 * (1 + goexperiment.TinySizeInt)
 )
 
 var SizeClassToSize = [NumSizeClasses]uint16{0, 8, 16, 24, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240, 256, 288, 320, 352, 384, 416, 448, 480, 512, 576, 640, 704, 768, 896, 1024, 1152, 1280, 1408, 1536, 1792, 2048, 2304, 2688, 3072, 3200, 3456, 4096, 4864, 5376, 6144, 6528, 6784, 6912, 8192, 9472, 9728, 10240, 10880, 12288, 13568, 14336, 16384, 18432, 19072, 20480, 21760, 24576, 27264, 28672, 32768}
