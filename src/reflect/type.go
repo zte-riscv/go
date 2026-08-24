@@ -18,6 +18,7 @@ package reflect
 import (
 	"internal/abi"
 	"internal/goarch"
+	"internal/goexperiment"
 	"iter"
 	"runtime"
 	"strconv"
@@ -1897,9 +1898,22 @@ func ChanOf(dir ChanDir, t Type) Type {
 }
 
 var funcTypes []Type
-var funcTypesMutex sync.Mutex
+
+// funcTypesMutex protects funcTypes. Writers (the slow path below) hold it
+// in write mode; the experiment-gated read fast path holds it in read mode,
+// which excludes the grow/store path and guarantees a consistent read.
+var funcTypesMutex sync.RWMutex
 
 func initFuncTypes(n int) Type {
+	if goexperiment.ReflectRWLock {
+		funcTypesMutex.RLock()
+		if n < len(funcTypes) && funcTypes[n] != nil {
+			t := funcTypes[n]
+			funcTypesMutex.RUnlock()
+			return t
+		}
+		funcTypesMutex.RUnlock()
+	}
 	funcTypesMutex.Lock()
 	defer funcTypesMutex.Unlock()
 	if n >= len(funcTypes) {

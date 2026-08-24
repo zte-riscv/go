@@ -128,4 +128,9 @@ type Flags struct {
 
 	// RuntimeSecret enables the runtime/secret package.
 	RuntimeSecret bool
+
+	// ReflectRWLock enables a read-lock fast path in reflect.initFuncTypes
+	// for the function-type cache, reducing lock contention on concurrent
+	// reflect.FuncOf calls when the cache is hot.
+	ReflectRWLock bool
 }
