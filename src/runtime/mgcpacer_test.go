@@ -24,6 +24,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "Steady",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(33.0),
@@ -49,6 +50,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "SteadyBigStacks",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(132.0),
@@ -77,6 +79,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "SteadyBigGlobals",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  128 << 20,
 			nCores:        8,
 			allocRate:     constant(132.0),
@@ -105,6 +108,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "StepAlloc",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(33.0).sum(ramp(66.0, 1).delay(50)),
@@ -128,6 +132,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "HeavyStepAlloc",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(33).sum(ramp(330, 1).delay(50)),
@@ -151,6 +156,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "StepScannableFrac",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(128.0),
@@ -176,6 +182,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "HighGOGC",
 			gcPercent:     1500,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     random(7, 0x53).offset(165),
@@ -217,6 +224,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "OscAlloc",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     oscillate(13, 0, 8).offset(67),
@@ -241,6 +249,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "JitterAlloc",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     random(13, 0xf).offset(132),
@@ -266,6 +275,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "HeavyJitterAlloc",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     random(33.0, 0x0).offset(330),
@@ -295,6 +305,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "SmallHeapSlowAlloc",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(1.0),
@@ -332,6 +343,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "MediumHeapSlowAlloc",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(1.0),
@@ -369,6 +381,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "LargeHeapSlowAlloc",
 			gcPercent:     100,
 			memoryLimit:   math.MaxInt64,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(1.0),
@@ -407,6 +420,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "SteadyMemoryLimit",
 			gcPercent:     100,
 			memoryLimit:   512 << 20,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(33.0),
@@ -436,6 +450,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "SteadyMemoryLimitNoGCPercent",
 			gcPercent:     -1,
 			memoryLimit:   512 << 20,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(33.0),
@@ -465,6 +480,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "ExceedMemoryLimit",
 			gcPercent:     100,
 			memoryLimit:   512 << 20,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(33.0),
@@ -499,6 +515,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "ExceedMemoryLimitNoGCPercent",
 			gcPercent:     -1,
 			memoryLimit:   512 << 20,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(33.0),
@@ -538,6 +555,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "MaintainMemoryLimit",
 			gcPercent:     100,
 			memoryLimit:   512 << 20,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(33.0),
@@ -571,6 +589,7 @@ func TestGcPacer(t *testing.T) {
 			name:          "MaintainMemoryLimitNoGCPercent",
 			gcPercent:     -1,
 			memoryLimit:   512 << 20,
+			gcRatio:       0.25,
 			globalsBytes:  32 << 10,
 			nCores:        8,
 			allocRate:     constant(33.0),
@@ -606,7 +625,7 @@ func TestGcPacer(t *testing.T) {
 		t.Run(e.name, func(t *testing.T) {
 			t.Parallel()
 
-			c := NewGCController(e.gcPercent, e.memoryLimit)
+			c := NewGCController(e.gcPercent, e.memoryLimit, e.gcRatio)
 			var bytesAllocatedBlackLast int64
 			results := make([]gcCycleResult, 0, e.length)
 			for i := 0; i < e.length; i++ {
@@ -761,6 +780,7 @@ type gcExecTest struct {
 
 	gcPercent    int
 	memoryLimit  int64
+	gcRatio      float64
 	globalsBytes uint64
 	nCores       int
 
@@ -1033,7 +1053,7 @@ func applyMemoryLimitHeapGoalHeadroom(goal uint64) uint64 {
 
 func TestIdleMarkWorkerCount(t *testing.T) {
 	const workers = 10
-	c := NewGCController(100, math.MaxInt64)
+	c := NewGCController(100, math.MaxInt64, 0.25)
 	c.SetMaxIdleMarkWorkers(workers)
 	for i := 0; i < workers; i++ {
 		if !c.NeedIdleMarkWorker() {

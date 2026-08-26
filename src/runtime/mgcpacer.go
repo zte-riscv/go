@@ -14,30 +14,6 @@ import (
 )
 
 const (
-	// gcGoalUtilization is the goal CPU utilization for
-	// marking as a fraction of GOMAXPROCS.
-	//
-	// Increasing the goal utilization will shorten GC cycles as the GC
-	// has more resources behind it, lessening costs from the write barrier,
-	// but comes at the cost of increasing mutator latency.
-	gcGoalUtilization = gcBackgroundUtilization
-
-	// gcBackgroundUtilization is the fixed CPU utilization for background
-	// marking. It must be <= gcGoalUtilization. The difference between
-	// gcGoalUtilization and gcBackgroundUtilization will be made up by
-	// mark assists. The scheduler will aim to use within 50% of this
-	// goal.
-	//
-	// As a general rule, there's little reason to set gcBackgroundUtilization
-	// < gcGoalUtilization. One reason might be in mostly idle applications,
-	// where goroutines are unlikely to assist at all, so the actual
-	// utilization will be lower than the goal. But this is moot point
-	// because the idle mark workers already soak up idle CPU resources.
-	// These two values are still kept separate however because they are
-	// distinct conceptually, and in previous iterations of the pacer the
-	// distinction was more important.
-	gcBackgroundUtilization = 0.25
-
 	// gcCreditSlack is the amount of scan work credit that can
 	// accumulate locally before updating gcController.heapScanWork and,
 	// optionally, gcController.bgScanCredit. Lower values give a more
@@ -75,6 +51,14 @@ const (
 	memoryLimitHeapGoalHeadroomPercent = 3
 )
 
+// gcGoalUtilization is the goal CPU utilization for
+// marking as a fraction of GOMAXPROCS.
+//
+// Increasing the goal utilization will shorten GC cycles as the GC
+// has more resources behind it, lessening costs from the write barrier,
+// but comes at the cost of increasing mutator latency.
+var gcGoalUtilization = gcController.gcRatio
+
 // gcController implements the GC pacing controller that determines
 // when to trigger concurrent garbage collection and how much marking
 // work to do in mutator assists and background marking.
@@ -90,6 +74,11 @@ const (
 var gcController gcControllerState
 
 type gcControllerState struct {
+	// gcController.gcRatio be optional, value equals gcratio/100.0.
+	// Initialized from GOGCRATIO, which in the range of (1, 99).
+	// Default GOGCRATIO is 25.
+	gcRatio float64
+
 	// Initialized from GOGC. GOGC=off means no GC.
 	gcPercent atomic.Int32
 
@@ -368,11 +357,12 @@ type gcControllerState struct {
 	_ cpu.CacheLinePad
 }
 
-func (c *gcControllerState) init(gcPercent int32, memoryLimit int64) {
+func (c *gcControllerState) init(gcPercent int32, memoryLimit int64, gcRatio float64) {
 	c.heapMinimum = defaultHeapMinimum
 	c.triggered = ^uint64(0)
 	c.setGCPercent(gcPercent)
 	c.setMemoryLimit(memoryLimit)
+	c.setGOGCRatio(gcRatio)
 	c.commit(true) // No sweep phase in the first GC cycle.
 	// N.B. Don't bother calling traceHeapGoal. Tracing is never enabled at
 	// initialization time.
@@ -400,13 +390,13 @@ func (c *gcControllerState) startCycle(markStartTime int64, procs int, trigger g
 	// dedicated workers so that the utilization is closest to
 	// 25%. For small GOMAXPROCS, this would introduce too much
 	// error, so we add fractional workers in that case.
-	totalUtilizationGoal := float64(procs) * gcBackgroundUtilization
+	totalUtilizationGoal := float64(procs) * gcController.gcRatio
 	dedicatedMarkWorkersNeeded := int64(totalUtilizationGoal + 0.5)
 	utilError := float64(dedicatedMarkWorkersNeeded)/totalUtilizationGoal - 1
 	const maxUtilError = 0.3
 	if utilError < -maxUtilError || utilError > maxUtilError {
 		// Rounding put us more than 30% off our goal. With
-		// gcBackgroundUtilization of 25%, this happens for
+		// gcController.gcRatio of 25%, this happens for
 		// GOMAXPROCS<=3 or GOMAXPROCS=6. Enable fractional
 		// workers to compensate.
 		if float64(dedicatedMarkWorkersNeeded) > totalUtilizationGoal {
@@ -606,7 +596,7 @@ func (c *gcControllerState) endCycle(now int64, procs int, userForced bool) {
 	assistDuration := now - c.markStartTime
 
 	// Assume background mark hit its utilization goal.
-	utilization := gcBackgroundUtilization
+	utilization := gcController.gcRatio
 	// Add assist utilization; avoid divide by zero.
 	if assistDuration > 0 {
 		utilization += float64(c.assistTime.Load()) / float64(assistDuration*int64(procs))
@@ -1424,6 +1414,39 @@ func readGOMEMLIMIT() int64 {
 		throw("malformed GOMEMLIMIT; see `go doc runtime/debug.SetMemoryLimit`")
 	}
 	return n
+}
+
+func (c *gcControllerState) setGOGCRatio(in float64) float64 {
+	if !c.test {
+		assertWorldStoppedOrLockHeld(&mheap_.lock)
+	}
+
+	out := c.gcRatio
+	c.gcRatio = in
+
+	return out
+}
+
+func readGOGCRATIO() float64 {
+	p := gogetenv("GOGCRATIO")
+	if p == "" {
+		return 0.25
+	}
+	n, ok := parseByteCount(p)
+	if !ok {
+		print("GOGCRATIO=", p, "\n")
+		throw("malformed GOGCRATIO; get the wrong value")
+	}
+
+	if n < 1 {
+		n = 1
+	} else if n > 99 {
+		n = 99
+	}
+
+	out := float64(n) / 100.0
+
+	return out
 }
 
 // addIdleMarkWorker attempts to add a new idle mark worker.
