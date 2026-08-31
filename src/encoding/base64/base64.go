@@ -6,10 +6,10 @@
 package base64
 
 import (
-	"internal/byteorder"
+	"encoding/binary"
 	"io"
-	"slices"
 	"strconv"
+	"unsafe"
 )
 
 /*
@@ -26,6 +26,8 @@ type Encoding struct {
 	decodeMap [256]uint8 // mapping of symbol byte value to symbol index
 	padChar   rune
 	strict    bool
+	ignoreWS  bool
+	lut       *[16]byte
 }
 
 const (
@@ -53,6 +55,29 @@ const (
 		"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"
 	invalidIndex = '\xff'
 )
+
+const encodeStd = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+const encodeURL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+// A lookup table containing the absolute offsets for all ranges for STD encoding.
+// Translate values 0..63 to the Base64 alphabet. There are five sets:
+// #  From      To         Abs    Index  Characters
+// 0  [0..25]   [65..90]   +65        0  ABCDEFGHIJKLMNOPQRSTUVWXYZ
+// 1  [26..51]  [97..122]  +71        1  abcdefghijklmnopqrstuvwxyz
+// 2  [52..61]  [48..57]    -4  [2..11]  0123456789
+// 3  [62]      [43]       -19       12  +
+// 4  [63]      [47]       -16       13  /
+var encodeStdLut = [16]byte{65, 71, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 237, 240, 0, 0}
+
+// A lookup table containing the absolute offsets for all ranges for URL encoding.
+// Translate values 0..63 to the Base64 alphabet. There are five sets:
+// #  From      To         Abs    Index  Characters
+// 0  [0..25]   [65..90]   +65        0  ABCDEFGHIJKLMNOPQRSTUVWXYZ
+// 1  [26..51]  [97..122]  +71        1  abcdefghijklmnopqrstuvwxyz
+// 2  [52..61]  [48..57]    -4  [2..11]  0123456789
+// 3  [62]      [45]       -17       12  -
+// 4  [63]      [95]       +32       13  _
+var encodeURLLut = [16]byte{65, 71, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 239, 32, 0, 0}
 
 // NewEncoding returns a new padded Encoding defined by the given alphabet,
 // which must be a 64-byte string that contains unique byte values and
@@ -82,6 +107,12 @@ func NewEncoding(encoder string) *Encoding {
 			panic("encoding alphabet includes duplicate symbols")
 		}
 		e.decodeMap[encoder[i]] = uint8(i)
+	}
+	// for SIMD
+	if encoder == encodeURL {
+		e.lut = &encodeURLLut
+	} else if encoder == encodeStd {
+		e.lut = &encodeStdLut
 	}
 	return e
 }
@@ -115,12 +146,20 @@ func (enc Encoding) Strict() *Encoding {
 	return &enc
 }
 
+// Forgiving creates a new encoding identical to enc except with
+// forgiving decoding enabled. In this mode, the decoder ignores
+// whitespace characters (space, tab, form feed, CR and LF) in the input.
+func (enc Encoding) Forgiving() *Encoding {
+	enc.ignoreWS = true
+	return &enc
+}
+
 // StdEncoding is the standard base64 encoding, as defined in RFC 4648.
-var StdEncoding = NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
+var StdEncoding = NewEncoding(encodeStd)
 
 // URLEncoding is the alternate base64 encoding defined in RFC 4648.
 // It is typically used in URLs and file names.
-var URLEncoding = NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+var URLEncoding = NewEncoding(encodeURL)
 
 // RawStdEncoding is the standard raw, unpadded base64 encoding,
 // as defined in RFC 4648 section 3.2.
@@ -136,16 +175,7 @@ var RawURLEncoding = URLEncoding.WithPadding(NoPadding)
  * Encoder
  */
 
-// Encode encodes src using the encoding enc,
-// writing [Encoding.EncodedLen](len(src)) bytes to dst.
-//
-// The encoding pads the output to a multiple of 4 bytes,
-// so Encode is not appropriate for use on individual blocks
-// of a large data stream. Use [NewEncoder] instead.
-func (enc *Encoding) Encode(dst, src []byte) {
-	if len(src) == 0 {
-		return
-	}
+func encodeGeneric(enc *Encoding, dst, src []byte) {
 	// enc is a pointer receiver, so the use of enc.encode within the hot
 	// loop below means a nil check at every operation. Lift that nil check
 	// outside of the loop to speed up the encoder.
@@ -189,20 +219,44 @@ func (enc *Encoding) Encode(dst, src []byte) {
 	}
 }
 
+// Encode encodes src using the encoding enc,
+// writing [Encoding.EncodedLen](len(src)) bytes to dst.
+//
+// The encoding pads the output to a multiple of 4 bytes,
+// so Encode is not appropriate for use on individual blocks
+// of a large data stream. Use [NewEncoder] instead.
+func (enc *Encoding) Encode(dst, src []byte) {
+	if len(src) == 0 {
+		return
+	}
+	encode(enc, dst, src)
+}
+
+func growByteSlice(s []byte, n int) []byte {
+	if n -= cap(s) - len(s); n > 0 {
+		s = append(s[:cap(s)], make([]byte, n)...)[:len(s)]
+	}
+	return s
+}
+
 // AppendEncode appends the base64 encoded src to dst
 // and returns the extended buffer.
 func (enc *Encoding) AppendEncode(dst, src []byte) []byte {
 	n := enc.EncodedLen(len(src))
-	dst = slices.Grow(dst, n)
+	dst = growByteSlice(dst, n)
 	enc.Encode(dst[len(dst):][:n], src)
 	return dst[:len(dst)+n]
 }
 
 // EncodeToString returns the base64 encoding of src.
 func (enc *Encoding) EncodeToString(src []byte) string {
-	buf := make([]byte, enc.EncodedLen(len(src)))
+	srcLen := len(src)
+	if srcLen == 0 {
+		return ""
+	}
+	buf := make([]byte, enc.EncodedLen(srcLen))
 	enc.Encode(buf, src)
-	return string(buf)
+	return unsafe.String(unsafe.SliceData(buf), len(buf))
 }
 
 type encoder struct {
@@ -333,7 +387,7 @@ func (enc *Encoding) decodeQuantum(dst, src []byte, si int) (nsi, n int, err err
 			continue
 		}
 
-		if in == '\n' || in == '\r' {
+		if enc.isIgnorableChar(in) {
 			j--
 			continue
 		}
@@ -350,7 +404,7 @@ func (enc *Encoding) decodeQuantum(dst, src []byte, si int) (nsi, n int, err err
 		case 2:
 			// "==" is expected, the first "=" is already consumed.
 			// skip over newlines
-			for si < len(src) && (src[si] == '\n' || src[si] == '\r') {
+			for si < len(src) && enc.isIgnorableChar(src[si]) {
 				si++
 			}
 			if si == len(src) {
@@ -366,7 +420,7 @@ func (enc *Encoding) decodeQuantum(dst, src []byte, si int) (nsi, n int, err err
 		}
 
 		// skip over newlines
-		for si < len(src) && (src[si] == '\n' || src[si] == '\r') {
+		for si < len(src) && enc.isIgnorableChar(src[si]) {
 			si++
 		}
 		if si < len(src) {
@@ -402,6 +456,20 @@ func (enc *Encoding) decodeQuantum(dst, src []byte, si int) (nsi, n int, err err
 	return si, dlen - 1, err
 }
 
+// isIgnorableChar reports whether c is a whitespace character that should be skipped.
+// \r and \n are always ignored. \t, \f and space are ignored only in Forgiving mode.
+//
+
+func (enc *Encoding) isIgnorableChar(c byte) bool {
+	if c == '\n' || c == '\r' {
+		return true
+	}
+	if enc.ignoreWS && (c == '\t' || c == '\f' || c == ' ') {
+		return true
+	}
+	return false
+}
+
 // AppendDecode appends the base64 decoded src to dst
 // and returns the extended buffer.
 // If the input is malformed, it returns the partially decoded src and an error.
@@ -414,7 +482,8 @@ func (enc *Encoding) AppendDecode(dst, src []byte) ([]byte, error) {
 	}
 	n = decodedLen(n, NoPadding)
 
-	dst = slices.Grow(dst, n)
+	dst = growByteSlice(dst, n)
+
 	n, err := enc.Decode(dst[len(dst):][:n], src)
 	return dst[:len(dst)+n], err
 }
@@ -423,8 +492,13 @@ func (enc *Encoding) AppendDecode(dst, src []byte) ([]byte, error) {
 // If the input is malformed, it returns the partially decoded data and
 // [CorruptInputError]. New line characters (\r and \n) are ignored.
 func (enc *Encoding) DecodeString(s string) ([]byte, error) {
-	dbuf := make([]byte, enc.DecodedLen(len(s)))
-	n, err := enc.Decode(dbuf, []byte(s))
+	srcLen := len(s)
+	if srcLen == 0 {
+		return nil, nil
+	}
+	dbuf := make([]byte, enc.DecodedLen(srcLen))
+	d := unsafe.Slice(unsafe.StringData(s), srcLen)
+	n, err := enc.Decode(dbuf, d)
 	return dbuf[:n], err
 }
 
@@ -505,17 +579,7 @@ func (d *decoder) Read(p []byte) (n int, err error) {
 	return n, d.err
 }
 
-// Decode decodes src using the encoding enc. It writes at most
-// [Encoding.DecodedLen](len(src)) bytes to dst and returns the number of bytes
-// written. The caller must ensure that dst is large enough to hold all
-// the decoded data. If src contains invalid base64 data, it will return the
-// number of bytes successfully written and [CorruptInputError].
-// New line characters (\r and \n) are ignored.
-func (enc *Encoding) Decode(dst, src []byte) (n int, err error) {
-	if len(src) == 0 {
-		return 0, nil
-	}
-
+func decodeGeneric(enc *Encoding, dst, src []byte) (n int, err error) {
 	// Lift the nil check outside of the loop. enc.decodeMap is directly
 	// used later in this function, to let the compiler know that the
 	// receiver can't be nil.
@@ -534,7 +598,7 @@ func (enc *Encoding) Decode(dst, src []byte) (n int, err error) {
 			enc.decodeMap[src2[6]],
 			enc.decodeMap[src2[7]],
 		); ok {
-			byteorder.BEPutUint64(dst[n:], dn)
+			binary.BigEndian.PutUint64(dst[n:], dn)
 			n += 6
 			si += 8
 		} else {
@@ -555,7 +619,7 @@ func (enc *Encoding) Decode(dst, src []byte) (n int, err error) {
 			enc.decodeMap[src2[2]],
 			enc.decodeMap[src2[3]],
 		); ok {
-			byteorder.BEPutUint32(dst[n:], dn)
+			binary.BigEndian.PutUint32(dst[n:], dn)
 			n += 3
 			si += 4
 		} else {
@@ -577,6 +641,19 @@ func (enc *Encoding) Decode(dst, src []byte) (n int, err error) {
 		}
 	}
 	return n, err
+}
+
+// Decode decodes src using the encoding enc. It writes at most
+// [Encoding.DecodedLen](len(src)) bytes to dst and returns the number of bytes
+// written. The caller must ensure that dst is large enough to hold all
+// the decoded data. If src contains invalid base64 data, it will return the
+// number of bytes successfully written and [CorruptInputError].
+// New line characters (\r and \n) are ignored.
+func (enc *Encoding) Decode(dst, src []byte) (int, error) {
+	if len(src) == 0 {
+		return 0, nil
+	}
+	return decode(enc, dst, src)
 }
 
 // assemble32 assembles 4 base64 digits into 3 bytes.
@@ -616,7 +693,8 @@ func assemble64(n1, n2, n3, n4, n5, n6, n7, n8 byte) (dn uint64, ok bool) {
 }
 
 type newlineFilteringReader struct {
-	wrapped io.Reader
+	wrapped  io.Reader
+	ignoreWS bool
 }
 
 func (r *newlineFilteringReader) Read(p []byte) (int, error) {
@@ -624,7 +702,9 @@ func (r *newlineFilteringReader) Read(p []byte) (int, error) {
 	for n > 0 {
 		offset := 0
 		for i, b := range p[:n] {
-			if b != '\r' && b != '\n' {
+			isIgnorable := b == '\r' || b == '\n' ||
+				(r.ignoreWS && (b == '\t' || b == '\f' || b == ' '))
+			if !isIgnorable {
 				if i != offset {
 					p[offset] = b
 				}
@@ -642,7 +722,7 @@ func (r *newlineFilteringReader) Read(p []byte) (int, error) {
 
 // NewDecoder constructs a new base64 stream decoder.
 func NewDecoder(enc *Encoding, r io.Reader) io.Reader {
-	return &decoder{enc: enc, r: &newlineFilteringReader{r}}
+	return &decoder{enc: enc, r: &newlineFilteringReader{r, enc.ignoreWS}}
 }
 
 // DecodedLen returns the maximum length in bytes of the decoded data

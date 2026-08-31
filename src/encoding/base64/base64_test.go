@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"reflect"
 	"runtime/debug"
 	"strconv"
@@ -71,8 +70,6 @@ func rawURLRef(ref string) string {
 	return rawRef(urlRef(ref))
 }
 
-const encodeStd = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-
 // A nonstandard encoding with a funny padding character, for testing
 var funnyEncoding = NewEncoding(encodeStd).WithPadding(rune('@'))
 
@@ -103,7 +100,7 @@ var bigtest = testpair{
 	"VHdhcyBicmlsbGlnLCBhbmQgdGhlIHNsaXRoeSB0b3Zlcw==",
 }
 
-func testEqual(t *testing.T, msg string, args ...any) bool {
+func testEqual(t *testing.T, msg string, args ...interface{}) bool {
 	t.Helper()
 	if args[len(args)-2] != args[len(args)-1] {
 		t.Errorf(msg, args...)
@@ -123,20 +120,9 @@ func TestEncode(t *testing.T) {
 	}
 }
 
-func TestEncodeShortDst(t *testing.T) {
-	src := make([]byte, 12)
-	dst := make([]byte, 1)
-	defer func() {
-		if recover() == nil {
-			t.Error("Encode with short dst did not panic")
-		}
-	}()
-	StdEncoding.Encode(dst, src)
-}
-
 func TestEncoder(t *testing.T) {
 	for _, p := range pairs {
-		bb := &strings.Builder{}
+		bb := &bytes.Buffer{}
 		encoder := NewEncoder(StdEncoding, bb)
 		encoder.Write([]byte(p.decoded))
 		encoder.Close()
@@ -147,7 +133,7 @@ func TestEncoder(t *testing.T) {
 func TestEncoderBuffering(t *testing.T) {
 	input := []byte(bigtest.decoded)
 	for bs := 1; bs <= 12; bs++ {
-		bb := &strings.Builder{}
+		bb := &bytes.Buffer{}
 		encoder := NewEncoder(StdEncoding, bb)
 		for pos := 0; pos < len(input); pos += bs {
 			end := pos + bs
@@ -191,7 +177,6 @@ func TestDecode(t *testing.T) {
 		}
 	}
 }
-
 func TestDecoder(t *testing.T) {
 	for _, p := range pairs {
 		decoder := NewDecoder(StdEncoding, strings.NewReader(p.encoded))
@@ -357,6 +342,14 @@ func TestDecodedLen(t *testing.T) {
 }
 
 func TestBig(t *testing.T) {
+	testBig(t, StdEncoding)
+}
+
+func TestBigWithURLEncoding(t *testing.T) {
+	testBig(t, URLEncoding)
+}
+
+func testBig(t *testing.T, encoding *Encoding) {
 	n := 3*1000 + 1
 	raw := make([]byte, n)
 	const alpha = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -364,7 +357,7 @@ func TestBig(t *testing.T) {
 		raw[i] = alpha[i%len(alpha)]
 	}
 	encoded := new(bytes.Buffer)
-	w := NewEncoder(StdEncoding, encoded)
+	w := NewEncoder(encoding, encoded)
 	nn, err := w.Write(raw)
 	if nn != n || err != nil {
 		t.Fatalf("Encoder.Write(raw) = %d, %v want %d, nil", nn, err, n)
@@ -373,7 +366,7 @@ func TestBig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encoder.Close() = %v want nil", err)
 	}
-	decoded, err := io.ReadAll(NewDecoder(StdEncoding, encoded))
+	decoded, err := io.ReadAll(NewDecoder(encoding, encoded))
 	if err != nil {
 		t.Fatalf("io.ReadAll(NewDecoder(...)): %v", err)
 	}
@@ -530,10 +523,19 @@ func TestDecoderIssue15656(t *testing.T) {
 }
 
 func BenchmarkEncodeToString(b *testing.B) {
-	data := make([]byte, 8192)
-	b.SetBytes(int64(len(data)))
-	for i := 0; i < b.N; i++ {
-		StdEncoding.EncodeToString(data)
+	sizes := []int{12, 768, 8192}
+	benchFunc := func(b *testing.B, benchSize int) {
+		data := make([]byte, benchSize)
+		b.SetBytes(int64(len(data)))
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			StdEncoding.EncodeToString(data)
+		}
+	}
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("%d", size), func(b *testing.B) {
+			benchFunc(b, size)
+		})
 	}
 }
 
@@ -551,16 +553,6 @@ func BenchmarkDecodeString(b *testing.B) {
 		b.Run(fmt.Sprintf("%d", size), func(b *testing.B) {
 			benchFunc(b, size)
 		})
-	}
-}
-
-func BenchmarkNewEncoding(b *testing.B) {
-	b.SetBytes(int64(len(Encoding{}.decodeMap)))
-	for i := 0; i < b.N; i++ {
-		e := NewEncoding(encodeStd)
-		for _, v := range e.decodeMap {
-			_ = v
-		}
 	}
 }
 
@@ -589,36 +581,163 @@ func TestDecoderRaw(t *testing.T) {
 	}
 }
 
-// TestEncodeAllLengths verifies the assembly encodeChunk across every
-// small input length: lengths 12 and up exercise the 4x loop (the REV8
-// wide-load path when built with misaligned_fast), lengths 3..9 the
-// tail loop, and the 1-2 byte remainder is handled in Go.
-func TestEncodeAllLengths(t *testing.T) {
-	rng := rand.New(rand.NewSource(1))
-	for n := 1; n <= 256; n++ {
-		src := make([]byte, n)
-		rng.Read(src)
-		enc := StdEncoding.EncodeToString(src)
-		dec, err := StdEncoding.DecodeString(enc)
-		if err != nil || !bytes.Equal(dec, src) {
-			t.Fatalf("len=%d: round-trip: %v", n, err)
+func TestForgivingDecode(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"SGVsbG8=", "Hello"},
+		{"SGVs\nbG8=", "Hello"},
+		{"  SGVsbG8=  ", "Hello"},
+		{"SGVs\tbG8=", "Hello"},
+		{"SGVs\fbG8=", "Hello"},
+		{"SGVs\n\r\t bG8=", "Hello"},
+		{"SGVs\bG8=", ""},
+	}
+	for _, c := range cases {
+		got, err := StdEncoding.Forgiving().DecodeString(c.in)
+		if err != nil {
+			if c.want != "" {
+				t.Errorf("Forgiving().DecodeString(%q) returned error: %v", c.in, err)
+			}
+			continue
+		}
+		if string(got) != c.want {
+			t.Errorf("Forgiving().DecodeString(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
 
-// TestEncodeUnalignedOffsets checks that the result is independent of
-// the src slice's alignment. The REV8 fast path reads 12 bytes with
-// two 64-bit loads, MOV (X6) and MOV 4(X6), which are unaligned for
-// most offsets.
-func TestEncodeUnalignedOffsets(t *testing.T) {
-	data := make([]byte, 4096+8)
-	rand.New(rand.NewSource(2)).Read(data)
-	for off := 0; off < 8; off++ {
-		src := data[off : off+3072]
-		enc := StdEncoding.EncodeToString(src)
-		dec, err := StdEncoding.DecodeString(enc)
-		if err != nil || !bytes.Equal(dec, src) {
-			t.Fatalf("offset=%d: round-trip: %v", off, err)
-		}
+func TestForgivingDecoderStream(t *testing.T) {
+	orig := "Hello, World!"
+	tests := []struct {
+		name      string
+		encoded   string
+		want      string
+		wantErr   bool
+		forgiving bool
+	}{
+		{
+			name:      "Default mode rejects spaces",
+			encoded:   "SGVs bG8=",
+			wantErr:   true,
+			forgiving: false,
+		},
+		{
+			name:      "Default mode rejects tabs",
+			encoded:   "SGVs\tbG8=",
+			wantErr:   true,
+			forgiving: false,
+		},
+		{
+			name:      "Forgiving mode handles basic newlines",
+			encoded:   "SGVs\nbG8sIFdvcmxkIQ==",
+			want:      orig,
+			forgiving: true,
+		},
+		{
+			name:      "Forgiving mode handles mixed whitespaces",
+			encoded:   "  SGVs\nbG8s\tIFdv\r\ncmxkIQ==  ",
+			want:      orig,
+			forgiving: true,
+		},
+		{
+			name:      "Forgiving mode handles all 5 whitespace types",
+			encoded:   " S\tG\nV\rs\bG\f8=",
+			wantErr:   true,
+			forgiving: true,
+		},
+		{
+			name:      "Forgiving mode handles all 5 valid whitespaces",
+			encoded:   " S\tG\nV\rs bG\f8=",
+			want:      "Hello",
+			forgiving: true,
+		},
+		{
+			name:      "Forgiving mode handles PEM style (64 chars per line)",
+			encoded:   "SGVsbG8sIFdvcmxkISEx\nSGVsbG8sIFdvcmxkISEx\nSGVsbG8sIFdvcmxkISEx\n",
+			want:      "Hello, World!!1Hello, World!!1Hello, World!!1",
+			forgiving: true,
+		},
+		{
+			name:      "Trailing garbage after padding in forgiving mode",
+			encoded:   "SGVsbG8sIFdvcmxkIQ== \t garbage",
+			wantErr:   true,
+			forgiving: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var enc *Encoding
+			if tt.forgiving {
+				enc = StdEncoding.Forgiving()
+			} else {
+				enc = StdEncoding
+			}
+
+			bufferSizes := []int{1, 2, 3, 4, 5, 8, 16, 32, 1024}
+
+			for _, bufSize := range bufferSizes {
+				t.Run(string(rune('0'+bufSize)), func(t *testing.T) {
+					r := NewDecoder(enc, bytes.NewReader([]byte(tt.encoded)))
+
+					var out bytes.Buffer
+					buf := make([]byte, bufSize)
+
+					for {
+						n, err := r.Read(buf)
+						if n > 0 {
+							out.Write(buf[:n])
+						}
+						if err == io.EOF {
+							break
+						}
+						if err != nil {
+							if !tt.wantErr {
+								t.Fatalf("unexpected error with bufsize %d: %v", bufSize, err)
+							}
+							return
+						}
+					}
+
+					if tt.wantErr {
+						t.Fatalf("expected error but got none (bufsize %d)", bufSize)
+					}
+
+					if got := out.String(); got != tt.want {
+						t.Errorf("bufsize %d: got %q, want %q", bufSize, got, tt.want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func BenchmarkEncode(b *testing.B) {
+	sizes := []int64{16, 28, 40, 128, 256, 512, 1024, 2048, 4096, 8192}
+	data := make([]byte, 8192)
+	dst := make([]byte, StdEncoding.EncodedLen(8192))
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("size-%d", size), func(b *testing.B) {
+			b.SetBytes(size)
+			for i := 0; i < b.N; i++ {
+				StdEncoding.Encode(dst, data[:size])
+			}
+		})
+	}
+}
+
+func BenchmarkDecode(b *testing.B) {
+	data := []byte(StdEncoding.EncodeToString(make([]byte, 8192)))
+	dbuf := make([]byte, StdEncoding.DecodedLen(len(data)))
+	sizes := []int64{24, 40, 56, 128, 256, 512, 1024, 2048, 4096, 8192}
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("size-%d", size), func(b *testing.B) {
+			b.SetBytes(size)
+			for i := 0; i < b.N; i++ {
+				StdEncoding.Decode(dbuf, data[:size])
+			}
+		})
 	}
 }

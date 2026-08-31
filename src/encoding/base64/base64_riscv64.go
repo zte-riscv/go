@@ -10,6 +10,14 @@ import "golang.org/x/sys/cpu"
 
 var supportRVV = cpu.RISCV64.HasV
 
+// RVV assembly is only beneficial above these thresholds (in input bytes for
+// encode, in base64 characters for decode); smaller payloads fall back to the
+// scalar implementation. Tuned on the Spacemit X60 via Benchmark*Dispatch:
+// RVV wins from size 96 onwards (96 = 32/24 lanes, a power of two VL); below
+// that the RVV setup cost dominates. Overridable in tests.
+var encodeRVVThreshold = 96
+var decodeRVVThreshold = 96
+
 func expandDecodeLUT(lut [128]byte) (out [256]byte) {
 	for i := range out {
 		out[i] = 255
@@ -47,7 +55,7 @@ func encodeAsm(dst, src []byte, lut *[64]byte) int
 func decodeAsm(dst, src []byte, lut *[256]byte) int
 
 func encode(enc *Encoding, dst, src []byte) {
-	if supportRVV && len(src) >= 16 && enc.lut != nil {
+	if supportRVV && len(src) >= encodeRVVThreshold && enc.lut != nil {
 		encoded := encodeAsm(dst, src, &enc.encode)
 		if encoded > 0 {
 			src = src[(encoded/4)*3:]
@@ -59,7 +67,7 @@ func encode(enc *Encoding, dst, src []byte) {
 
 func decode(enc *Encoding, dst, src []byte) (int, error) {
 	srcLen := len(src)
-	if supportRVV && srcLen >= 24 {
+	if supportRVV && srcLen >= decodeRVVThreshold {
 		remain := srcLen
 		if enc.lut == &encodeStdLut {
 			remain = decodeAsm(dst, src, &dencodeStdLut)

@@ -90,3 +90,62 @@ func BenchmarkDecodeRISCV64RVV(b *testing.B) {
 		})
 	}
 }
+
+// Benchmark*Dispatch exercise the full encode/decode dispatch path
+// (threshold + RVV) with RVV forced on or off, so the scalar/RVV crossover
+// point for the RVV thresholds can be measured on hardware.
+func benchmarkDispatch(b *testing.B, size int, useRVV, encode bool) {
+	oldSupport, oldET, oldDT := supportRVV, encodeRVVThreshold, decodeRVVThreshold
+	if useRVV {
+		supportRVV = cpu.RISCV64.HasV
+		encodeRVVThreshold = 0
+		decodeRVVThreshold = 0
+	} else {
+		supportRVV = false
+	}
+	defer func() {
+		supportRVV, encodeRVVThreshold, decodeRVVThreshold = oldSupport, oldET, oldDT
+	}()
+
+	b.SetBytes(int64(size))
+	b.ReportAllocs()
+	b.ResetTimer()
+	if encode {
+		src := make([]byte, size)
+		dst := make([]byte, StdEncoding.EncodedLen(size))
+		for i := 0; i < b.N; i++ {
+			StdEncoding.Encode(dst, src)
+		}
+		return
+	}
+	raw := make([]byte, size)
+	src := []byte(StdEncoding.EncodeToString(raw))
+	dst := make([]byte, StdEncoding.DecodedLen(len(src)))
+	for i := 0; i < b.N; i++ {
+		if _, err := StdEncoding.Decode(dst, src); err != nil {
+			b.Fatalf("decode failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkEncodeDispatch(b *testing.B) {
+	sizes := []int{16, 32, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 2048, 4096, 8192}
+	for _, size := range sizes {
+		for _, mode := range []string{"scalar", "rvv"} {
+			b.Run(fmt.Sprintf("size-%d/%s", size, mode), func(b *testing.B) {
+				benchmarkDispatch(b, size, mode == "rvv", true)
+			})
+		}
+	}
+}
+
+func BenchmarkDecodeDispatch(b *testing.B) {
+	sizes := []int{24, 40, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 2048, 4096, 8192}
+	for _, size := range sizes {
+		for _, mode := range []string{"scalar", "rvv"} {
+			b.Run(fmt.Sprintf("size-%d/%s", size, mode), func(b *testing.B) {
+				benchmarkDispatch(b, size, mode == "rvv", false)
+			})
+		}
+	}
+}
