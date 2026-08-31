@@ -1,0 +1,156 @@
+// Copyright 2026 Sun Yimin. All rights reserved.
+// Use of this source code is governed by a BSD 3-Clause-style
+// license that can be found in the LICENSE file.
+
+//go:build riscv64 && !purego
+
+package base64
+
+import (
+	"bytes"
+	"testing"
+
+	"golang.org/x/sys/cpu"
+)
+
+func TestStdEncodeAsm(t *testing.T) {
+	if !cpu.RISCV64.HasV {
+		t.Skip("skip riscv64 asm test: RVV not supported")
+	}
+	inputs := [][]byte{
+		[]byte("abcdefghijkl"),
+		[]byte("\x2b\xf7\xcc\x27\x01\xfe\x43\x97\xb4\x9e\xbe\xed"),
+		[]byte("abcdefghijklabcdefghijkl"),
+		[]byte("abcdefghijklabcdefghijklabcdefghijklabcdefghijklabcdefghijklabcdefghijkl"),
+	}
+	for _, src := range inputs {
+		dst := make([]byte, StdEncoding.EncodedLen(len(src)))
+		ret := encodeAsm(dst, src, &StdEncoding.encode)
+
+		expectedRet := (len(src) / 3) * 4
+		if ret != expectedRet {
+			t.Fatalf("ret=%d, expected=%d", ret, expectedRet)
+		}
+
+		expected := make([]byte, StdEncoding.EncodedLen((len(src)/3)*3))
+		encodeGeneric(StdEncoding, expected, src[:(len(src)/3)*3])
+		if !bytes.Equal(dst[:ret], expected[:ret]) {
+			t.Fatalf("got %x, expected %x", dst[:ret], expected[:ret])
+		}
+	}
+}
+
+func TestEncodeAsmReturnPrefix(t *testing.T) {
+	if !cpu.RISCV64.HasV {
+		t.Skip("skip riscv64 asm test: RVV not supported")
+	}
+
+	for _, n := range []int{1, 2, 3, 4, 5, 11, 12, 13, 15, 16, 47, 48, 49, 64, 65, 96, 127} {
+		src := bytes.Repeat([]byte{0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67}, (n+6)/7)[:n]
+		dst := make([]byte, StdEncoding.EncodedLen(len(src)))
+		ret := encodeAsm(dst, src, &StdEncoding.encode)
+
+		expectedRet := (len(src) / 3) * 4
+		if ret != expectedRet {
+			t.Fatalf("n=%d ret=%d expectedRet=%d", n, ret, expectedRet)
+		}
+
+		expected := make([]byte, StdEncoding.EncodedLen((len(src)/3)*3))
+		encodeGeneric(StdEncoding, expected, src[:(len(src)/3)*3])
+		if !bytes.Equal(dst[:ret], expected[:ret]) {
+			t.Fatalf("n=%d asm prefix mismatch", n)
+		}
+	}
+}
+
+func TestStdDecodeAsm(t *testing.T) {
+	if !cpu.RISCV64.HasV {
+		t.Skip("skip riscv64 asm test: RVV not supported")
+	}
+	src := []byte("YWJjZGVmZ2hpamts")
+	dst := make([]byte, StdEncoding.DecodedLen(len(src)))
+	remain := decodeAsm(dst, src, &dencodeStdLut)
+	if remain != 0 {
+		t.Fatalf("remain=%d, expected=0", remain)
+	}
+	if !bytes.Equal(dst[:12], []byte("abcdefghijkl")) {
+		t.Fatalf("decode mismatch: %q", string(dst[:12]))
+	}
+
+	bad := []byte("YWJj?GVmZ2hpamts")
+	remain = decodeAsm(dst, bad, &dencodeStdLut)
+	if remain == 0 {
+		t.Fatalf("expected non-zero remain on invalid input")
+	}
+	if remain != len(bad) {
+		t.Fatalf("remain=%d, expected=%d", remain, len(bad))
+	}
+}
+
+func TestDecodeRVVDispatchConsistency(t *testing.T) {
+	old := supportRVV
+	defer func() { supportRVV = old }()
+
+	if !cpu.RISCV64.HasV {
+		t.Skip("skip RVV dispatch path test: RVV not supported")
+	}
+
+	raw := []byte("abcdefghijklabcdefghijkl")
+	enc := make([]byte, StdEncoding.EncodedLen(len(raw)))
+	StdEncoding.Encode(enc, raw)
+
+	dstFallback := make([]byte, StdEncoding.DecodedLen(len(enc)))
+	supportRVV = false
+	n1, err1 := decode(StdEncoding, dstFallback, enc)
+
+	dstRVV := make([]byte, StdEncoding.DecodedLen(len(enc)))
+	supportRVV = true
+	n2, err2 := decode(StdEncoding, dstRVV, enc)
+
+	if n1 != n2 || err1 != err2 {
+		t.Fatalf("decode result mismatch: fallback=(%d,%v) rvv=(%d,%v)", n1, err1, n2, err2)
+	}
+	if !bytes.Equal(dstFallback[:n1], dstRVV[:n2]) {
+		t.Fatalf("decode bytes mismatch between fallback and RVV paths")
+	}
+
+	bad := []byte("YWJj?GVmZ2hpamts")
+	dstFallback = make([]byte, StdEncoding.DecodedLen(len(bad)))
+	supportRVV = false
+	n1, err1 = decode(StdEncoding, dstFallback, bad)
+
+	dstRVV = make([]byte, StdEncoding.DecodedLen(len(bad)))
+	supportRVV = true
+	n2, err2 = decode(StdEncoding, dstRVV, bad)
+
+	if n1 != n2 || err1 == nil || err2 == nil {
+		t.Fatalf("expected matching decode errors, fallback=(%d,%v) rvv=(%d,%v)", n1, err1, n2, err2)
+	}
+	if !bytes.Equal(dstFallback[:n1], dstRVV[:n2]) {
+		t.Fatalf("decoded prefix mismatch on invalid input")
+	}
+}
+
+func TestEncodeRVVDispatchConsistency(t *testing.T) {
+	old := supportRVV
+	defer func() { supportRVV = old }()
+
+	src := []byte("abcdefghijklabcdefghijklabcdefghijklabcdefghijkl")
+	encodedLen := StdEncoding.EncodedLen(len(src))
+
+	withFallback := make([]byte, encodedLen)
+	supportRVV = false
+	encode(StdEncoding, withFallback, src)
+
+	if !cpu.RISCV64.HasV {
+		t.Skip("skip RVV dispatch path test: RVV not supported")
+	}
+
+	withRVVFlag := make([]byte, encodedLen)
+	supportRVV = true
+	encode(StdEncoding, withRVVFlag, src)
+
+	if !bytes.Equal(withRVVFlag, withFallback) {
+		t.Fatalf("mismatch between RVV dispatch and fallback path")
+	}
+}
