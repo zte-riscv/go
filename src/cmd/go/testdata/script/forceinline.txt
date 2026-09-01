@@ -25,6 +25,28 @@ stderr -q 'force-inline check allows `runtime.gcDrain` inlining `runtime.scanObj
 stderr -q 'force-inline enabled .* func=runtime.findObject'
 stderr -q 'force-inline check allows `runtime.scanObject` inlining `runtime.findObject`'
 
+# ----------------------------------------------------------------------------------------------------------------------
+# The "force-inline enabled" assertions below cover every entry of the default
+# force-inline list (see initForceInlineFuncList in
+# cmd/compile/internal/inline/inl.go). This test is the mechanism that records
+# the pending action of keeping the list in sync with the Go runtime: when a
+# listed function is renamed or removed in a Go version upgrade, its
+# "force-inline enabled" log line disappears and this test fails, signalling
+# that the list needs updating.
+#
+# NOTE: runtime.heapBitsSetType was previously in the list but does not exist
+# in this tree's runtime and was removed as a dead entry. Do not re-add it.
+#
+
+stderr -q 'force-inline enabled .* func=runtime\.nextFreeFast'
+stderr -q 'force-inline enabled .* func=runtime\.\(\*mcache\)\.nextFree'
+stderr -q 'force-inline enabled .* func=runtime\.\(\*mcentral\)\.cacheSpan'
+stderr -q 'force-inline enabled .* func=runtime\.gcmarknewobject'
+stderr -q 'force-inline enabled .* func=runtime\.deductAssistCredit'
+stderr -q 'force-inline enabled .* func=runtime\.greyobject'
+stderr -q 'force-inline enabled .* func=runtime\.newobject'
+stderr -q 'force-inline enabled .* func=runtime\.bgsweep'
+
 # Check the small functions be inlined.
 ! stderr -q 'force-inline enabled .* func=test_module/nomain/sub.SmallFunc'
 

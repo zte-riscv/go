@@ -165,6 +165,24 @@ func hotNodesFromCDF(p *pgoir.Profile) (float64, []pgo.NamedCallEdge) {
 }
 
 // forceInlineMap contains the function list which want to be force inlined.
+//
+// WARNING: this list is coupled to the runtime implementation of the Go
+// version this compiler is built from. Runtime functions are renamed,
+// removed, or refactored (e.g. inlined into callers, split, merged) between
+// Go releases, so the list MUST be revalidated on every Go version upgrade.
+//
+// Given that Go versions are subject to upgrades, the function list here may
+// require updates accordingly; a means of recording this pending action is
+// needed. That means is the test below:
+//
+//   - cmd/go's TestScript/forceinline asserts that every entry in the list is
+//     actually force-inlined by -d=forceinline=1. A renamed/removed function
+//     makes that test FAIL, which is the signal that this list needs updating.
+//     See src/cmd/go/testdata/script/forceinline.txt.
+//   - A manual sweep with -gcflags='all=-d=forceinline=1 -d=forceinlinelog=2'
+//     prints "force-inline enabled ... func=<name>" for every matched
+//     function; any entry that never shows up is dead and must be dropped.
+//
 var forceInlineMap map[string]struct{}
 var forceInlineInitOnce = sync.Once{}
 
@@ -178,7 +196,6 @@ func initForceInlineFuncList() {
 		// Add default force inline function list.
 		// You may need update this list when you update the go version.
 		forceInlineMap = map[string]struct{}{
-			"runtime.heapBitsSetType":               {},
 			"runtime.userArenaHeapBitsSetSliceType": {},
 
 			"runtime.nextFreeFast":          {},
