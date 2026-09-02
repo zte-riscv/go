@@ -30,8 +30,10 @@ import (
 	"fmt"
 	"go/constant"
 	"internal/buildcfg"
+	"math"
 	"strconv"
 	"strings"
+	"sync"
 
 	"cmd/compile/internal/base"
 	"cmd/compile/internal/inline/inlheur"
@@ -58,6 +60,9 @@ const (
 	inlineBigFunctionNodes      = 5000                 // Functions with this many nodes are considered "big".
 	inlineBigFunctionMaxCost    = 20                   // Max cost of inlinee when inlining into a "big" function.
 	inlineClosureCalledOnceCost = 10 * inlineMaxBudget // if a closure is just called once, inline it.
+
+	// The hairyVisitor.budget may be increased in some place, so set to MaxInt32/2 to avoid addition overflow.
+	forceInlineBudget = math.MaxInt32 / 2
 )
 
 var (
@@ -159,6 +164,75 @@ func hotNodesFromCDF(p *pgoir.Profile) (float64, []pgo.NamedCallEdge) {
 	return 0, p.NamedEdgeMap.ByWeight
 }
 
+// forceInlineMap contains the function list which want to be force inlined.
+//
+// WARNING: this list is coupled to the runtime implementation of the Go
+// version this compiler is built from. Runtime functions are renamed,
+// removed, or refactored (e.g. inlined into callers, split, merged) between
+// Go releases, so the list MUST be revalidated on every Go version upgrade.
+//
+// Given that Go versions are subject to upgrades, the function list here may
+// require updates accordingly; a means of recording this pending action is
+// needed. That means is the test below:
+//
+//   - cmd/go's TestScript/forceinline asserts that every entry in the list is
+//     actually force-inlined by -d=forceinline=1. A renamed/removed function
+//     makes that test FAIL, which is the signal that this list needs updating.
+//     See src/cmd/go/testdata/script/forceinline.txt.
+//   - A manual sweep with -gcflags='all=-d=forceinline=1 -d=forceinlinelog=2'
+//     prints "force-inline enabled ... func=<name>" for every matched
+//     function; any entry that never shows up is dead and must be dropped.
+//
+var forceInlineMap map[string]struct{}
+var forceInlineInitOnce = sync.Once{}
+
+// initForceInlineFuncList init forceInlineMap which contains force inline functions.
+func initForceInlineFuncList() {
+	switch base.Debug.ForceInline {
+	case 0:
+		return
+
+	case 1:
+		// Add default force inline function list.
+		// You may need update this list when you update the go version.
+		forceInlineMap = map[string]struct{}{
+			"runtime.userArenaHeapBitsSetSliceType": {},
+
+			"runtime.nextFreeFast":          {},
+			"runtime.(*mcache).nextFree":    {},
+			"runtime.(*mcentral).cacheSpan": {},
+			"runtime.gcmarknewobject":       {},
+			"runtime.deductAssistCredit":    {},
+
+			"runtime.mallocgcSmallScanNoHeader": {},
+
+			"runtime.mallocgc": {},
+
+			"runtime.scanObject": {},
+			"runtime.findObject": {},
+			"runtime.greyobject": {},
+			"runtime.newobject":  {},
+			"runtime.bgsweep":    {},
+		}
+
+	default:
+		base.Errorf("-forceinline does not support setting to %d", base.Debug.ForceInline)
+		base.ErrorExit()
+	}
+}
+
+// isForceInlineFunc determines whether the function needs to be force inlined.
+func isForceInlineFunc(fn *ir.Func) bool {
+	if base.Debug.ForceInline == 0 {
+		return false
+	}
+	forceInlineInitOnce.Do(initForceInlineFuncList)
+
+	// Note: Here use ir.LinkFuncName, not ir.PkgFuncName.
+	_, ok := forceInlineMap[ir.LinkFuncName(fn)]
+	return ok
+}
+
 // CanInlineFuncs computes whether a batch of functions are inlinable.
 func CanInlineFuncs(funcs []*ir.Func, profile *pgoir.Profile) {
 	if profile != nil {
@@ -208,6 +282,13 @@ func simdCreditMultiplier(fn *ir.Func) int32 {
 // Note that inlineCostOk has the final say on whether an inline will
 // happen; changes here merely make inlines possible.
 func inlineBudget(fn *ir.Func, profile *pgoir.Profile, relaxed bool, verbose bool) int32 {
+	if isForceInlineFunc(fn) {
+		// Update the budget for force inline function.
+		if base.Debug.ForceInlineLog > 1 {
+			fmt.Printf("force-inline enabled increased budget=%v for func=%v\n", forceInlineBudget, ir.PkgFuncName(fn))
+		}
+		return forceInlineBudget
+	}
 	// Update the budget for profile-guided inlining.
 	budget := int32(inlineMaxBudget)
 
@@ -239,7 +320,8 @@ func CanInline(fn *ir.Func, profile *pgoir.Profile) {
 	}
 
 	var reason string // reason, if any, that the function was not inlined
-	if base.Flag.LowerM > 1 || logopt.Enabled() {
+	var isForceInlineFn = isForceInlineFunc(fn)
+	if base.Flag.LowerM > 1 || logopt.Enabled() || (base.Debug.ForceInlineLog > 1 && isForceInlineFn) {
 		defer func() {
 			if reason != "" {
 				if base.Flag.LowerM > 1 {
@@ -247,6 +329,11 @@ func CanInline(fn *ir.Func, profile *pgoir.Profile) {
 				}
 				if logopt.Enabled() {
 					logopt.LogOpt(fn.Pos(), "cannotInlineFunction", "inline", ir.FuncName(fn), reason)
+				}
+				if isForceInlineFn {
+					// Print the reason why the function cannot be force inlined.
+					fmt.Printf("force-inline cannot inline func=%v: %s at %v\n",
+						ir.PkgFuncName(fn), reason, ir.Line(fn))
 				}
 			}
 		}()
@@ -962,13 +1049,16 @@ var InlineCall = func(callerfn *ir.Func, call *ir.CallExpr, fn *ir.Func, inlInde
 //   - the "max cost" limit used to make the decision (which may differ depending on func size)
 //   - the score assigned to this specific callsite
 //   - whether the inlined function is "hot" according to PGO.
-func inlineCostOK(n *ir.CallExpr, caller, callee *ir.Func, bigCaller, closureCalledOnce bool) (bool, int32, int32, bool) {
+func inlineCostOK(n *ir.CallExpr, caller, callee *ir.Func, bigCaller, closureCalledOnce bool, forceInl bool) (bool, int32, int32, bool) {
 	maxCost := int32(inlineMaxBudget)
 
 	if bigCaller {
 		// We use this to restrict inlining into very big functions.
 		// See issue 26546 and 17566.
 		maxCost = inlineBigFunctionMaxCost
+	}
+	if forceInl {
+		maxCost = forceInlineBudget
 	}
 
 	simdMaxCost := simdCreditMultiplier(callee) * maxCost
@@ -1059,8 +1149,21 @@ func canInlineCallExpr(callerfn *ir.Func, n *ir.CallExpr, callee *ir.Func, bigCa
 		return false, 0, false
 	}
 
-	ok, maxCost, callSiteScore, hot := inlineCostOK(n, callerfn, callee, bigCaller, closureCalledOnce)
-	if !ok {
+	forceInl := isForceInlineFunc(callee)
+	ok, maxCost, callSiteScore, hot := inlineCostOK(n, callerfn, callee, bigCaller, closureCalledOnce, forceInl)
+	if forceInl {
+		if !ok {
+			if base.Debug.ForceInlineLog > 0 {
+				fmt.Printf("force-inline cannot inline func=%s: cost=%d exceeds budget=%d at %v\n",
+					ir.PkgFuncName(callee), callee.Inl.Cost, forceInlineBudget, ir.Line(n))
+			}
+			return false, 0, false
+		}
+		if base.Debug.ForceInlineLog > 0 {
+			fmt.Printf("force-inline check allows `%s` inlining `%s` (cost=%d) at %v\n", ir.PkgFuncName(ir.CurFunc),
+				ir.PkgFuncName(callee), callee.Inl.Cost, ir.Line(n))
+		}
+	} else if !ok {
 		// callee cost too high for this call site.
 		if log && logopt.Enabled() {
 			logopt.LogOpt(n.Pos(), "cannotInlineCall", "inline", ir.FuncName(callerfn),
