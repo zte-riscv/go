@@ -491,6 +491,7 @@ var passes = [...]pass{
 	{name: "cpufeatures", fn: cpufeatures, required: buildcfg.Experiment.SIMD, disabled: !buildcfg.Experiment.SIMD},
 	{name: "rewrite tern", fn: rewriteTern, required: false, disabled: !buildcfg.Experiment.SIMD},
 	{name: "lower", fn: lower, required: true},
+	{name: "bytesstringbytesopt", fn: bytesStringBytesOpt},
 	{name: "addressing modes", fn: addressingModes, required: false},
 	{name: "late lower", fn: lateLower, required: true},
 	{name: "pair", fn: pair},
