@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"internal/asan"
+	"internal/goexperiment"
 	"internal/profile"
 	"internal/profilerecord"
 	"internal/testenv"
@@ -213,20 +214,44 @@ func TestGenericsInlineLocations(t *testing.T) {
 	const expectedSample = "testing.tRunner;runtime/pprof.TestGenericsInlineLocations;runtime/pprof.nonRecursiveGenericAllocFunction[go.shape.struct {},go.shape.struct { runtime/pprof.buf [128]uint8 }];runtime/pprof.nonRecursiveGenericAllocFunction[go.shape.struct { runtime/pprof.buf [128]uint8 },go.shape.struct {}];runtime/pprof.storeAlloc [1 16 1 16]"
 	const expectedLocation = "runtime/pprof.nonRecursiveGenericAllocFunction[go.shape.struct {},go.shape.struct { runtime/pprof.buf [128]uint8 }];runtime/pprof.nonRecursiveGenericAllocFunction[go.shape.struct { runtime/pprof.buf [128]uint8 },go.shape.struct {}];runtime/pprof.storeAlloc"
 	const expectedLocationNewInliner = "runtime/pprof.TestGenericsInlineLocations;" + expectedLocation
+
+	const expectedSampleTiny = "testing.tRunner;runtime/pprof.TestGenericsInlineLocations;runtime/pprof.nonRecursiveGenericAllocFunction[go.shape.struct { runtime/pprof.buf [128]uint8 },go.shape.struct {}];runtime/pprof.storeAlloc [1 32 1 32]"
+	const expectedSampleTiny_1 = "testing.tRunner;runtime/pprof.TestGenericsInlineLocations;runtime/pprof.nonRecursiveGenericAllocFunction[go.shape.struct {},go.shape.struct { runtime/pprof.buf [128]uint8 }];runtime/pprof.nonRecursiveGenericAllocFunction[go.shape.struct { runtime/pprof.buf [128]uint8 },go.shape.struct {}];runtime/pprof.storeAlloc [1 32 1 32]"
+	const expectedLocationTiny = "runtime/pprof.nonRecursiveGenericAllocFunction[go.shape.struct { runtime/pprof.buf [128]uint8 },go.shape.struct {}];runtime/pprof.storeAlloc"
+	const expectedLocationNewInlinerTiny = "runtime/pprof.TestGenericsInlineLocations;" + expectedLocationTiny
+
 	var s *profile.Sample
 	for _, sample := range p.Sample {
-		if sampleToString(sample) == expectedSample {
-			s = sample
-			break
+		if goexperiment.TinySize {
+			if sampleToString(sample) == expectedSampleTiny || sampleToString(sample) == expectedSampleTiny_1 {
+				s = sample
+				break
+			}
+		} else {
+			if sampleToString(sample) == expectedSample {
+				s = sample
+				break
+			}
 		}
 	}
 	if s == nil {
-		t.Fatalf("expected \n%s\ngot\n%s", expectedSample, strings.Join(profileToStrings(p), "\n"))
+		if goexperiment.TinySize {
+			t.Fatalf("expected \n%s\n%s\ngot\n%s", expectedSampleTiny, expectedSampleTiny_1, strings.Join(profileToStrings(p), "\n"))
+		} else {
+			t.Fatalf("expected \n%s\ngot\n%s", expectedSample, strings.Join(profileToStrings(p), "\n"))
+		}
 	}
 	loc := s.Location[0]
 	actual := strings.Join(locationToStrings(loc, nil), ";")
-	if expectedLocation != actual && expectedLocationNewInliner != actual {
-		t.Errorf("expected a location with at least 3 functions\n%s\ngot\n%s\n", expectedLocation, actual)
+	if goexperiment.TinySize {
+		if expectedLocation != actual && expectedLocationNewInliner != actual &&
+			expectedLocationTiny != actual && expectedLocationNewInlinerTiny != actual {
+			t.Errorf("expected a location with at least 3 functions\n%s\ngot\n%s\n", expectedLocationTiny, actual)
+		}
+	} else {
+		if expectedLocation != actual && expectedLocationNewInliner != actual {
+			t.Errorf("expected a location with at least 3 functions\n%s\ngot\n%s\n", expectedLocation, actual)
+		}
 	}
 }
 
