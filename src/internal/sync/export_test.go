@@ -36,3 +36,47 @@ func NewTruncHashTrieMap[K, V comparable]() *HashTrieMap[K, V] {
 	}
 	return &m
 }
+
+func NewXor1HashTrieMap[K comparable, V any](k1, k2 K) *HashTrieMap[K, V] {
+	var m HashTrieMap[K, V]
+	m.init()
+	m.keyHash = func(p unsafe.Pointer, _ uintptr) uintptr {
+		k := *(*K)(p)
+		if k == k1 {
+			return 0xFFFFFFFF_FFFFFFFE
+		}
+		if k == k2 {
+			return 0xFFFFFFFF_FFFFFFFF
+		}
+		return 0
+	}
+	return &m
+}
+
+func NewFinalBitCollisionHashTrieMap[K comparable, V any](k1, k2, k3 K) *HashTrieMap[K, V] {
+	const (
+		sharedPrefix = uintptr(0x123456789ABC) << 15
+		parentSlot   = uintptr(0x15)
+		siblingSlot  = uintptr(0x2a)
+		h1           = sharedPrefix | (siblingSlot << 8) | (parentSlot << 1)
+		h2           = h1 | 1
+		h3           = sharedPrefix | (siblingSlot << 8) | (siblingSlot << 1)
+	)
+
+	var m HashTrieMap[K, V]
+	m.init()
+	m.keyHash = func(p unsafe.Pointer, _ uintptr) uintptr {
+		k := *(*K)(p)
+		switch k {
+		case k1:
+			return h1
+		case k2:
+			return h2
+		case k3:
+			return h3
+		default:
+			return 0
+		}
+	}
+	return &m
+}
