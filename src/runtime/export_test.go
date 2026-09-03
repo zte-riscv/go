@@ -1404,25 +1404,26 @@ func GCTestPointerClass(p unsafe.Pointer) string {
 const Raceenabled = raceenabled
 
 const (
-	GCBackgroundUtilization            = gcBackgroundUtilization
-	GCGoalUtilization                  = gcGoalUtilization
 	DefaultHeapMinimum                 = defaultHeapMinimum
 	MemoryLimitHeapGoalHeadroomPercent = memoryLimitHeapGoalHeadroomPercent
 	MemoryLimitMinHeapGoalHeadroom     = memoryLimitMinHeapGoalHeadroom
 )
 
+var GCBackgroundUtilization = gcController.gcRatio
+var GCGoalUtilization = gcGoalUtilization
+
 type GCController struct {
 	gcControllerState
 }
 
-func NewGCController(gcPercent int, memoryLimit int64) *GCController {
+func NewGCController(gcPercent int, memoryLimit int64, gcRatio float64) *GCController {
 	// Force the controller to escape. We're going to
 	// do 64-bit atomics on it, and if it gets stack-allocated
 	// on a 32-bit architecture, it may get allocated unaligned
 	// space.
 	g := Escape(new(GCController))
 	g.gcControllerState.test = true // Mark it as a test copy.
-	g.init(int32(gcPercent), memoryLimit)
+	g.init(int32(gcPercent), memoryLimit, gcRatio)
 	return g
 }
 

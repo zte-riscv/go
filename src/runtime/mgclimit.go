@@ -228,7 +228,7 @@ func (l *gcCPULimiterState) updateLocked(now int64) {
 	// Compute total GC time.
 	windowGCTime := assistTime
 	if l.gcEnabled {
-		windowGCTime += int64(float64(windowTotalTime) * gcBackgroundUtilization)
+		windowGCTime += int64(float64(windowTotalTime) * gcController.gcRatio)
 	}
 
 	// Subtract out all idle time from the total time. Do this after computing
