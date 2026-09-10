@@ -100,6 +100,15 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 		p.Reg = REG_ZERO
 		p.To.Reg = REG_ZERO
 		p.To.Type = obj.TYPE_REG
+
+	case ACSEXTW:
+		// C.SEXT.W is a pseudo-instruction for C.ADDIW rd, 0 (RV64)
+		p.As = ACADDIW
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = p.From.Reg
+		p.From.Type = obj.TYPE_CONST
+		p.From.Reg = obj.REG_NONE
+		p.From.Offset = 0
 	}
 
 	insData, err := instructionDataForAs(p.As)

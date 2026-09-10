@@ -524,6 +524,7 @@ start:
 	CZEXTH	X10				// 699d
 	CSEXTH	X10				// 6d9d
 	CZEXTW	X10				// 719d
+	CSEXTW	X10				// 0125
 	CNOT	X10				// 759d
 	CMUL	X11, X10		// 4d9d
 
