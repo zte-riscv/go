@@ -1965,8 +1965,12 @@ func (s *state) stmt(n ir.Node) {
 
 		bEnd := s.f.NewBlock(ssa.BlockPlain)
 		var likely int8
-		if n.Likely {
+		if n.Likely && n.UnLikely {
+			base.WarnfAt(n.Pos(), "IfStmt sets both likely and unlikely: %v", n)
+		} else if n.Likely {
 			likely = 1
+		} else if n.UnLikely {
+			likely = -1
 		}
 		var bThen *ssa.Block
 		if len(n.Body) != 0 {

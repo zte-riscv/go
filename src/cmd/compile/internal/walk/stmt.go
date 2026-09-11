@@ -7,6 +7,7 @@ package walk
 import (
 	"cmd/compile/internal/base"
 	"cmd/compile/internal/ir"
+	"cmd/compile/internal/types"
 )
 
 // The result of walkStmt MUST be assigned back to n, e.g.
@@ -220,10 +221,131 @@ func walkGoDefer(n *ir.GoDeferStmt) ir.Node {
 	return n
 }
 
+// predictByIfCond thinks the following branch is likely:
+// if err == nil { ... }
+// and the following branch is unlikely:
+// if err != nil { ... }
+// predictByIfCond returns true if we find the likely or unlikely branch
+func predictByIfCond(n *ir.IfStmt) bool {
+	b, ok := n.Cond.(*ir.BinaryExpr)
+	if !ok || b.X == nil || b.Y == nil {
+		return false
+	}
+	if b.X.Type() == types.ErrorType && b.Y.Op() == ir.ONIL ||
+		b.Y.Type() == types.ErrorType && b.X.Op() == ir.ONIL {
+		// err == nil or nil == err
+		if b.Op() == ir.OEQ {
+			if base.Debug.BlockPredictLog > 0 {
+				base.WarnfAt(n.Pos(), "if cond err == nil likely")
+			}
+			n.Likely = true
+			return true
+		}
+		// err != nil or nil != err
+		if b.Op() == ir.ONE {
+			if base.Debug.BlockPredictLog > 0 {
+				base.WarnfAt(n.Pos(), "if cond err != nil unlikely")
+			}
+			n.UnLikely = true
+			return true
+		}
+	}
+
+	return false
+}
+
+// isBlockReturnError checks whether an error type is returned in nodes,
+// and whether the error is nil.
+func isBlockReturnError(nodes ir.Nodes) (retErr, isNilErr bool) {
+	for _, b := range nodes {
+		ret, ok := b.(*ir.ReturnStmt)
+		if !ok {
+			continue
+		}
+		for _, res := range ret.Results {
+			a, ok := res.(*ir.AssignStmt)
+			if !ok || a.X == nil || a.Y == nil {
+				continue
+			}
+
+			if a.X.Type() == types.ErrorType {
+				if a.Y.Op() == ir.ONIL { // Return err = nil
+					return true, true
+				} else { // Return err = non-nil
+					return true, false
+				}
+			}
+		}
+	}
+	return false, false
+}
+
+// predictByIfBody thinks the following branch is unlikely:
+// if ...  { return a, b, (error)non-nil }
+// and the following branch is likely:
+// if ...  { return a, b, (error)nil }
+// predictByIfBody returns true if we find the unlikely branch
+func predictByIfBody(n *ir.IfStmt) bool {
+	retErr, isNilErr := isBlockReturnError(n.Body)
+	if !retErr {
+		return false
+	}
+	if isNilErr { // Body returns err = nil, so Body may be more likely
+		n.Likely = true
+	} else { // Body returns err = non-nil, so Else may be more likely
+		n.UnLikely = true
+	}
+	if base.Debug.BlockPredictLog > 0 {
+		base.WarnfAt(n.Pos(), "if body return err likely: %v", n.Likely)
+	}
+	return true
+}
+
+// predictByIfElse thinks the following branch is unlikely:
+// else { return a, b, (error)non-nil }
+// and the following branch is likely:
+// else { return a, b, (error)nil }
+// predictByIfElse returns true if we find the unlikely branch
+func predictByIfElse(n *ir.IfStmt) bool {
+	retErr, isNilErr := isBlockReturnError(n.Else)
+	if !retErr {
+		return false
+	}
+	if isNilErr { // Else block return err = nil, so Else may be more likely
+		n.UnLikely = true
+	} else { // Else block return err = non-nil, so Body may be more likely
+		n.Likely = true
+	}
+	if base.Debug.BlockPredictLog > 0 {
+		base.WarnfAt(n.Pos(), "if else return err likely: %v", n.Likely)
+	}
+	return true
+}
+
+// predictLikely predict the likelihood of an if statement
+func predictLikely(n *ir.IfStmt) {
+	if predictByIfCond(n) {
+		return
+	}
+
+	if predictByIfBody(n) {
+		return
+	}
+
+	if predictByIfElse(n) {
+		return
+	}
+}
+
 // walkIf walks an OIF node.
 func walkIf(n *ir.IfStmt) ir.Node {
 	n.Cond = walkExpr(n.Cond, n.PtrInit())
 	walkStmtList(n.Body)
 	walkStmtList(n.Else)
+
+	if base.Debug.BlockPredict > 1 {
+		predictLikely(n)
+	}
+
 	return n
 }

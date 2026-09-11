@@ -4,6 +4,8 @@
 
 package ssa
 
+import "cmd/compile/internal/base"
+
 // layout orders basic blocks in f with the goal of minimizing control flow instructions.
 // After this phase returns, the order of f.Blocks matters and is the order
 // in which those blocks will appear in the assembly output.
@@ -88,6 +90,7 @@ func layoutOrder(f *Func) []*Block {
 	}
 
 	bid := f.Entry.ID
+	blockTrace := false
 blockloop:
 	for {
 		// add block to schedule
@@ -132,7 +135,27 @@ blockloop:
 		}
 		if likely != nil && !scheduled[likely.ID] {
 			bid = likely.ID
+			blockTrace = true
 			continue
+		}
+
+		// Pick the next block in the path trace if possible, trace starts with
+		// statically predicted branch, e.g.
+		//   b0: ... If -> b1(likely),b2
+		//   b1: ... Plain -> b3
+		// schedule the path trace b0->b1->b3 sequentially
+		if base.Debug.BlockPredict > 0 && blockTrace {
+			if len(b.Succs) == 1 {
+				s := b.Succs[0].b
+				if !scheduled[s.ID] {
+					if base.Debug.BlockPredictLog > 0 {
+						base.WarnfAt(b.Pos, "found predicted block, f: %s, bid: %d", f.Name, s.ID)
+					}
+					bid = s.ID
+					continue blockloop
+				}
+			}
+			blockTrace = false
 		}
 
 		// Use degree for now.
