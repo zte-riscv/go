@@ -54,54 +54,6 @@ func jalToSym(ctxt *obj.Link, p *obj.Prog, lr int16) {
 // progedit is called individually for each *obj.Prog. It normalizes instruction
 // formats and eliminates as many pseudo-instructions as possible.
 func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
-	// Convert CSR pseudo instructions into real riscv64 instructions.
-	switch p.As {
-	case ACSRC:
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = REG_ZERO
-		p.As = ACSRRC
-	case ACSRCI:
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = REG_ZERO
-		p.As = ACSRRCI
-	case ACSRR:
-		p.From.Type = obj.TYPE_REG
-		p.From.Reg = REG_ZERO
-		p.As = ACSRRS
-	case ACSRS:
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = REG_ZERO
-		p.As = ACSRRS
-	case ACSRSI:
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = REG_ZERO
-		p.As = ACSRRSI
-	case ACSRW:
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = REG_ZERO
-		p.As = ACSRRW
-	case ACSRWI:
-		p.To.Type = obj.TYPE_REG
-		p.To.Reg = REG_ZERO
-		p.As = ACSRRWI
-	case ANTLP1, ANTLPALL, ANTLS1, ANTLALL:
-		switch p.As {
-		case ANTLP1:
-			p.From.Reg = REG_X2
-		case ANTLPALL:
-			p.From.Reg = REG_X3
-		case ANTLS1:
-			p.From.Reg = REG_X4
-		case ANTLALL:
-			p.From.Reg = REG_X5
-		}
-		p.As = AADD
-		p.From.Type = obj.TYPE_REG
-		p.Reg = REG_ZERO
-		p.To.Reg = REG_ZERO
-		p.To.Type = obj.TYPE_REG
-	}
-
 	insData, err := instructionDataForAs(p.As)
 	if err != nil {
 		panic(fmt.Sprintf("failed to lookup instruction data for %v: %v", p.As, err))
@@ -207,16 +159,6 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 				p.From.Reg = REG_ZERO
 				break
 			}
-			if buildcfg.GORISCV64 >= 23 && p.To.Type == obj.TYPE_REG {
-				if math.IsNaN(float64(f32)) {
-					p.As = AFLIS
-					break
-				}
-				if _, ok := fimmMappingS[float64(f32)]; ok {
-					p.As = AFLIS
-					break
-				}
-			}
 			p.From.Type = obj.TYPE_MEM
 			p.From.Sym = ctxt.Float32Sym(f32)
 			p.From.Name = obj.NAME_EXTERN
@@ -231,43 +173,11 @@ func progedit(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 				p.From.Reg = REG_ZERO
 				break
 			}
-			if buildcfg.GORISCV64 >= 23 && p.To.Type == obj.TYPE_REG {
-				if math.IsNaN(f64) {
-					p.As = AFLID
-					break
-				}
-				if _, ok := fimmMappingD[f64]; ok {
-					p.As = AFLID
-					break
-				}
-			}
 			p.From.Type = obj.TYPE_MEM
 			p.From.Sym = ctxt.Float64Sym(f64)
 			p.From.Name = obj.NAME_EXTERN
 			p.From.Offset = 0
 		}
-
-	case APREFETCHI, APREFETCHR, APREFETCHW:
-		low5bits := p.From.Offset & 0b11111
-		if low5bits != 0 {
-			p.Ctxt.Diag("%v: The imm[4:0] of PREFETCH must equal 0b00000", p)
-			return
-		}
-
-		p.From.Offset = p.From.Offset &^ 0b11111
-		switch p.As {
-		case APREFETCHI:
-			p.From.Offset |= 0b00000
-		case APREFETCHR:
-			p.From.Offset |= 0b00001
-		case APREFETCHW:
-			p.From.Offset |= 0b00011
-		}
-		p.From.Offset = signExtend(p.From.Offset, 12)
-		p.As = AORI
-		p.To.Reg = REG_ZERO
-		// AORI used instructionsForOpImmediate to encode. so p.Reg will used by rs1 and rs2 will be REG_NONE
-		p.Reg = p.From.Reg
 	}
 
 	if ctxt.Flag_dynlink {
@@ -544,14 +454,14 @@ func setPCs(p *obj.Prog, pc int64, compress bool) int64 {
 //
 // A nicer version of this diagram can be found on slide 21 of the presentation
 // attached to https://golang.org/issue/16922#issuecomment-243748180.
-func stackOffset(a *obj.Addr, stacksize int64) {
+func stackOffset(a *obj.Addr, stacksize int64, framesize int64) {
 	switch a.Name {
 	case obj.NAME_AUTO:
 		// Adjust to the top of AUTOs.
 		a.Offset += stacksize
 	case obj.NAME_PARAM:
 		// Adjust to the bottom of PARAMs.
-		a.Offset += stacksize + 8
+		a.Offset += framesize + 8
 	}
 }
 
@@ -603,18 +513,30 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		stacksize += ctxt.Arch.FixedFrameSize
 	}
 
+	// If the function has a frame, build an frame record.
+	//
+	// After the frame is created, FP points to 8(SP), SP points to the saved
+	// return address (RA/LR) at 0(SP), and the saved frame pointer (caller S0)
+	// is placed just below it at -PtrSize(SP).
+	useFP := buildcfg.FramePointerEnabled && stacksize != 0
+	framesize := stacksize
+	if useFP {
+		framesize += int64(ctxt.Arch.PtrSize)
+	}
 	cursym.Func().Args = text.To.Val.(int32)
 	cursym.Func().Locals = int32(stacksize)
 
 	prologue := text
 
 	if !cursym.Func().Text.From.Sym.NoSplit() {
-		prologue = stacksplit(ctxt, prologue, cursym, newprog, stacksize) // emit split check
+		prologue = stacksplit(ctxt, prologue, cursym, newprog, framesize) // emit split check
 	}
 
 	q := prologue
 
 	if stacksize != 0 {
+		var prologueEnd *obj.Prog
+
 		prologue = ctxt.StartUnsafePoint(prologue, newprog)
 
 		// Actually save LR.
@@ -622,35 +544,62 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 		prologue.As = AMOV
 		prologue.Pos = q.Pos
 		prologue.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_LR}
-		prologue.To = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: -stacksize}
+		prologue.To = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: -framesize}
+
+		if useFP {
+			// Save caller's frame pointer (S0) in the caller frame slot,
+			// one word below the stack pointer.
+			prologue = obj.Appendp(prologue, newprog)
+			prologue.As = AMOV
+			prologue.Pos = q.Pos
+			prologue.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_S0}
+			prologue.To = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: -framesize - int64(ctxt.Arch.PtrSize)}
+		}
 
 		// Insert stack adjustment.
 		prologue = obj.Appendp(prologue, newprog)
 		prologue.As = AADDI
 		prologue.Pos = q.Pos
-		prologue.Pos = prologue.Pos.WithXlogue(src.PosPrologueEnd)
-		prologue.From = obj.Addr{Type: obj.TYPE_CONST, Offset: -stacksize}
+		prologue.From = obj.Addr{Type: obj.TYPE_CONST, Offset: -framesize}
 		prologue.Reg = REG_SP
 		prologue.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_SP}
-		prologue.Spadj = int32(stacksize)
-
-		prologue = ctxt.EndUnsafePoint(prologue, newprog, -1)
+		prologue.Spadj = int32(framesize)
 
 		// On Linux, in a cgo binary we may get a SIGSETXID signal early on
 		// before the signal stack is set, as glibc doesn't allow us to block
 		// SIGSETXID. So a signal may land on the current stack and clobber
-		// the content below the SP. We store the LR again after the SP is
-		// decremented.
+		// the content below the SP. Store the LR and FP again after the SP
+		// is decremented.
 		prologue = obj.Appendp(prologue, newprog)
 		prologue.As = AMOV
 		prologue.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_LR}
 		prologue.To = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: 0}
+		prologueEnd = prologue
+
+		if useFP {
+			prologue = obj.Appendp(prologue, newprog)
+			prologue.As = AMOV
+			prologue.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_S0}
+			prologue.To = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: -int64(ctxt.Arch.PtrSize)}
+
+			prologue = obj.Appendp(prologue, newprog)
+			prologue.As = AADDI
+			prologue.Pos = q.Pos
+			prologue.From = obj.Addr{Type: obj.TYPE_CONST, Offset: int64(ctxt.Arch.PtrSize)}
+			prologue.Reg = REG_SP
+			prologue.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_S0}
+			prologueEnd = prologue
+		}
+
+		// End the async-unsafe region only once the frame record is complete.
+		ctxt.EndUnsafePoint(prologueEnd, newprog, -1)
+		prologueEnd.Pos = prologueEnd.Pos.WithXlogue(src.PosPrologueEnd)
 	}
 
 	// Update stack-based offsets.
 	for p := cursym.Func().Text; p != nil; p = p.Link {
-		stackOffset(&p.From, stacksize)
-		stackOffset(&p.To, stacksize)
+		stackOffset(&p.From, stacksize, framesize)
+		stackOffset(&p.To, stacksize, framesize)
 	}
 
 	// Additional instruction rewriting.
@@ -689,6 +638,14 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			retJMP := p.To.Sym
 
 			if stacksize != 0 {
+				if useFP {
+					// Restore S0.
+					p.As = AMOV
+					p.From = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: -int64(ctxt.Arch.PtrSize)}
+					p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_S0}
+					p = obj.Appendp(p, newprog)
+				}
+
 				// Restore LR.
 				p.As = AMOV
 				p.From = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: 0}
@@ -696,10 +653,10 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 				p = obj.Appendp(p, newprog)
 
 				p.As = AADDI
-				p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: stacksize}
+				p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: framesize}
 				p.Reg = REG_SP
 				p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_SP}
-				p.Spadj = int32(-stacksize)
+				p.Spadj = int32(-framesize)
 				p = obj.Appendp(p, newprog)
 			}
 
@@ -720,7 +677,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 			// Spadj from function entry to each PC, and shouldn't
 			// count adjustments from earlier epilogues, since they
 			// won't affect later PCs.
-			p.Spadj = int32(stacksize)
+			p.Spadj = int32(framesize)
 
 		case AADDI:
 			// Refine Spadjs account for adjustment via ADDI instruction.
@@ -908,26 +865,37 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 	}
 
 	if ctxt.Flag_maymorestack != "" {
-		// Save LR and REGCTXT
-		const frameSize = 16
+		// Save LR FP and REGCTXT
+		const frameSize = 32
 		p = ctxt.StartUnsafePoint(p, newprog)
 
 		// Spill Arguments. This has to happen before we open
 		// any more frame space.
 		p = cursym.Func().SpillRegisterArgs(p, newprog)
 
-		// MOV LR, -16(SP)
+		// MOV LR, -32(SP)
 		p = obj.Appendp(p, newprog)
 		p.As = AMOV
 		p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_LR}
 		p.To = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: -frameSize}
-		// ADDI $-16, SP
+		// ADDI $-32, SP
 		p = obj.Appendp(p, newprog)
 		p.As = AADDI
 		p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: -frameSize}
 		p.Reg = REG_SP
 		p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_SP}
 		p.Spadj = frameSize
+		// MOV S0, -8(SP)
+		p = obj.Appendp(p, newprog)
+		p.As = AMOV
+		p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_S0}
+		p.To = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: -int64(ctxt.Arch.PtrSize)}
+		// ADDI $8, SP, S0
+		p = obj.Appendp(p, newprog)
+		p.As = AADDI
+		p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: int64(ctxt.Arch.PtrSize)}
+		p.Reg = REG_SP
+		p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_S0}
 		// MOV REGCTXT, 8(SP)
 		p = obj.Appendp(p, newprog)
 		p.As = AMOV
@@ -942,19 +910,24 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 		p.To.Sym = ctxt.LookupABI(ctxt.Flag_maymorestack, cursym.ABI())
 		jalToSym(ctxt, p, REG_X5)
 
-		// Restore LR and REGCTXT
+		// Restore LR FP and REGCTXT
 
 		// MOV 8(SP), REGCTXT
 		p = obj.Appendp(p, newprog)
 		p.As = AMOV
 		p.From = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: 8}
 		p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_CTXT}
+		// MOV -8(SP), S0
+		p = obj.Appendp(p, newprog)
+		p.As = AMOV
+		p.From = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: -int64(ctxt.Arch.PtrSize)}
+		p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_S0}
 		// MOV (SP), LR
 		p = obj.Appendp(p, newprog)
 		p.As = AMOV
 		p.From = obj.Addr{Type: obj.TYPE_MEM, Reg: REG_SP, Offset: 0}
 		p.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_LR}
-		// ADDI $16, SP
+		// ADDI $32, SP
 		p = obj.Appendp(p, newprog)
 		p.As = AADDI
 		p.From = obj.Addr{Type: obj.TYPE_CONST, Offset: frameSize}
@@ -988,19 +961,19 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 	// unnecessarily. See issue #35470.
 	p = ctxt.StartUnsafePoint(p, newprog)
 
-	var to_more, to_more_big *obj.Prog
+	var to_done, to_more *obj.Prog
 
 	if framesize <= abi.StackSmall {
 		// small stack
-		//	// if SP <= stackguard { goto label-of-call-to-morestack }
-		//	BLEU	SP, stackguard, label-of-call-to-morestack
+		//	// if SP > stackguard { goto done }
+		//	BLTU	stackguard, SP, done
 		p = obj.Appendp(p, newprog)
-		p.As = ABLEU
+		p.As = ABLTU
 		p.From.Type = obj.TYPE_REG
-		p.From.Reg = REG_SP
-		p.Reg = REG_X6
+		p.From.Reg = REG_X6
+		p.Reg = REG_SP
 		p.To.Type = obj.TYPE_BRANCH
-		to_more = p
+		to_done = p
 	} else {
 		// large stack: SP-framesize < stackguard-StackSmall
 		offset := framesize - abi.StackSmall
@@ -1028,13 +1001,13 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 			p.From.Reg = REG_SP
 			p.Reg = REG_X7
 			p.To.Type = obj.TYPE_BRANCH
-			to_more_big = p
+			to_more = p
 		}
 
 		// Check against the stack guard. We've ensured this won't underflow.
 		//	ADD	$-(framesize-StackSmall), SP, X7
-		//	// if X7 <= stackguard { goto label-of-call-to-morestack }
-		//	BLEU	X7, stackguard, label-of-call-to-morestack
+		//	// if X7 > stackguard { goto done }
+		//	BLTU	stackguard, X7, done
 		p = obj.Appendp(p, newprog)
 		p.As = AADDI
 		p.From.Type = obj.TYPE_CONST
@@ -1044,37 +1017,17 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 		p.To.Reg = REG_X7
 
 		p = obj.Appendp(p, newprog)
-		p.As = ABLEU
+		p.As = ABLTU
 		p.From.Type = obj.TYPE_REG
-		p.From.Reg = REG_X7
-		p.Reg = REG_X6
+		p.From.Reg = REG_X6
+		p.Reg = REG_X7
 		p.To.Type = obj.TYPE_BRANCH
-		to_more = p
+		to_done = p
 	}
-
-	end := ctxt.EndUnsafePoint(p, newprog, -1)
-
-	var last *obj.Prog
-	for last = cursym.Func().Text; last.Link != nil; last = last.Link {
-	}
-
-	// Now we are at the end of the function, but logically
-	// we are still in function prologue. We need to fix the
-	// SP data and PCDATA.
-	p = obj.Appendp(last, newprog)
-	p.As = obj.ANOP
-	p.Spadj = -int32(framesize)
-
-	p = ctxt.EmitEntryStackMap(cursym, p, newprog)
-	p = ctxt.StartUnsafePoint(p, newprog)
-
-	if to_more_big != nil {
-		to_more_big.To.SetTarget(p)
-	}
-	to_more.To.SetTarget(p)
 
 	// Spill the register args that could be clobbered by the
 	// morestack code
+	p = ctxt.EmitEntryStackMap(cursym, p, newprog)
 	p = cursym.Func().SpillRegisterArgs(p, newprog)
 
 	// CALL runtime.morestack(SB)
@@ -1089,8 +1042,12 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 	} else {
 		p.To.Sym = ctxt.Lookup("runtime.morestack")
 	}
+	if to_more != nil {
+		to_more.To.SetTarget(p)
+	}
 	jalToSym(ctxt, p, REG_X5)
 
+	// The instructions which unspill regs should be preemptible.
 	p = ctxt.EndUnsafePoint(p, newprog, -1)
 	p = cursym.Func().UnspillRegisterArgs(p, newprog)
 
@@ -1100,9 +1057,13 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, cursym *obj.LSym, newprog obj.ProgA
 	p.To = obj.Addr{Type: obj.TYPE_BRANCH}
 	p.From = obj.Addr{Type: obj.TYPE_REG, Reg: REG_ZERO}
 	p.To.SetTarget(startPred.Link)
-	p.Spadj = int32(framesize)
 
-	return end
+	// placeholder for to_done's jump target
+	p = obj.Appendp(p, newprog)
+	p.As = obj.ANOP // zero-width place holder
+	to_done.To.SetTarget(p)
+
+	return p
 }
 
 // signExtend sign extends val starting at bit bit.
@@ -1453,20 +1414,6 @@ func validateCL(ctxt *obj.Link, ins *instruction) {
 	wantNoneReg(ctxt, ins, "rs2", ins.rs2)
 }
 
-func validateCLB(ctxt *obj.Link, ins *instruction) {
-	wantImmU(ctxt, ins, ins.imm, 2)
-	wantIntPrimeReg(ctxt, ins, "rd", ins.rd)
-	wantIntPrimeReg(ctxt, ins, "rs1", ins.rs1)
-	wantNoneReg(ctxt, ins, "rs2", ins.rs2)
-}
-
-func validateCLH(ctxt *obj.Link, ins *instruction) {
-	wantScaledImmU(ctxt, ins, ins.imm, 2, 2)
-	wantIntPrimeReg(ctxt, ins, "rd", ins.rd)
-	wantIntPrimeReg(ctxt, ins, "rs1", ins.rs1)
-	wantNoneReg(ctxt, ins, "rs2", ins.rs2)
-}
-
 func validateCR(ctxt *obj.Link, ins *instruction) {
 	switch ins.as {
 	case ACJR, ACJALR:
@@ -1522,20 +1469,6 @@ func validateCS(ctxt *obj.Link, ins *instruction) {
 	}
 }
 
-func validateCSB(ctxt *obj.Link, ins *instruction) {
-	wantImmU(ctxt, ins, ins.imm, 2)
-	wantNoneReg(ctxt, ins, "rd", ins.rd)
-	wantIntPrimeReg(ctxt, ins, "rs1", ins.rs1)
-	wantIntPrimeReg(ctxt, ins, "rs2", ins.rs2)
-}
-
-func validateCSH(ctxt *obj.Link, ins *instruction) {
-	wantScaledImmU(ctxt, ins, ins.imm, 2, 2)
-	wantNoneReg(ctxt, ins, "rd", ins.rd)
-	wantIntPrimeReg(ctxt, ins, "rs1", ins.rs1)
-	wantIntPrimeReg(ctxt, ins, "rs2", ins.rs2)
-}
-
 func validateCSS(ctxt *obj.Link, ins *instruction) {
 	if ins.rd != REG_SP {
 		ctxt.Diag("%v: rd must be SP/X2", ins)
@@ -1553,14 +1486,6 @@ func validateCSS(ctxt *obj.Link, ins *instruction) {
 	} else {
 		wantIntReg(ctxt, ins, "rs2", ins.rs2)
 	}
-}
-
-func validateCU(ctxt *obj.Link, ins *instruction) {
-	wantIntPrimeReg(ctxt, ins, "rd", ins.rd)
-	if ins.rd != ins.rs1 {
-		ctxt.Diag("%v: rd must be the same as rs1", ins)
-	}
-	wantNoneReg(ctxt, ins, "rs2", ins.rs2)
 }
 
 func validateRII(ctxt *obj.Link, ins *instruction) {
@@ -1836,7 +1761,6 @@ func compressedEncoding(as obj.As) uint32 {
 	// necessary bits.
 	op := uint32(0)
 	switch as {
-	// CA Format
 	case ACSUB:
 		op = 0b100011<<10 | 0b00<<5
 	case ACXOR:
@@ -1849,9 +1773,6 @@ func compressedEncoding(as obj.As) uint32 {
 		op = 0b100111<<10 | 0b00<<5
 	case ACADDW:
 		op = 0b100111<<10 | 0b01<<5
-	case ACMUL:
-		op = 0b100111<<10 | 0b10<<5
-	// CB Format
 	case ACBEQZ:
 		op = 0b110 << 13
 	case ACBNEZ:
@@ -1862,7 +1783,6 @@ func compressedEncoding(as obj.As) uint32 {
 		op = 0b100<<13 | 0b01<<10
 	case ACSRLI:
 		op = 0b100<<13 | 0b00<<10
-	// CI Format
 	case ACLI:
 		op = 0b010 << 13
 	case ACLUI:
@@ -1877,28 +1797,16 @@ func compressedEncoding(as obj.As) uint32 {
 		op = 0b001 << 13
 	case ACADDI16SP:
 		op = 0b011 << 13
-	// CIW Format
 	case ACADDI4SPN:
 		op = 0b000 << 13
-	// CJ Format
 	case ACJ:
 		op = 0b101 << 13
-	// CL Format
 	case ACLW:
 		op = 0b010 << 13
 	case ACLD:
 		op = 0b011 << 13
 	case ACFLD:
 		op = 0b001 << 13
-	// CLB Format
-	case ACLBU:
-		op = 0b100000 << 10
-	// CLH Format
-	case ACLH:
-		op = 0b100001<<10 | 0b1<<6
-	case ACLHU:
-		op = 0b100001<<10 | 0b0<<6
-	// CR Format
 	case ACJR:
 		op = 0b1000 << 12
 	case ACMV:
@@ -1909,39 +1817,18 @@ func compressedEncoding(as obj.As) uint32 {
 		op = 0b1001 << 12
 	case ACADD:
 		op = 0b1001 << 12
-	// CS Format
 	case ACSW:
 		op = 0b110 << 13
 	case ACSD:
 		op = 0b111 << 13
 	case ACFSD:
 		op = 0b101 << 13
-	// CSB Format
-	case ACSB:
-		op = 0b100010 << 10
-	// CSH Format
-	case ACSH:
-		op = 0b100011<<10 | 0b0<<6
-	// CSS Format
 	case ACSWSP:
 		op = 0b110 << 13
 	case ACSDSP:
 		op = 0b111 << 13
 	case ACFSDSP:
 		op = 0b101 << 13
-	// CU Format
-	case ACNOT:
-		op = 0b100111<<10 | 0b11101<<2
-	case ACSEXTB:
-		op = 0b100111<<10 | 0b11001<<2
-	case ACSEXTH:
-		op = 0b100111<<10 | 0b11011<<2
-	case ACZEXTB:
-		op = 0b100111<<10 | 0b11000<<2
-	case ACZEXTH:
-		op = 0b100111<<10 | 0b11010<<2
-	case ACZEXTW:
-		op = 0b100111<<10 | 0b11100<<2
 	}
 
 	return op | enc.opcode
@@ -2050,20 +1937,6 @@ func encodeCL(ins *instruction) uint32 {
 	return compressedEncoding(ins.as) | (imm>>2)<<10 | regCI(ins.rs1)<<7 | (imm&0x3)<<5 | rd<<2
 }
 
-// encodeCLB encodes a compressed load byte (CLB-type) instruction.
-func encodeCLB(ins *instruction) uint32 {
-	// Bit order [0|1]
-	imm := encodeBitPattern(uint32(ins.imm), []int{0, 1})
-	return compressedEncoding(ins.as) | regCI(ins.rs1)<<7 | (imm&0x3)<<5 | regCI(ins.rd)<<2
-}
-
-// encodeCLH encodes a compressed load harfword (CLH-type) instruction.
-func encodeCLH(ins *instruction) uint32 {
-	// Bit order [1]
-	imm := encodeBitPattern(uint32(ins.imm), []int{1})
-	return compressedEncoding(ins.as) | regCI(ins.rs1)<<7 | (imm&0x1)<<5 | regCI(ins.rd)<<2
-}
-
 // encodeCR encodes a compressed register (CR-type) instruction.
 func encodeCR(ins *instruction) uint32 {
 	rs1, rs2 := uint32(0), uint32(0)
@@ -2097,20 +1970,6 @@ func encodeCS(ins *instruction) uint32 {
 	return compressedEncoding(ins.as) | ((imm>>2)&0x7)<<10 | regCI(ins.rs1)<<7 | (imm&3)<<5 | rs2<<2
 }
 
-// encodeCSB encodes a compressed store the least significant byte (CSB-type) instruction.
-func encodeCSB(ins *instruction) uint32 {
-	// Bit order [0|1]
-	imm := encodeBitPattern(uint32(ins.imm), []int{0, 1})
-	return compressedEncoding(ins.as) | regCI(ins.rs1)<<7 | (imm&0x3)<<5 | regCI(ins.rs2)<<2
-}
-
-// encodeCSH encodes a compressed store the least significant halfword (CSH-type) instruction.
-func encodeCSH(ins *instruction) uint32 {
-	// Bit order [1]
-	imm := encodeBitPattern(uint32(ins.imm), []int{1})
-	return compressedEncoding(ins.as) | regCI(ins.rs1)<<7 | (imm&0x1)<<5 | regCI(ins.rs2)<<2
-}
-
 // encodeCSS encodes a compressed stack-relative store (CSS-type) instruction.
 func encodeCSS(ins *instruction) uint32 {
 	imm := uint32(ins.imm)
@@ -2128,11 +1987,6 @@ func encodeCSS(ins *instruction) uint32 {
 		rs2 = regI(ins.rs2)
 	}
 	return compressedEncoding(ins.as) | imm<<7 | rs2<<2
-}
-
-// encodeCU encodes a compressed (CU-type) instruction.
-func encodeCU(ins *instruction) uint32 {
-	return compressedEncoding(ins.as) | regCI(ins.rd)<<7
 }
 
 // encodeR encodes an R-type RISC-V instruction.
@@ -2529,13 +2383,6 @@ var (
 	csEncoding  = encoding{encode: encodeCS, validate: validateCS, length: 2}
 	cssEncoding = encoding{encode: encodeCSS, validate: validateCSS, length: 2}
 
-	// Zcb encodings
-	clbEncoding = encoding{encode: encodeCLB, validate: validateCLB, length: 2}
-	clhEncoding = encoding{encode: encodeCLH, validate: validateCLH, length: 2}
-	csbEncoding = encoding{encode: encodeCSB, validate: validateCSB, length: 2}
-	cshEncoding = encoding{encode: encodeCSH, validate: validateCSH, length: 2}
-	cuEncoding  = encoding{encode: encodeCU, validate: validateCU, length: 2}
-
 	// Encodings for vector configuration setting instruction.
 	vsetvliEncoding  = encoding{encode: encodeVsetvli, validate: validateVsetvli, length: 4}
 	vsetivliEncoding = encoding{encode: encodeVsetivli, validate: validateVsetivli, length: 4}
@@ -2682,41 +2529,6 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AAMOMINUW & obj.AMask: {enc: rIIIEncoding},
 	AAMOMINUD & obj.AMask: {enc: rIIIEncoding},
 
-	// 16: Extension for Atomic Compare-and-Swap (CAS) Instructions (Zacas)
-	AAMOCASW & obj.AMask: {enc: rIIIEncoding},
-	AAMOCASD & obj.AMask: {enc: rIIIEncoding},
-	AAMOCASQ & obj.AMask: {enc: rIIIEncoding},
-
-	// 16.1: Byte and Halfword Atomic Memory Operation Instructions (Zabha)
-	AAMOSWAPB & obj.AMask: {enc: rIIIEncoding},
-	AAMOSWAPH & obj.AMask: {enc: rIIIEncoding},
-	AAMOADDB & obj.AMask:  {enc: rIIIEncoding},
-	AAMOADDH & obj.AMask:  {enc: rIIIEncoding},
-	AAMOANDB & obj.AMask:  {enc: rIIIEncoding},
-	AAMOANDH & obj.AMask:  {enc: rIIIEncoding},
-	AAMOORB & obj.AMask:   {enc: rIIIEncoding},
-	AAMOORH & obj.AMask:   {enc: rIIIEncoding},
-	AAMOXORB & obj.AMask:  {enc: rIIIEncoding},
-	AAMOXORH & obj.AMask:  {enc: rIIIEncoding},
-	AAMOMAXB & obj.AMask:  {enc: rIIIEncoding},
-	AAMOMAXH & obj.AMask:  {enc: rIIIEncoding},
-	AAMOMAXUB & obj.AMask: {enc: rIIIEncoding},
-	AAMOMAXUH & obj.AMask: {enc: rIIIEncoding},
-	AAMOMINB & obj.AMask:  {enc: rIIIEncoding},
-	AAMOMINH & obj.AMask:  {enc: rIIIEncoding},
-	AAMOMINUB & obj.AMask: {enc: rIIIEncoding},
-	AAMOMINUH & obj.AMask: {enc: rIIIEncoding},
-	AAMOCASB & obj.AMask:  {enc: rIIIEncoding},
-	AAMOCASH & obj.AMask:  {enc: rIIIEncoding},
-
-	// 19.6.1: Cache-Block Management Instructions (Zicbom)
-	ACBOCLEAN & obj.AMask: {enc: iIIEncoding},
-	ACBOFLUSH & obj.AMask: {enc: iIIEncoding},
-	ACBOINVAL & obj.AMask: {enc: iIIEncoding},
-
-	// 19.6.2: Cache-Block Zero Instructions (Zicboz)
-	ACBOZERO & obj.AMask: {enc: iIIEncoding},
-
 	// 20.5: Single-Precision Load and Store Instructions
 	AFLW & obj.AMask: {enc: iFEncoding},
 	AFSW & obj.AMask: {enc: sFEncoding},
@@ -2761,10 +2573,6 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AFLD & obj.AMask: {enc: iFEncoding},
 	AFSD & obj.AMask: {enc: sFEncoding},
 
-	// 15: Wait-on-Reservation-Set Instructions (Zawrs)
-	AWRSNTO & obj.AMask: {enc: iIIEncoding},
-	AWRSSTO & obj.AMask: {enc: iIIEncoding},
-
 	// 21.4: Double-Precision Floating-Point Computational Instructions
 	AFADDD & obj.AMask:   {enc: rFFFEncoding},
 	AFSUBD & obj.AMask:   {enc: rFFFEncoding},
@@ -2802,32 +2610,6 @@ var instructions = [ALAST & obj.AMask]instructionData{
 
 	// 21.7: Double-Precision Floating-Point Classify Instruction
 	AFCLASSD & obj.AMask: {enc: rFIEncoding},
-
-	// 24: "Zfa" Extension for Additional Floating-Point Instructions
-	// 24.1: Load-Immediate Instructions
-	AFLIS & obj.AMask: {enc: rIFEncoding},
-	AFLID & obj.AMask: {enc: rIFEncoding},
-
-	// 24.2: Minimum and Maximum Instructions
-	AFMAXMS & obj.AMask: {enc: rFFFEncoding},
-	AFMINMS & obj.AMask: {enc: rFFFEncoding},
-	AFMAXMD & obj.AMask: {enc: rFFFEncoding},
-	AFMINMD & obj.AMask: {enc: rFFFEncoding},
-
-	// 24.3: Round-to-Integer Instructions
-	AFROUNDS & obj.AMask:   {enc: rFFEncoding},
-	AFROUNDNXS & obj.AMask: {enc: rFFEncoding},
-	AFROUNDD & obj.AMask:   {enc: rFFEncoding},
-	AFROUNDNXD & obj.AMask: {enc: rFFEncoding},
-
-	// 24.4: Modular Convert-to-Integer Instruction
-	AFCVTMODWD & obj.AMask: {enc: rFIEncoding},
-
-	// 24.6: Comparison Instructions
-	AFLEQS & obj.AMask: {enc: rFFIEncoding},
-	AFLTQS & obj.AMask: {enc: rFFIEncoding},
-	AFLEQD & obj.AMask: {enc: rFFIEncoding},
-	AFLTQD & obj.AMask: {enc: rFFIEncoding},
 
 	//
 	// "C" Extension for Compressed Instructions, Version 2.0
@@ -2887,24 +2669,6 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	ACEBREAK & obj.AMask: {enc: crEncoding},
 
 	//
-	// "Zc*" Extension for Code Size Reduction
-	//
-
-	// 27.8: "zcb" Extension for simple code-size saving instruction
-	ACLBU & obj.AMask:   {enc: clbEncoding},
-	ACLHU & obj.AMask:   {enc: clhEncoding},
-	ACLH & obj.AMask:    {enc: clhEncoding},
-	ACSB & obj.AMask:    {enc: csbEncoding},
-	ACSH & obj.AMask:    {enc: cshEncoding},
-	ACZEXTB & obj.AMask: {enc: cuEncoding},
-	ACSEXTB & obj.AMask: {enc: cuEncoding},
-	ACZEXTH & obj.AMask: {enc: cuEncoding},
-	ACSEXTH & obj.AMask: {enc: cuEncoding},
-	ACZEXTW & obj.AMask: {enc: cuEncoding},
-	ACNOT & obj.AMask:   {enc: cuEncoding},
-	ACMUL & obj.AMask:   {enc: caEncoding, ternary: true},
-
-	//
 	// "B" Extension for Bit Manipulation, Version 1.0.0
 	//
 
@@ -2945,11 +2709,6 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	ARORW & obj.AMask:  {enc: rIIIEncoding, immForm: ARORIW, ternary: true},
 	AORCB & obj.AMask:  {enc: rIIEncoding},
 	AREV8 & obj.AMask:  {enc: rIIEncoding},
-
-	// 28.4.3: Carry-less Multiplication (Zbc)
-	ACLMUL & obj.AMask:  {enc: rIIIEncoding, ternary: true},
-	ACLMULH & obj.AMask: {enc: rIIIEncoding, ternary: true},
-	ACLMULR & obj.AMask: {enc: rIIIEncoding, ternary: true},
 
 	// 28.4.4: Single-bit Instructions (Zbs)
 	ABCLR & obj.AMask:  {enc: rIIIEncoding, immForm: ABCLRI, ternary: true},
@@ -3706,64 +3465,6 @@ var instructions = [ALAST & obj.AMask]instructionData{
 	AVMV4RV & obj.AMask: {enc: rVVEncoding},
 	AVMV8RV & obj.AMask: {enc: rVVEncoding},
 
-	//// 32. Cryptography Extensions: Vector Instructions, Version 1.0
-	// Zvbb - Vector Basic Bit-manipulation
-	AVANDNVV & obj.AMask: {enc: rVVVEncoding},
-	AVANDNVX & obj.AMask: {enc: rVIVEncoding},
-	AVBREVV & obj.AMask:  {enc: rVVEncoding},
-	AVBREV8V & obj.AMask: {enc: rVVEncoding},
-	AVREV8V & obj.AMask:  {enc: rVVEncoding},
-	AVCLZV & obj.AMask:   {enc: rVVEncoding},
-	AVCTZV & obj.AMask:   {enc: rVVEncoding},
-	AVCPOPV & obj.AMask:  {enc: rVVEncoding},
-	AVROLVV & obj.AMask:  {enc: rVVVEncoding},
-	AVROLVX & obj.AMask:  {enc: rVIVEncoding},
-	AVWSLLVV & obj.AMask: {enc: rVVVEncoding},
-	AVWSLLVX & obj.AMask: {enc: rVIVEncoding},
-	AVWSLLVI & obj.AMask: {enc: rVVuEncoding},
-
-	// Zvbc - Vector Carryless Multiplication
-	AVCLMULVV & obj.AMask:  {enc: rVVVEncoding},
-	AVCLMULVX & obj.AMask:  {enc: rVIVEncoding},
-	AVCLMULHVV & obj.AMask: {enc: rVVVEncoding},
-	AVCLMULHVX & obj.AMask: {enc: rVIVEncoding},
-
-	// Zvkb - Vector Cryptography Bit-manipulation
-	AVRORVV & obj.AMask: {enc: rVVVEncoding},
-	AVRORVX & obj.AMask: {enc: rVIVEncoding},
-	AVRORVI & obj.AMask: {enc: rVVuEncoding},
-
-	// Zvkg - Vector GCM/GMAC
-	AVGHSHVV & obj.AMask: {enc: rVVVEncoding},
-	AVGMULVV & obj.AMask: {enc: rVVEncoding},
-
-	// Zvkned - NIST Suite: Vector AES Block Cipher
-	AVAESEFVV & obj.AMask:  {enc: rVVEncoding},
-	AVAESEFVS & obj.AMask:  {enc: rVVEncoding},
-	AVAESEMVV & obj.AMask:  {enc: rVVEncoding},
-	AVAESEMVS & obj.AMask:  {enc: rVVEncoding},
-	AVAESDFVV & obj.AMask:  {enc: rVVEncoding},
-	AVAESDFVS & obj.AMask:  {enc: rVVEncoding},
-	AVAESDMVV & obj.AMask:  {enc: rVVEncoding},
-	AVAESDMVS & obj.AMask:  {enc: rVVEncoding},
-	AVAESKF1VI & obj.AMask: {enc: rVVuEncoding},
-	AVAESKF2VI & obj.AMask: {enc: rVVuEncoding},
-	AVAESZVS & obj.AMask:   {enc: rVVEncoding},
-
-	// Zvknh[ab] - NIST Suite: Vector SHA-2 Secure Hash
-	AVSHA2MSVV & obj.AMask: {enc: rVVVEncoding},
-	AVSHA2CHVV & obj.AMask: {enc: rVVVEncoding},
-	AVSHA2CLVV & obj.AMask: {enc: rVVVEncoding},
-
-	// Zvksed - ShangMi Suite: SM4 Block Cipher
-	AVSM4KVI & obj.AMask: {enc: rVVuEncoding},
-	AVSM4RVV & obj.AMask: {enc: rVVEncoding},
-	AVSM4RVS & obj.AMask: {enc: rVVEncoding},
-
-	// Zvksh - ShangMi Suite: SM3 Secure Hash
-	AVSM3MEVV & obj.AMask: {enc: rVVVEncoding},
-	AVSM3CVI & obj.AMask:  {enc: rVVuEncoding},
-
 	//
 	// Privileged ISA
 	//
@@ -3909,21 +3610,6 @@ func (ins *instruction) compress() {
 			ins.as = ACLD
 		}
 
-	case ALH:
-		if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 2, 2) && buildcfg.GORISCV64 >= 23 {
-			ins.as = ACLH
-		}
-
-	case ALBU:
-		if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && immUFits(ins.imm, 2) == nil && buildcfg.GORISCV64 >= 23 {
-			ins.as = ACLBU
-		}
-
-	case ALHU:
-		if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 2, 2) && buildcfg.GORISCV64 >= 23 {
-			ins.as = ACLHU
-		}
-
 	case AFLD:
 		if ins.rs1 == REG_SP && isScaledImmU(ins.imm, 9, 8) {
 			ins.as, ins.rs1, ins.rs2 = ACFLDSP, obj.REG_NONE, ins.rs1
@@ -3943,16 +3629,6 @@ func (ins *instruction) compress() {
 			ins.as, ins.rs1, ins.rs2 = ACSDSP, obj.REG_NONE, ins.rs1
 		} else if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && isScaledImmU(ins.imm, 8, 8) {
 			ins.as, ins.rd, ins.rs1, ins.rs2 = ACSD, obj.REG_NONE, ins.rd, ins.rs1
-		}
-
-	case ASB:
-		if isIntPrimeReg(ins.rs1) && isIntPrimeReg(ins.rs2) && immUFits(ins.imm, 2) == nil && buildcfg.GORISCV64 >= 23 {
-			ins.as, ins.rd, ins.rs1, ins.rs2 = ACSB, obj.REG_NONE, ins.rd, ins.rs1
-		}
-
-	case ASH:
-		if isIntPrimeReg(ins.rs1) && isIntPrimeReg(ins.rs2) && isScaledImmU(ins.imm, 2, 2) && buildcfg.GORISCV64 >= 23 {
-			ins.as, ins.rd, ins.rs1, ins.rs2 = ACSH, obj.REG_NONE, ins.rd, ins.rs1
 		}
 
 	case AFSD:
@@ -4005,28 +3681,6 @@ func (ins *instruction) compress() {
 	case AANDI:
 		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && immIFits(ins.imm, 6) == nil {
 			ins.as = ACANDI
-		} else if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.imm == 0xff && buildcfg.GORISCV64 >= 23 {
-			ins.as = ACZEXTB
-		}
-
-	case ASEXTB:
-		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && buildcfg.GORISCV64 >= 23 {
-			ins.as = ACSEXTB
-		}
-
-	case ASEXTH:
-		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && buildcfg.GORISCV64 >= 23 {
-			ins.as = ACSEXTH
-		}
-
-	case AZEXTH:
-		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && buildcfg.GORISCV64 >= 23 {
-			ins.as = ACZEXTH
-		}
-
-	case AADDUW:
-		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.rs2 == REG_X0 && buildcfg.GORISCV64 >= 23 {
-			ins.as, ins.rs2 = ACZEXTW, obj.REG_NONE
 		}
 
 	case AADD:
@@ -4036,11 +3690,6 @@ func (ins *instruction) compress() {
 			ins.as, ins.rs1, ins.rs2 = ACADD, ins.rs2, ins.rs1
 		} else if ins.rd != REG_X0 && ins.rs1 == REG_X0 && ins.rs2 != REG_X0 {
 			ins.as = ACMV
-		}
-
-	case AMUL:
-		if ins.rd == ins.rs1 && isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs2) && buildcfg.GORISCV64 >= 23 {
-			ins.as = ACMUL
 		}
 
 	case AADDW:
@@ -4079,11 +3728,6 @@ func (ins *instruction) compress() {
 			ins.as = ACXOR
 		} else if isIntPrimeReg(ins.rd) && isIntPrimeReg(ins.rs1) && ins.rd == ins.rs2 {
 			ins.as, ins.rs1, ins.rs2 = ACXOR, ins.rs2, ins.rs1
-		}
-
-	case AXORI:
-		if isIntPrimeReg(ins.rd) && ins.rd == ins.rs1 && ins.imm == -1 && buildcfg.GORISCV64 >= 23 {
-			ins.as = ACNOT
 		}
 
 	case AEBREAK:
@@ -4591,74 +4235,6 @@ func instructionsForRotate(p *obj.Prog, ins *instruction) []*instruction {
 	}
 }
 
-var fimmMappingS = map[float64]uint32{
-	-1.0:                   0,
-	1.1754943508222875e-38: 1, // min positive normal float32
-	1.52587890625e-05:      2,
-	3.0517578125e-05:       3,
-	0.00390625:             4,
-	0.0078125:              5,
-	0.0625:                 6,
-	0.125:                  7,
-	0.25:                   8,
-	0.3125:                 9,
-	0.375:                  10,
-	0.4375:                 11,
-	0.5:                    12,
-	0.625:                  13,
-	0.75:                   14,
-	0.875:                  15,
-	1.0:                    16,
-	1.25:                   17,
-	1.5:                    18,
-	1.75:                   19,
-	2.0:                    20,
-	2.5:                    21,
-	3.0:                    22,
-	4.0:                    23,
-	8.0:                    24,
-	16.0:                   25,
-	128.0:                  26,
-	256.0:                  27,
-	32768.0:                28,
-	65536.0:                29,
-	math.Inf(1):            30,
-}
-
-var fimmMappingD = map[float64]uint32{
-	-1.0:                    0,
-	2.2250738585072014e-308: 1, // min positive normal float64
-	1.52587890625e-05:       2,
-	3.0517578125e-05:        3,
-	0.00390625:              4,
-	0.0078125:               5,
-	0.0625:                  6,
-	0.125:                   7,
-	0.25:                    8,
-	0.3125:                  9,
-	0.375:                   10,
-	0.4375:                  11,
-	0.5:                     12,
-	0.625:                   13,
-	0.75:                    14,
-	0.875:                   15,
-	1.0:                     16,
-	1.25:                    17,
-	1.5:                     18,
-	1.75:                    19,
-	2.0:                     20,
-	2.5:                     21,
-	3.0:                     22,
-	4.0:                     23,
-	8.0:                     24,
-	16.0:                    25,
-	128.0:                   26,
-	256.0:                   27,
-	32768.0:                 28,
-	65536.0:                 29,
-	math.Inf(1):             30,
-}
-
 // instructionsForMinMax returns the machine instructions for an integer minimum or maximum.
 func instructionsForMinMax(p *obj.Prog, ins *instruction) []*instruction {
 	if buildcfg.GORISCV64 >= 22 {
@@ -4768,16 +4344,10 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.RegTo2), uint32(p.To.Reg), uint32(p.From.Reg)
 
 	case AAMOSWAPW, AAMOSWAPD, AAMOADDW, AAMOADDD, AAMOANDW, AAMOANDD, AAMOORW, AAMOORD,
-		AAMOXORW, AAMOXORD, AAMOMINW, AAMOMIND, AAMOMINUW, AAMOMINUD, AAMOMAXW, AAMOMAXD, AAMOMAXUW, AAMOMAXUD,
-		AAMOSWAPB, AAMOSWAPH, AAMOADDB, AAMOADDH, AAMOANDB, AAMOANDH, AAMOORB, AAMOORH, AAMOXORB, AAMOXORH,
-		AAMOMINB, AAMOMINH, AAMOMINUB, AAMOMINUH, AAMOMAXB, AAMOMAXH, AAMOMAXUB, AAMOMAXUH, AAMOCASB, AAMOCASH,
-		AAMOCASW, AAMOCASD, AAMOCASQ:
+		AAMOXORW, AAMOXORD, AAMOMINW, AAMOMIND, AAMOMINUW, AAMOMINUD, AAMOMAXW, AAMOMAXD, AAMOMAXUW, AAMOMAXUD:
 		// Set aqrl to use acquire & release access ordering
 		ins.funct7 = 3
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.RegTo2), uint32(p.To.Reg), uint32(p.From.Reg)
-
-	case AWRSNTO, AWRSSTO:
-		ins.rd, ins.rs1, ins.imm = REG_ZERO, REG_ZERO, encode(p.As).csr
 
 	case AECALL, AEBREAK:
 		insEnc := encode(p.As)
@@ -4839,33 +4409,9 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 		}
 		ins.rs2 = obj.REG_NONE
 
-	case AFLIS, AFLID:
-		fimm := p.From.Val.(float64)
-		var index uint32
-		var mapping map[float64]uint32
-		if ins.as == AFLIS {
-			mapping = fimmMappingS
-		} else {
-			mapping = fimmMappingD
-		}
-
-		// NaN is special as it can't be used in comparison.
-		if math.IsNaN(fimm) {
-			index = 31
-		} else if idx, ok := mapping[fimm]; ok {
-			index = idx
-		} else {
-			p.Ctxt.Diag("%v: unknown floating point immediate", fimm)
-			return nil
-		}
-		ins.rs2 = REG_ZERO + index
 	case AFENCE:
 		ins.rd, ins.rs1, ins.rs2 = REG_ZERO, REG_ZERO, obj.REG_NONE
 		ins.imm = 0x0ff
-
-	case APAUSE:
-		ins.as, ins.rd, ins.rs1, ins.rs2 = AFENCE, REG_ZERO, REG_ZERO, obj.REG_NONE
-		ins.imm = 0x010
 
 	case AFCVTWS, AFCVTLS, AFCVTWUS, AFCVTLUS, AFCVTWD, AFCVTLD, AFCVTWUD, AFCVTLUD:
 		// Set the default rounding mode in funct3 to round to zero.
@@ -4957,10 +4503,10 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 		ins.as = AFSGNJND
 		ins.rs1 = uint32(p.From.Reg)
 
-	case ACLW, ACLD, ACFLD, ACLBU, ACLHU, ACLH:
+	case ACLW, ACLD, ACFLD:
 		ins.rs1, ins.rs2 = ins.rs2, obj.REG_NONE
 
-	case ACSW, ACSD, ACFSD, ACSB, ACSH:
+	case ACSW, ACSD, ACFSD:
 		ins.rs1, ins.rd = ins.rd, obj.REG_NONE
 		ins.imm = p.To.Offset
 
@@ -4969,9 +4515,6 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 
 	case ACANDI, ACSRLI, ACSRAI:
 		ins.rs1, ins.rd = ins.rd, ins.rs1
-
-	case ACZEXTB, ACSEXTB, ACZEXTH, ACSEXTH, ACZEXTW, ACNOT:
-		ins.rd, ins.rs1, ins.rs2 = ins.rs2, ins.rs2, obj.REG_NONE
 
 	case ACBEQZ, ACBNEZ:
 		ins.rd, ins.rs1, ins.rs2 = obj.REG_NONE, uint32(p.From.Reg), obj.REG_NONE
@@ -5010,9 +4553,6 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 		if ins.imm < 0 || ins.imm > 31 {
 			p.Ctxt.Diag("%v: immediate out of range 0 to 31", p)
 		}
-
-	case ACBOCLEAN, ACBOFLUSH, ACBOINVAL, ACBOZERO:
-		ins.rd, ins.rs1, ins.rs2, ins.imm = REG_ZERO, uint32(p.From.Reg), obj.REG_NONE, encode(p.As).csr
 
 	case ACLZ, ACLZW, ACTZ, ACTZW, ACPOP, ACPOPW, ASEXTB, ASEXTH, AZEXTH:
 		ins.rs1, ins.rs2 = uint32(p.From.Reg), obj.REG_NONE
@@ -5179,9 +4719,7 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 		AVREDSUMVS, AVREDMAXUVS, AVREDMAXVS, AVREDMINUVS, AVREDMINVS, AVREDANDVS, AVREDORVS, AVREDXORVS,
 		AVWREDSUMUVS, AVWREDSUMVS, AVFREDOSUMVS, AVFREDUSUMVS, AVFREDMAXVS, AVFREDMINVS, AVFWREDOSUMVS, AVFWREDUSUMVS,
 		AVSLIDEUPVX, AVSLIDEDOWNVX, AVSLIDE1UPVX, AVFSLIDE1UPVF, AVSLIDE1DOWNVX, AVFSLIDE1DOWNVF,
-		AVRGATHERVV, AVRGATHEREI16VV, AVRGATHERVX,
-		AVANDNVV, AVANDNVX, AVROLVV, AVROLVX, AVWSLLVV, AVWSLLVX, AVCLMULVV, AVCLMULVX,
-		AVCLMULHVV, AVCLMULHVX, AVRORVV, AVRORVX:
+		AVRGATHERVV, AVRGATHEREI16VV, AVRGATHERVX:
 		// Set mask bit
 		switch {
 		case ins.rs3 == obj.REG_NONE:
@@ -5205,7 +4743,7 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 		ins.rd, ins.rs1, ins.rs2, ins.rs3 = uint32(p.To.Reg), uint32(p.Reg), uint32(p.From.Reg), obj.REG_NONE
 
 	case AVADDVI, AVRSUBVI, AVANDVI, AVORVI, AVXORVI, AVMSEQVI, AVMSNEVI, AVMSLEUVI, AVMSLEVI, AVMSGTUVI, AVMSGTVI,
-		AVSLLVI, AVSRLVI, AVSRAVI, AVNSRLWI, AVNSRAWI, AVRGATHERVI, AVSLIDEUPVI, AVSLIDEDOWNVI, AVWSLLVI, AVRORVI:
+		AVSLLVI, AVSRLVI, AVSRAVI, AVNSRLWI, AVNSRAWI, AVRGATHERVI, AVSLIDEUPVI, AVSLIDEDOWNVI:
 		// Set mask bit
 		switch {
 		case ins.rs3 == obj.REG_NONE:
@@ -5218,8 +4756,7 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 	case AVZEXTVF2, AVSEXTVF2, AVZEXTVF4, AVSEXTVF4, AVZEXTVF8, AVSEXTVF8, AVFSQRTV, AVFRSQRT7V, AVFREC7V, AVFCLASSV,
 		AVFCVTXUFV, AVFCVTXFV, AVFCVTRTZXUFV, AVFCVTRTZXFV, AVFCVTFXUV, AVFCVTFXV,
 		AVFWCVTXUFV, AVFWCVTXFV, AVFWCVTRTZXUFV, AVFWCVTRTZXFV, AVFWCVTFXUV, AVFWCVTFXV, AVFWCVTFFV,
-		AVFNCVTXUFW, AVFNCVTXFW, AVFNCVTRTZXUFW, AVFNCVTRTZXFW, AVFNCVTFXUW, AVFNCVTFXW, AVFNCVTFFW, AVFNCVTRODFFW,
-		AVBREVV, AVBREV8V, AVREV8V, AVCLZV, AVCTZV, AVCPOPV:
+		AVFNCVTXUFW, AVFNCVTXFW, AVFNCVTRTZXUFW, AVFNCVTRTZXFW, AVFNCVTFXUW, AVFNCVTFXW, AVFNCVTFFW, AVFNCVTRODFFW:
 		// Set mask bit
 		switch {
 		case ins.rs1 == obj.REG_NONE:
@@ -5391,25 +4928,6 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 			ins.rd = uint32(p.From.Reg)
 		}
 		ins.rs1, ins.rs2 = obj.REG_NONE, REG_V0
-
-	case AVAESKF1VI, AVAESKF2VI, AVSM4KVI, AVSM3CVI:
-		if ins.rs3 != obj.REG_NONE {
-			p.Ctxt.Diag("%v: too many operands for instruction", p)
-		}
-		ins.rd, ins.rs1, ins.rs2, ins.rs3 = uint32(p.To.Reg), obj.REG_NONE, uint32(p.Reg), obj.REG_NONE
-
-	case AVGMULVV, AVAESEFVV, AVAESEFVS, AVAESEMVV, AVAESEMVS, AVAESDFVV, AVAESDFVS, AVAESDMVV,
-		AVAESDMVS, AVAESZVS, AVSM4RVV, AVSM4RVS:
-		if ins.rs3 != obj.REG_NONE {
-			p.Ctxt.Diag("%v: too many operands for instruction", p)
-		}
-		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), obj.REG_NONE, uint32(p.From.Reg)
-
-	case AVGHSHVV, AVSHA2MSVV, AVSHA2CHVV, AVSHA2CLVV, AVSM3MEVV:
-		if ins.rs3 != obj.REG_NONE {
-			p.Ctxt.Diag("%v: too many operands for instruction", p)
-		}
-		ins.rd, ins.rs1, ins.rs2 = uint32(p.To.Reg), uint32(p.From.Reg), uint32(p.Reg)
 	}
 
 	// Only compress instructions when there is no relocation, since
@@ -5537,13 +5055,6 @@ func assemble(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	}
 
 	obj.MarkUnsafePoints(ctxt, cursym.Func().Text, newprog, isUnsafePoint, nil)
-
-	// generate jump table entries.
-	for _, jt := range cursym.Func().JumpTables {
-		for i, p := range jt.Targets {
-			jt.Sym.WriteAddr(ctxt, int64(i)*8, 8, cursym, p.Pc)
-		}
-	}
 }
 
 func isUnsafePoint(p *obj.Prog) bool {

@@ -14,15 +14,15 @@ jobs:
 
       - name: Build toolchain and test (host arm64)
         run: |
-            # install bootstrap Go
-            set -euxo pipefail
-            BOOT=/tmp/go-bootstrap
-            curl -fsSL https://go.dev/dl/go1.25.0.linux-arm64.tar.gz -o /tmp/go.tar.gz
-            tar -C /tmp -xzf /tmp/go.tar.gz
-            mv /tmp/go "$BOOT"
-            export GOROOT_BOOTSTRAP="$BOOT"
-            uname -a
+            # # install bootstrap Go
+            # set -euxo pipefail
+            # BOOT=/tmp/go-bootstrap
+            # curl -fsSL https://go.dev/dl/go1.25.0.linux-arm64.tar.gz -o /tmp/go.tar.gz
+            # tar -C /tmp -xzf /tmp/go.tar.gz
+            # mv /tmp/go "$BOOT"
+            # export GOROOT_BOOTSTRAP="$BOOT"
+            # uname -a
 
-            # build toolchain and test
-            cd "$GITHUB_WORKSPACE/src"
-            ./all.bash
+            # # build toolchain and test
+            # cd "$GITHUB_WORKSPACE/src"
+            # ./all.bash

@@ -11,7 +11,6 @@ import (
 	"cmd/compile/internal/types"
 	"cmd/internal/obj"
 	"cmd/internal/src"
-	"internal/buildcfg"
 )
 
 // A Config holds readonly compilation information.
@@ -353,10 +352,6 @@ func NewConfig(arch string, types Types, ctxt *obj.Link, optimize, softfloat boo
 		c.floatParamRegs = paramFloatRegRISCV64
 		c.FPReg = framepointerRegRISCV64
 		c.hasGReg = true
-		c.unalignedOK = buildcfg.GORISCV64EXT.MisalignedFast
-		c.haveBswap64 = buildcfg.GORISCV64 >= 22
-		c.haveBswap32 = buildcfg.GORISCV64 >= 22
-		c.haveBswap16 = buildcfg.GORISCV64 >= 22
 	case "wasm":
 		c.PtrSize = 8
 		c.RegSize = 8

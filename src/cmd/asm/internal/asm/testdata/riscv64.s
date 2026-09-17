@@ -173,16 +173,6 @@ start:
 	SD	X5, 4(X6)				// 23325300
 
 	// 7.1: CSR Instructions
-	CSRC	X5, CYCLE				// 73b002c0
-	CSRC	$2, TIME				// 737011c0
-	CSRCI	$2, TIME				// 737011c0
-	CSRR	CYCLE, X5				// f32200c0
-	CSRR	VCSR, X5				// f322f000
-	CSRR	VL, X5					// f32200c2
-	CSRR	VLENB, X5				// f32220c2
-	CSRR	VSTART, X5				// f3228000
-	CSRR	VXSAT, X5				// f3229000
-	CSRR	VXRM, X5				// f322a000
 	CSRRC	X0, CYCLE, X5				// f33200c0
 	CSRRC	X0, CYCLE, X0				// 733000c0
 	CSRRC	X10, CYCLE, X5				// f33205c0
@@ -199,32 +189,17 @@ start:
 	CSRRW	X10, CYCLE, X5				// f31205c0
 	CSRRW	$2, TIME, X5				// f35211c0
 	CSRRWI	$2, TIME, X5				// f35211c0
-	CSRS	X10, CYCLE				// 732005c0
-	CSRS	$2, TIME				// 736011c0
-	CSRSI	$2, TIME				// 736011c0
-	CSRW	X10, CYCLE				// 731005c0
-	CSRW	$2, TIME				// 735011c0
-	CSRWI	$2, TIME				// 735011c0
 
 	// 8.1: Base Counters and Timers (Zicntr)
 	RDCYCLE		X5				// f32200c0
 	RDTIME		X5				// f32210c0
 	RDINSTRET	X5				// f32220c0
 
-	// 9: Zihintntl Extension
-	NTLP1					// 33002000
-	NTLPALL					// 33003000
-	NTLS1					// 33004000
-	NTLALL					// 33005000
-
 	// 12.3: Integer Conditional Operations (Zicond)
 	CZEROEQZ	X5, X6, X7			// b353530e
 	CZEROEQZ	X5, X7				// b3d3530e
 	CZERONEZ	X5, X6, X7			// b373530e
 	CZERONEZ	X5, X7				// b3f3530e
-
-	// 10.1: Zihintpause Extension for Pause Hint
-	PAUSE						// 0f000001
 
 	// 13.1: Multiplication Operations
 	MUL	X5, X6, X7				// b3035302
@@ -268,52 +243,6 @@ start:
 	AMOMIND		X5, (X6), X7			// af335386
 	AMOMINUW	X5, (X6), X7			// af2353c6
 	AMOMINUD	X5, (X6), X7			// af3353c6
-
-	// 15: Wait-on-Reservation-Set Instructions (Zawrs)
-	WRSNTO                              // 7300d000
-    WRSSTO                              // 7300d001
-
-	// 16: Extension for Atomic Compare-and-Swap (CAS) Instructions (Zacas)
-	AMOCASW	X5, (X6), X7			// af23532e
-	AMOCASD	X5, (X6), X7			// af33532e
-	AMOCASQ	X5, (X6), X7			// af43532e
-
-
-	// 16.1: Byte and Halfword Atomic Memory Operation Instructions (Zabha)
-	AMOSWAPB	X5, (X6), X7			// af03530e
-	AMOSWAPH	X5, (X6), X7			// af13530e
-	AMOADDB		X5, (X6), X7			// af035306
-	AMOADDH		X5, (X6), X7			// af135306
-	AMOANDB		X5, (X6), X7			// af035366
-	AMOANDH		X5, (X6), X7			// af135366
-	AMOORB		X5, (X6), X7			// af035346
-	AMOORH		X5, (X6), X7			// af135346
-	AMOXORB		X5, (X6), X7			// af035326
-	AMOXORH		X5, (X6), X7			// af135326
-	AMOMAXB		X5, (X6), X7			// af0353a6
-	AMOMAXH		X5, (X6), X7			// af1353a6
-	AMOMAXUB	X5, (X6), X7			// af0353e6
-	AMOMAXUH	X5, (X6), X7			// af1353e6
-	AMOMINB		X5, (X6), X7			// af035386
-	AMOMINH		X5, (X6), X7			// af135386
-	AMOMINUB	X5, (X6), X7			// af0353c6
-	AMOMINUH	X5, (X6), X7			// af1353c6
-	AMOCASB		X5, (X6), X7			// af03532e
-	AMOCASH		X5, (X6), X7			// af13532e
-
-	// 19.6.1: Cache-Block Management Instructions (Zicbom)
-	CBOCLEAN	(X5)					// 0fa01200
-	CBOFLUSH	(X5)					// 0fa02200
-	CBOINVAL	(X5)					// 0fa00200
-
-	// 19.6.2: Cache-Block Zero Instructions (Zicboz)
-	CBOZERO		(X5)					// 0fa04200
-
-	// 19.6.3: Cache-Block Prefetch Instructions
-	PREFETCHI 448(X5)					// 13e0021c
-	PREFETCHI -64(X5)					// 13e002fc
-	PREFETCHR 448(X5)					// 13e0121c
-	PREFETCHW 448(X5)					// 13e0321c
 
 	// 20.5: Single-Precision Load and Store Instructions
 	FLW	(X5), F0				// 07a00200
@@ -513,109 +442,6 @@ start:
 	// 26.5.6: Compressed Breakpoint Instruction
 	CEBREAK						// 0290
 
-	// 27.8: Simple code-size saving Instructions (Zcb)
-	CLBU	3(X10), X11		// 6c81
-	CLHU	2(X10), X11		// 2c85
-	CLH		2(X10), X11		// 6c85
-	CSB		X11, 2(X10)		// 2c89
-	CSH		X11, 2(X10)		// 2c8d
-	CZEXTB	X10				// 619d
-	CSEXTB	X10				// 659d
-	CZEXTH	X10				// 699d
-	CSEXTH	X10				// 6d9d
-	CZEXTW	X10				// 719d
-	CNOT	X10				// 759d
-	CMUL	X11, X10		// 4d9d
-
-	// 24: "Zfa" Extension for Additional Floating-Point Instructions
-	// 24.1: Load-Immediate Instructions
-	FLIS $(NaN), F1                // d3801ff0
-	FLIS $(-1.0), F1               // d30010f0
-	FLIS $(1.1754943508222875e-38), F1     // d38010f0
-	FLIS $(1.52587890625e-05), F1  // d30011f0
-	FLIS $(3.0517578125e-05),  F1  // d38011f0
-	FLIS $(0.00390625), F1         // d30012f0
-	FLIS $(0.0078125), F1          // d38012f0
-	FLIS $(0.0625), F1             // d30013f0
-	FLIS $(0.125), F1              // d38013f0
-	FLIS $(0.25), F1               // d30014f0
-	FLIS $(0.3125), F1             // d38014f0
-	FLIS $(0.375), F1              // d30015f0
-	FLIS $(0.4375), F1             // d38015f0
-	FLIS $(0.5), F1                // d30016f0
-	FLIS $(0.625), F1              // d38016f0
-	FLIS $(0.75), F1               // d30017f0
-	FLIS $(0.875), F1              // d38017f0
-	FLIS $(1.0), F1                // d30018f0
-	FLIS $(1.25), F1               // d38018f0
-	FLIS $(1.5), F1                // d30019f0
-	FLIS $(1.75), F1               // d38019f0
-	FLIS $(2.0), F1                // d3001af0
-	FLIS $(2.5), F1                // d3801af0
-	FLIS $(3.0), F1                // d3001bf0
-	FLIS $(4.0), F1                // d3801bf0
-	FLIS $(8.0), F1                // d3001cf0
-	FLIS $(16.0), F1               // d3801cf0
-	FLIS $(128.0), F1              // d3001df0
-	FLIS $(256.0), F1              // d3801df0
-	FLIS $(32768.0), F1            // d3001ef0
-	FLIS $(65536.0), F1            // d3801ef0
-	FLIS $(+Inf), F1               // d3001ff0
-	FLIS $(NaN), F1                // d3801ff0
-	FLID $(-1.0), F1               // d30010f2
-	FLID $(2.2250738585072014e-308), F1     // d38010f2
-	FLID $(1.52587890625e-05), F1  // d30011f2
-	FLID $(3.0517578125e-05), F1   // d38011f2
-	FLID $(0.00390625), F1         // d30012f2
-	FLID $(0.0078125), F1          // d38012f2
-	FLID $(0.0625), F1             // d30013f2
-	FLID $(0.125), F1              // d38013f2
-	FLID $(0.25), F1               // d30014f2
-	FLID $(0.3125), F1             // d38014f2
-	FLID $(0.375), F1              // d30015f2
-	FLID $(0.4375), F1             // d38015f2
-	FLID $(0.5), F1                // d30016f2
-	FLID $(0.625), F1              // d38016f2
-	FLID $(0.75), F1               // d30017f2
-	FLID $(0.875), F1              // d38017f2
-	FLID $(1.0), F1                // d30018f2
-	FLID $(1.25), F1               // d38018f2
-	FLID $(1.5), F1                // d30019f2
-	FLID $(1.75), F1               // d38019f2
-	FLID $(2.0), F1                // d3001af2
-	FLID $(2.5), F1                // d3801af2
-	FLID $(3.0), F1                // d3001bf2
-	FLID $(4.0), F1                // d3801bf2
-	FLID $(8.0), F1                // d3001cf2
-	FLID $(16.0), F1               // d3801cf2
-	FLID $(128.0), F1              // d3001df2
-	FLID $(256.0), F1              // d3801df2
-	FLID $(32768.0), F1            // d3001ef2
-	FLID $(65536.0), F1            // d3801ef2
-	FLID $(+Inf), F1               // d3001ff2
-	FLID $(NaN), F1                // d3801ff2
-
-	// 24.2: Minimum and Maximum Instructions
-	FMAXMD F21, F20, F19           // d3395a2b
-	FMAXMS F21, F20, F19           // d3395a29
-	FMINMD F12, F11, F10           // 53a5c52a
-	FMINMS F12, F11, F10           // 53a5c528
-
-	// 24.3: Round-to-Integer Instructions
-	FROUNDD F18, F9                // d3044942
-	FROUNDS F18, F9                // d3044940
-	FROUNDNXD F18, F9              // d3045942
-	FROUNDNXS F18, F9              // d3045940
-
-	// 24.4: Modular Convert-to-Integer Instruction
-	FCVTMODWD F1, X11              // d39580c2
-
-	// 24.6: Comparison Instructions
-	FLEQD F2, F1, X11              // d3c520a2
-	FLEQS F2, F1, X11              // d3c520a0
-	FLTQD F18, F9, X11             // d3d524a3
-	FLTQS F18, F9, X11             // d3d524a1
-
 	// 28.4.1: Address Generation Instructions (Zba)
 	ADDUW		X10, X11, X12			// 3b86a508
 	ADDUW		X10, X11			// bb85a508
@@ -682,12 +508,6 @@ start:
 	RORW	$31, X13				// 9bd6f661 or 9bdff6019b961600b3e6df00
 	ORCB	X5, X6					// 13d37228
 	REV8	X7, X8					// 13d4836b
-
-
-	// Zbc extension
-	CLMUL	X5, X6, X7 				// b313530a
-	CLMULH	X5, X6, X7 				// b333530a
-	CLMULR	X5, X6, X7 				// b323530a
 
 	// 28.4.4: Single-bit Instructions (Zbs)
 	BCLR	X23, X24, X25				// b31c7c49
@@ -2145,84 +1965,6 @@ start:
 	VMV4RV		V8, V4				// 57b2819e
 	VMV8RV		V8, V0				// 57b0839e
 
-	// 32. 
-	// Zvbb - Vector Basic Bit-manipulation
-	VANDNVV		V1, V2, V3			// d7812006
-	VANDNVV		V1, V2, V0, V3			// d7812004
-	VANDNVX		X10, V2, V3			// d7412506
-	VANDNVX		X10, V2, V0, V3			// d7412504
-	VBREVV		V2, V3				// d721254a
-	VBREVV		V2, V0, V3			// d7212548
-	VBREV8V		V2, V3				// d721244a
-	VBREV8V		V2, V0, V3			// d7212448
-	VREV8V		V2, V3				// d7a1244a
-	VREV8V		V2, V0, V3			// d7a12448
-	VCLZV		V2, V3				// d721264a
-	VCLZV		V2, V0, V3			// d7212648
-	VCTZV		V2, V3				// d7a1264a
-	VCTZV		V2, V0, V3			// d7a12648
-	VCPOPV		V2, V3				// d721274a
-	VCPOPV		V2, V0, V3			// d7212748
-	VROLVV		V1, V2, V3			// d7812056
-	VROLVV		V1, V2, V0, V3			// d7812054
-	VROLVX		X10, V2, V3			// d7412556
-	VROLVX		X10, V2, V0, V3			// d7412554
-	VWSLLVV		V1, V2, V3			// d78120d6
-	VWSLLVV		V1, V2, V0, V3			// d78120d4
-	VWSLLVX		X10, V2, V3			// d74125d6
-	VWSLLVX		X10, V2, V0, V3			// d74125d4
-	VWSLLVI		$16, V2, V3			// d73128d6
-	VWSLLVI		$16, V2, V0, V3			// d73128d4
-
-	// Zvbc - Vector Carryless Multiplication
-	VCLMULVV	V1, V2, V3			// d7a12032
-	VCLMULVV	V1, V2, V0, V3			// d7a12030
-	VCLMULVX	X10, V2, V3			// d7612532
-	VCLMULVX	X10, V2, V0, V3			// d7612530
-	VCLMULHVV	V1, V2, V3			// d7a12036
-	VCLMULHVV	V1, V2, V0, V3			// d7a12034
-	VCLMULHVX	X10, V2, V3			// d7612536
-	VCLMULHVX	X10, V2, V0, V3			// d7612534
-
-	// Zvkb - Vector Cryptography Bit-manipulation
-	VRORVV		V1, V2, V3			// d7812052
-	VRORVV		V1, V2, V0, V3			// d7812050
-	VRORVX		X10, V2, V3			// d7412552
-	VRORVX		X10, V2, V0, V3			// d7412550
-	VRORVI		$16, V2, V3			// d7312852
-	VRORVI		$16, V2, V0, V3			// d7312850
-
-	// Zvkg - Vector GCM/GMAC
-	VGHSHVV		V1, V2, V3			// f7a120b2
-	VGMULVV		V1, V2				// 77a118a2
-
-	// Zvkned - NIST Suite: Vector AES Block Cipher
-	VAESEFVV	V1, V2				// 77a111a2
-	VAESEFVS	V1, V2				// 77a111a6
-	VAESEMVV	V1, V2				// 772111a2
-	VAESEMVS	V1, V2				// 772111a6
-	VAESDFVV	V1, V2				// 77a110a2
-	VAESDFVS	V1, V2				// 77a110a6
-	VAESDMVV	V1, V2				// 772110a2
-	VAESDMVS	V1, V2				// 772110a6
-	VAESKF1VI	$16, V2, V3			// f721288a
-	VAESKF2VI	$16, V2, V3			// f72128aa
-	VAESZVS		V1, V2				// 77a113a6
-
-	// Zvknh[ab] - NIST Suite: Vector SHA-2 Secure Hash
-	VSHA2MSVV	V1, V2, V3			// f7a120b6
-	VSHA2CHVV	V1, V2, V3			// f7a120ba
-	VSHA2CLVV	V1, V2, V3			// f7a120be
-
-	// Zvksed - ShangMi Suite: SM4 Block Cipher
-	VSM4KVI		$16, V2, V3			// f7212886
-	VSM4RVV		V1, V2				// 772118a2
-	VSM4RVS		V1, V2				// 772118a6
-
-	// Zvksh - ShangMi Suite: SM3 Secure Hash
-	VSM3MEVV	V1, V2, V3			// f7a12082
-	VSM3CVI		$16, V2, V3			// f72128ae
-
 	//
 	// Privileged ISA
 	//
@@ -2304,12 +2046,6 @@ start:
 	// Converted to load of symbol (AUIPC + FLW)
 	MOVF	$(709.78271289338397), F3		// 970f000087a10f00
 
-	// Convert to load of immediate via Zfa (FLIS)
-	MOVF $(1.52587890625e-05), F1  // 970f000087a00f00 or d30011f0
-	MOVF $(3.0517578125e-05),  F1  // 970f000087a00f00 or d38011f0
-	MOVF $(0.00390625), F1         // 970f000087a00f00 or d30012f0
-	MOVF $(0.0078125), F1          // 970f000087a00f00 or d38012f0
-
 	MOVD	4(X5), F0				// 07b04200
 	MOVD	F0, 4(X5)				// 27b20200
 	MOVD	F0, F1					// d3000022
@@ -2320,12 +2056,6 @@ start:
 
 	// Converted to load of symbol (AUIPC + FLD)
 	MOVD	$(709.78271289338397), F3		// 970f000087b10f00
-
-	// Convert to load of immediate via Zfa (FLID)
-	MOVD $(1.52587890625e-05), F1  // 970f000087b00f00 or d30011f2
-	MOVD $(3.0517578125e-05), F1   // 970f000087b00f00 or d38011f2
-	MOVD $(0.00390625), F1         // 970f000087b00f00 or d30012f2
-	MOVD $(0.0078125), F1          // 970f000087b00f00 or d38012f2
 
 	// TLS load with local-exec (LUI + ADDIW + ADD of TP + load)
 	MOV	tls(SB), X5				// b70f00009b8f0f00b38f4f0083b20f00

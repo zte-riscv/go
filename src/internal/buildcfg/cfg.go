@@ -20,23 +20,22 @@ import (
 )
 
 var (
-	GOROOT       = os.Getenv("GOROOT") // cached for efficiency
-	GOARCH       = envOr("GOARCH", defaultGOARCH)
-	GOOS         = envOr("GOOS", defaultGOOS)
-	GO386        = envOr("GO386", DefaultGO386)
-	GOAMD64      = goamd64()
-	GOARM        = goarm()
-	GOARM64      = goarm64()
-	GOMIPS       = gomips()
-	GOMIPS64     = gomips64()
-	GOPPC64      = goppc64()
-	GORISCV64    = goriscv64()
-	GORISCV64EXT = goriscv64Extensions()
-	GOWASM       = gowasm()
-	ToolTags     = toolTags()
-	GO_LDSO      = defaultGO_LDSO
-	GOFIPS140    = gofips140()
-	Version      = version
+	GOROOT    = os.Getenv("GOROOT") // cached for efficiency
+	GOARCH    = envOr("GOARCH", defaultGOARCH)
+	GOOS      = envOr("GOOS", defaultGOOS)
+	GO386     = envOr("GO386", DefaultGO386)
+	GOAMD64   = goamd64()
+	GOARM     = goarm()
+	GOARM64   = goarm64()
+	GOMIPS    = gomips()
+	GOMIPS64  = gomips64()
+	GOPPC64   = goppc64()
+	GORISCV64 = goriscv64()
+	GOWASM    = gowasm()
+	ToolTags  = toolTags()
+	GO_LDSO   = defaultGO_LDSO
+	GOFIPS140 = gofips140()
+	Version   = version
 )
 
 // Error is one of the errors found (if any) in the build configuration.
@@ -313,49 +312,8 @@ func goppc64() int {
 	return int(DefaultGOPPC64[len("power")] - '0')
 }
 
-// ParseGORISCV64 parses GORISCV64 value and returns the profile and extensions.
-// Format: "rva23u64" or "rva23u64,zacas,zabha"
-// Returns: (profile, extensions map, error)
-func ParseGORISCV64(v string) (string, map[string]bool, error) {
-	extensions := make(map[string]bool)
-
-	// Split by comma
-	parts := strings.Split(v, ",")
-	profile := strings.TrimSpace(parts[0])
-
-	// Validate profile - must start with rva
-	if !strings.HasPrefix(profile, "rva") {
-		return profile, nil, fmt.Errorf("invalid GORISCV64 profile: must start with rva (got %q)", profile)
-	}
-
-	// Extract extensions from remaining parts
-	for i := 1; i < len(parts); i++ {
-		ext := strings.TrimSpace(parts[i])
-		if ext == "" {
-			continue
-		}
-		// Convert to lowercase for internal storage (case-insensitive matching)
-		extLower := strings.ToLower(ext)
-		if !isValidRiscv64Ext(extLower) {
-			return profile, nil, fmt.Errorf("invalid GORISCV64 extension: must be one of %s (got %q)", allowedRiscv64OptList(), ext)
-		}
-		extensions[extLower] = true
-	}
-
-	return profile, extensions, nil
-}
-
 func goriscv64() int {
-	v := envOr("GORISCV64", DefaultGORISCV64)
-
-	// Extract profile and extensions
-	profile, _, err := ParseGORISCV64(v)
-	if err != nil {
-		Error = err
-	}
-
-	// Process profile (existing logic)
-	switch profile {
+	switch v := envOr("GORISCV64", DefaultGORISCV64); v {
 	case "rva20u64":
 		return 20
 	case "rva22u64":
@@ -364,11 +322,11 @@ func goriscv64() int {
 		return 23
 	}
 	Error = fmt.Errorf("invalid GORISCV64: must be rva20u64, rva22u64, rva23u64")
-	v2 := DefaultGORISCV64[len("rva"):]
-	i := strings.IndexFunc(v2, func(r rune) bool {
+	v := DefaultGORISCV64[len("rva"):]
+	i := strings.IndexFunc(v, func(r rune) bool {
 		return r < '0' || r > '9'
 	})
-	year, _ := strconv.Atoi(v2[:i])
+	year, _ := strconv.Atoi(v[:i])
 	return year
 }
 
