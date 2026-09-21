@@ -26,7 +26,6 @@ type Encoding struct {
 	decodeMap [256]uint8 // mapping of symbol byte value to symbol index
 	padChar   rune
 	strict    bool
-	ignoreWS  bool
 	lut       *[16]byte
 }
 
@@ -143,14 +142,6 @@ func (enc Encoding) WithPadding(padding rune) *Encoding {
 // (CR and LF) are still ignored.
 func (enc Encoding) Strict() *Encoding {
 	enc.strict = true
-	return &enc
-}
-
-// Forgiving creates a new encoding identical to enc except with
-// forgiving decoding enabled. In this mode, the decoder ignores
-// whitespace characters (space, tab, form feed, CR and LF) in the input.
-func (enc Encoding) Forgiving() *Encoding {
-	enc.ignoreWS = true
 	return &enc
 }
 
@@ -457,17 +448,9 @@ func (enc *Encoding) decodeQuantum(dst, src []byte, si int) (nsi, n int, err err
 }
 
 // isIgnorableChar reports whether c is a whitespace character that should be skipped.
-// \r and \n are always ignored. \t, \f and space are ignored only in Forgiving mode.
-//
-
+// \r and \n are always ignored.
 func (enc *Encoding) isIgnorableChar(c byte) bool {
-	if c == '\n' || c == '\r' {
-		return true
-	}
-	if enc.ignoreWS && (c == '\t' || c == '\f' || c == ' ') {
-		return true
-	}
-	return false
+	return c == '\n' || c == '\r'
 }
 
 // AppendDecode appends the base64 decoded src to dst
@@ -693,8 +676,7 @@ func assemble64(n1, n2, n3, n4, n5, n6, n7, n8 byte) (dn uint64, ok bool) {
 }
 
 type newlineFilteringReader struct {
-	wrapped  io.Reader
-	ignoreWS bool
+	wrapped io.Reader
 }
 
 func (r *newlineFilteringReader) Read(p []byte) (int, error) {
@@ -702,8 +684,7 @@ func (r *newlineFilteringReader) Read(p []byte) (int, error) {
 	for n > 0 {
 		offset := 0
 		for i, b := range p[:n] {
-			isIgnorable := b == '\r' || b == '\n' ||
-				(r.ignoreWS && (b == '\t' || b == '\f' || b == ' '))
+			isIgnorable := b == '\r' || b == '\n'
 			if !isIgnorable {
 				if i != offset {
 					p[offset] = b
@@ -722,7 +703,7 @@ func (r *newlineFilteringReader) Read(p []byte) (int, error) {
 
 // NewDecoder constructs a new base64 stream decoder.
 func NewDecoder(enc *Encoding, r io.Reader) io.Reader {
-	return &decoder{enc: enc, r: &newlineFilteringReader{r, enc.ignoreWS}}
+	return &decoder{enc: enc, r: &newlineFilteringReader{r}}
 }
 
 // DecodedLen returns the maximum length in bytes of the decoded data
