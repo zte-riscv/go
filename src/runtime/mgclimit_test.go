@@ -76,13 +76,13 @@ func TestGCCPULimiter(t *testing.T) {
 		// Test passing time without assists during a GC. Specifically, just enough to drain the bucket to
 		// exactly procs nanoseconds (easier to get to because of rounding).
 		//
-		// The window we need to drain the bucket is 1/(1-2*gcBackgroundUtilization) times the current fill:
+		// The window we need to drain the bucket is 1/(1-2*gcController.gcRatio) times the current fill:
 		//
-		//   fill + (window * procs * gcBackgroundUtilization - window * procs * (1-gcBackgroundUtilization)) = n
-		//   fill = n - (window * procs * gcBackgroundUtilization - window * procs * (1-gcBackgroundUtilization))
-		//   fill = n + window * procs * ((1-gcBackgroundUtilization) - gcBackgroundUtilization)
-		//   fill = n + window * procs * (1-2*gcBackgroundUtilization)
-		//   window = (fill - n) / (procs * (1-2*gcBackgroundUtilization)))
+		//   fill + (window * procs * gcController.gcRatio - window * procs * (1-gcController.gcRatio)) = n
+		//   fill = n - (window * procs * gcController.gcRatio - window * procs * (1-gcController.gcRatio))
+		//   fill = n + window * procs * ((1-gcController.gcRatio) - gcController.gcRatio)
+		//   fill = n + window * procs * (1-2*gcController.gcRatio)
+		//   window = (fill - n) / (procs * (1-2*gcController.gcRatio)))
 		//
 		// And here we want n=procs:
 		factor := (1 / (1 - 2*GCBackgroundUtilization))
