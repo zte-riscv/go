@@ -1412,6 +1412,15 @@ const (
 var GCBackgroundUtilization = gcController.gcRatio
 var GCGoalUtilization = gcGoalUtilization
 
+// GCRatioDefault and GCRatioMax expose the GOGCRATIO clamp bounds for tests.
+const (
+	GCRatioDefault = defaultGCRatio
+	GCRatioMax     = maxGCRatio
+)
+
+// ReadGOGCRATIO exposes readGOGCRATIO for tests.
+func ReadGOGCRATIO() float64 { return readGOGCRATIO() }
+
 type GCController struct {
 	gcControllerState
 }

@@ -49,6 +49,22 @@ const (
 	// heap goal should have as a percent of the maximum possible heap goal allowed
 	// to maintain the memory limit.
 	memoryLimitHeapGoalHeadroomPercent = 3
+
+	// defaultGCRatio is the default GOGCRATIO value, expressed as a fraction
+	// of GOMAXPROCS. 25% matches the historical gcBackgroundUtilization.
+	defaultGCRatio = 0.25
+
+	// maxGCRatio is the maximum GOGCRATIO value, expressed as a fraction
+	// of GOMAXPROCS.
+	//
+	// The pacer rounds the number of dedicated mark workers to the nearest
+	// integer P, tolerating a relative error of up to maxUtilError (30%), so
+	// dedicated workers may use up to 1.3*gcRatio of the Ps. The GC CPU
+	// limiter can only guarantee progress when that stays strictly below half
+	// of the Ps (its leaky-bucket threshold is 50%), which requires
+	// 1.3*gcRatio < 0.5, i.e. gcRatio < 0.3846. 38% is therefore the highest
+	// whole-percent setting that is safe.
+	maxGCRatio = 0.38
 )
 
 // gcGoalUtilization is the goal CPU utilization for
@@ -74,9 +90,10 @@ var gcGoalUtilization = gcController.gcRatio
 var gcController gcControllerState
 
 type gcControllerState struct {
-	// gcController.gcRatio be optional, value equals gcratio/100.0.
-	// Initialized from GOGCRATIO, which in the range of (1, 99).
-	// Default GOGCRATIO is 25.
+	// gcRatio is the target CPU utilization for background marking, as a
+	// fraction of GOMAXPROCS. It is optional and initialized from
+	// GOGCRATIO/100, clamped to the range [1, 38] (see maxGCRatio).
+	// The default is 25%.
 	gcRatio float64
 
 	// Initialized from GOGC. GOGC=off means no GC.
@@ -1430,7 +1447,7 @@ func (c *gcControllerState) setGOGCRatio(in float64) float64 {
 func readGOGCRATIO() float64 {
 	p := gogetenv("GOGCRATIO")
 	if p == "" {
-		return 0.25
+		return defaultGCRatio
 	}
 	n, ok := parseByteCount(p)
 	if !ok {
@@ -1438,15 +1455,17 @@ func readGOGCRATIO() float64 {
 		throw("malformed GOGCRATIO; get the wrong value")
 	}
 
+	// Clamp to [1, 38] percent. The upper bound keeps dedicated mark
+	// workers strictly below half of the Ps even with the pacer's 30%
+	// rounding error, so the GC CPU limiter can always pull GC utilization
+	// back under its 50% threshold (see maxGCRatio).
 	if n < 1 {
 		n = 1
-	} else if n > 99 {
-		n = 99
+	} else if n > 38 {
+		n = 38
 	}
 
-	out := float64(n) / 100.0
-
-	return out
+	return float64(n) / 100.0
 }
 
 // addIdleMarkWorker attempts to add a new idle mark worker.
