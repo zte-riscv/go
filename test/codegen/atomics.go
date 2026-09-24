@@ -35,7 +35,7 @@ func atomicLogical64(x *atomic.Uint64) uint64 {
 	// arm64/v8.0:".*arm64HasATOMICS"
 	// arm64/v8.1:-".*arm64HasATOMICS"
 	// On amd64, make sure we use LOCK+AND instead of CMPXCHG when we don't use the result.
-	// amd64:"LOCK" "CMPXCHGQ"
+	// amd64:"LOCK" -"CMPXCHGQ"
 	// riscv64:"AMOANDD" -"JAL"
 	x.And(11)
 	// arm64/v8.0:"LDCLRALD"
@@ -58,7 +58,7 @@ func atomicLogical64(x *atomic.Uint64) uint64 {
 	// arm64/v8.1:"LDORALD"
 	// arm64/v8.0:".*arm64HasATOMICS"
 	// arm64/v8.1:-".*arm64HasATOMICS"
-	// amd64:"LOCK","CMPXCHGQ"
+	// amd64:"LOCK" "CMPXCHGQ"
 	// riscv64:"AMOORD" -"JAL"
 	r += x.Or(44)
 
