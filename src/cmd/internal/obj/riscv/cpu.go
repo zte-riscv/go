@@ -417,6 +417,10 @@ const (
 	ANTLPALL
 	ANTLS1
 	ANTLALL
+	ACNTLP1
+	ACNTLPALL
+	ACNTLS1
+	ACNTLALL
 
 	// 12.3: Integer Conditional Operations (Zicond)
 	ACZEROEQZ

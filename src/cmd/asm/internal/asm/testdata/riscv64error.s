@@ -455,4 +455,8 @@ TEXT errors(SB),$0
 	VRORVX X10, V2, V4, V3			// ERROR "invalid vector mask register"
 	VRORVI $16, V2, V4, V3			// ERROR "invalid vector mask register"
 
+	// Zihintntl Extension for Non-Temporal Locality Hints
+	NTLP1	X5					// ERROR "NTL hints take no operands"
+	CNTLP1	X5					// ERROR "NTL hints take no operands"
+
 	RET
