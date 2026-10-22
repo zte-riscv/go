@@ -4776,6 +4776,10 @@ func instructionsForProg(p *obj.Prog, compress bool) []*instruction {
 		ins.funct7 = 3
 		ins.rd, ins.rs1, ins.rs2 = uint32(p.RegTo2), uint32(p.To.Reg), uint32(p.From.Reg)
 
+		if p.As == AAMOCASQ && (ins.rd&1 != 0 || ins.rs2&1 != 0) {
+			p.Ctxt.Diag("%v: AMOCASQ requires even-numbered registers for rd and rs2", p)
+		}
+
 	case AWRSNTO, AWRSSTO:
 		ins.rd, ins.rs1, ins.imm = REG_ZERO, REG_ZERO, encode(p.As).csr
 

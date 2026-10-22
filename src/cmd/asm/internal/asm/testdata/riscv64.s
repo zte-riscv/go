@@ -276,7 +276,7 @@ start:
 	// 16: Extension for Atomic Compare-and-Swap (CAS) Instructions (Zacas)
 	AMOCASW	X5, (X6), X7			// af23532e
 	AMOCASD	X5, (X6), X7			// af33532e
-	AMOCASQ	X5, (X6), X7			// af43532e
+	AMOCASQ	X6, (X7), X8			// 2fc4632e
 
 
 	// 16.1: Byte and Halfword Atomic Memory Operation Instructions (Zabha)
