@@ -10,35 +10,319 @@ concurrency:
 jobs:
   build-toolchain-in-milkv-pioneer:
     runs-on: milkv-pioneer
-    timeout-minutes: 120
+    timeout-minutes: 240
+
+    # =====================================================================
+    # 实验说明（ASAN 交叉验证）
+    #
+    # 背景：TestASAN/asan2_fail 在 RISE runner 上挂死，而在本 runner 上
+    #       all.bash 能正常通过。本 workflow 做控制变量实验：
+    #
+    #   1) 打印环境指纹（OS / gcc / libasan / glibc / 内核 / GORISCV64）
+    #   2) 纯 C ASAN 越界对照（普通插桩路径，走 __asan_report_store4）
+    #   3) 纯 C ASAN 对照（精确复刻 Go runtime/asan 的调用路径：
+    #      __asan_region_is_poisoned + __asan_report_error）
+    #   4) 下载官方 Go，既作为 GOROOT_BOOTSTRAP，也作为官方对照工具链
+    #   5) 用官方 Go 作 bootstrap 构建当前 HEAD 工具链（make.bash）
+    #   6) 用 HEAD 构建并单跑 asan2_fail
+    #   7) 用官方 Go 构建并单跑同一份 asan2_fail
+    #
+    # 注意：实验期间统一使用 GORISCV64=rva20u64。
+    #       misaligned_fast 是本 fork 私有扩展（commit 3f61bcf10c），
+    #       官方 Go 不识别；为了让两台机器、两套工具链的对照成立，
+    #       这里也不使用它。
+    #
+    # 旧的 all.bash 流程没有删除，整体注释在下方 steps 开头。
+    # =====================================================================
+    env:
+      GORISCV64: rva20u64
+
     steps:
-      - uses: actions/checkout@v4
+      # ===================================================================
+      # 旧流程（整体注释保留，实验结束后取消注释即可恢复）
+      # ===================================================================
+      # - uses: actions/checkout@v4
+      #   with:
+      #     fetch-depth: 0
+      #
+      # - name: Ensure C toolchain is available
+      #   run: |
+      #       set -euxo pipefail
+      #       if ! command -v gcc >/dev/null 2>&1; then
+      #         sudo apt-get update
+      #         sudo apt-get install -y --no-install-recommends gcc libc6-dev
+      #       fi
+      #       gcc --version
+      #
+      # - name: Build toolchain (host riscv64)
+      #   run: |
+      #       # install bootstrap Go
+      #       set -euxo pipefail
+      #       BOOT=/tmp/go-bootstrap
+      #       rm -rf "$BOOT"
+      #       curl -fsSL https://github.com/zte-riscv/go/releases/download/go1.26.4.202607/go1.26.4.202607.linux-riscv64.tar.gz -o /tmp/go.tar.gz
+      #       tar -C /tmp -xzf /tmp/go.tar.gz
+      #       mv /tmp/go "$BOOT"
+      #       export GOROOT_BOOTSTRAP="$BOOT"
+      #       export GORISCV64=rva20u64
+      #       export GO_TEST_TIMEOUT_SCALE=10
+      #
+      #       # build toolchain
+      #       cd "$GITHUB_WORKSPACE/src"
+      #       rm -f "$GITHUB_WORKSPACE/VERSION"
+      #       ./all.bash
+      # ===================================================================
+
+      # ===================================================================
+      # 实验 0：检出代码
+      # ===================================================================
+      - name: "实验 0: checkout"
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Ensure C toolchain is available
+      # ===================================================================
+      # 实验 1：确保 C 工具链可用
+      #
+      # ASAN 的 -fsanitize=address 需要 gcc 和 libasan；缺少 gcc 时，
+      # 后面的 C 对照和 go build -asan 都无法执行。
+      # ===================================================================
+      - name: "实验 1: 确保 C 工具链可用"
         run: |
-            set -euxo pipefail
-            if ! command -v gcc >/dev/null 2>&1; then
-              sudo apt-get update
-              sudo apt-get install -y --no-install-recommends gcc libc6-dev
+          set -euxo pipefail
+          if ! command -v gcc >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends gcc libc6-dev
+          fi
+          gcc --version
+
+      # ===================================================================
+      # 实验 2：打印环境指纹
+      #
+      # 重点记录 gcc / libasan / glibc 版本和内核信息。ASAN 的行为主要
+      # 由 libasan（随 gcc 安装）决定，而不是由发行版名字决定。
+      # ===================================================================
+      - name: "实验 2: 打印环境指纹"
+        run: |
+          set -x
+          mkdir -p "$GITHUB_WORKSPACE/asan-logs"
+          LOG="$GITHUB_WORKSPACE/asan-logs/00-env.log"
+          {
+            echo "===== uname ====="
+            uname -a || true
+            echo "===== /etc/os-release ====="
+            cat /etc/os-release || true
+            echo "===== gcc --version ====="
+            gcc --version || true
+            echo "===== ld --version (glibc) ====="
+            ld --version | head -1 || true
+            echo "===== libasan path ====="
+            gcc -print-file-name=libasan.so || true
+            echo "===== libasan realpath ====="
+            readlink -f "$(gcc -print-file-name=libasan.so)" || true
+            echo "===== libasan/gcc packages ====="
+            dpkg-query -W -f='${Package} ${Version}\n' 'libasan*' 'gcc*' 2>/dev/null || true
+            echo "===== cpu / mem / limits ====="
+            nproc
+            free -h
+            ulimit -a
+            echo "===== vm.overcommit_memory ====="
+            cat /proc/sys/vm/overcommit_memory || true
+            echo "===== cpu mmu ====="
+            grep -m1 -i 'mmu' /proc/cpuinfo || true
+            echo "===== GORISCV64 ====="
+            echo "${GORISCV64:-unset}"
+            echo "===== symbolizers ====="
+            command -v llvm-symbolizer addr2line || true
+          } 2>&1 | tee "$LOG"
+
+      # ===================================================================
+      # 实验 3：纯 C ASAN 对照（普通插桩路径）
+      #
+      # 复刻 asan2_fail 的越界模式：malloc(20) 之后访问第 20 字节，
+      # 即“部分可用格子 + 右红区”。gcc 会插入内联检查并调用
+      # __asan_report_store4，用来判断本机 libasan 的报告路径是否正常。
+      #
+      # 判读：
+      #   exit=1   正常打印 heap-buffer-overflow（libasan 正常）
+      #   exit=137 被 timeout 杀掉（libasan 报告路径挂死）
+      # ===================================================================
+      - name: "实验 3: 纯 C ASAN 对照（普通插桩路径）"
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          LOG="$GITHUB_WORKSPACE/asan-logs/01-c-normal.log"
+          printf '%s\n' \
+            '#include <stdlib.h>' \
+            'int main(void) {' \
+            '    int *p = malloc(5 * sizeof(int));' \
+            '    int *q = (int *)((char *)p + 20);  /* 部分可用格子 + 右红区 */' \
+            '    *q = 100;' \
+            '    return 0;' \
+            '}' > /tmp/asan-c-normal.c
+          gcc -fsanitize=address -g -O0 /tmp/asan-c-normal.c -o /tmp/asan-c-normal
+          set +e
+          timeout -s KILL 120 /tmp/asan-c-normal > "$LOG" 2>&1
+          code=$?
+          set -e
+          echo "exit=$code" | tee -a "$LOG"
+
+      # ===================================================================
+      # 实验 4：纯 C ASAN 对照（精确复刻 Go 的调用路径）
+      #
+      # Go 的 runtime/asan 不走 __asan_report_store4，而是：
+      #   __asan_region_is_poisoned -> __asan_report_error
+      # 这两个入口和普通 C 插桩不同。这里用 no_sanitize 关闭编译器的
+      # 自动插桩，手工调用同一对接口，参数和 runtime/asan/asan.go 一致。
+      #
+      # 判读：
+      #   实验 3 正常、实验 4 挂 -> libasan 的 __asan_report_error 入口问题
+      #   实验 3 正常、实验 4 正常 -> 问题在 Go 的 asancall/传参/栈切换
+      # ===================================================================
+      - name: "实验 4: 纯 C ASAN 对照（复刻 __asan_region_is_poisoned + __asan_report_error）"
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          LOG="$GITHUB_WORKSPACE/asan-logs/02-c-report-error.log"
+          printf '%s\n' \
+            '#include <stdlib.h>' \
+            '#include <stdbool.h>' \
+            '#include <sanitizer/asan_interface.h>' \
+            '' \
+            '/* 关闭本函数的自动插桩，手工调用 runtime/asan/asan.go 使用的同一对接口 */' \
+            '__attribute__((no_sanitize("address")))' \
+            'int main(void) {' \
+            '    int *p = malloc(5 * sizeof(int));' \
+            '    char *q = (char *)p + 20;' \
+            '    if (__asan_region_is_poisoned(q, 4)) {' \
+            '        __asan_report_error(__builtin_return_address(0), 0,' \
+            '                            __builtin_frame_address(0), q, true, 4);' \
+            '    }' \
+            '    return 0;' \
+            '}' > /tmp/asan-c-report-error.c
+          gcc -fsanitize=address -g -O0 /tmp/asan-c-report-error.c -o /tmp/asan-c-report-error
+          set +e
+          timeout -s KILL 120 /tmp/asan-c-report-error > "$LOG" 2>&1
+          code=$?
+          set -e
+          echo "exit=$code" | tee -a "$LOG"
+
+      # ===================================================================
+      # 实验 5：下载官方 Go
+      #
+      # 注意：这里下载的是 go.dev 的官方版本，不是本 fork 的 release。
+      # 它有两个用途：
+      #   1) 作为实验 6 的 GOROOT_BOOTSTRAP（Go 1.26 要求 >= go1.24.6）
+      #   2) 作为实验 8 的官方对照工具链
+      #
+      # go1.26.4 与当前 VERSION 最接近；若该版本没有 riscv64 包，
+      # 依次回退到 go1.25.5 / go1.25.0。
+      # ===================================================================
+      - name: "实验 5: 下载官方 Go（bootstrap + 官方对照）"
+        run: |
+          set -euxo pipefail
+          OFF=/tmp/go-official
+          rm -rf "$OFF" /tmp/go /tmp/go.tar.gz
+          for V in go1.26.4 go1.25.5 go1.25.0; do
+            if curl -fsSL "https://go.dev/dl/${V}.linux-riscv64.tar.gz" -o /tmp/go.tar.gz; then
+              echo "downloaded official ${V}"
+              echo "${V}" > /tmp/official-version
+              break
             fi
-            gcc --version
+          done
+          tar -C /tmp -xzf /tmp/go.tar.gz
+          mv /tmp/go "$OFF"
+          "$OFF/bin/go" version
 
-      - name: Build toolchain (host riscv64)
+      # ===================================================================
+      # 实验 6：用官方 Go 作 bootstrap 构建当前 HEAD 工具链
+      #
+      # 只跑 make.bash（构建），不再跑 all.bash（全量测试）。
+      # 后面用这份工具链构建 asan2_fail。
+      # ===================================================================
+      - name: "实验 6: 用官方 Go 作为 bootstrap 构建 HEAD（make.bash）"
+        continue-on-error: true
         run: |
-            # install bootstrap Go
-            set -euxo pipefail
-            BOOT=/tmp/go-bootstrap
-            rm -rf "$BOOT"
-            curl -fsSL https://github.com/zte-riscv/go/releases/download/go1.26.4.202607/go1.26.4.202607.linux-riscv64.tar.gz -o /tmp/go.tar.gz
-            tar -C /tmp -xzf /tmp/go.tar.gz
-            mv /tmp/go "$BOOT"
-            export GOROOT_BOOTSTRAP="$BOOT"
-            export GORISCV64=rva20u64
-            export GO_TEST_TIMEOUT_SCALE=10
+          set -euxo pipefail
+          OFF=/tmp/go-official
+          cd "$GITHUB_WORKSPACE/src"
+          rm -f "$GITHUB_WORKSPACE/VERSION"
+          GOROOT_BOOTSTRAP="$OFF" GORISCV64=rva20u64 ./make.bash
+          "$GITHUB_WORKSPACE/bin/go" version
 
-            # build toolchain
-            cd "$GITHUB_WORKSPACE/src"
-            rm -f "$GITHUB_WORKSPACE/VERSION"
-            ./all.bash
+      # ===================================================================
+      # 实验 7：用 HEAD 构建并单跑 asan2_fail
+      #
+      # 编译参数刻意与测试保持一致（testsanitizers 的 configure("address")
+      # 会设置 CGO_CFLAGS=-fsanitize=address -g、CGO_LDFLAGS=-fsanitize=address）。
+      # 用 timeout 兜底，避免像 CI 里那样一挂就是一个多小时。
+      # ===================================================================
+      - name: "实验 7: HEAD 构建并单跑 asan2_fail"
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          GOROOT="$GITHUB_WORKSPACE"
+          export GOROOT GORISCV64=rva20u64 CGO_ENABLED=1
+          cd "$GOROOT/src"
+          CGO_CFLAGS='-fsanitize=address -g' CGO_LDFLAGS='-fsanitize=address' \
+            "$GOROOT/bin/go" build -asan -o /tmp/asan2_head \
+            cmd/cgo/internal/testsanitizers/testdata/asan2_fail.go
+
+          LOG="$GITHUB_WORKSPACE/asan-logs/03-asan2_head.log"
+          set +e
+          timeout -s KILL 120 /tmp/asan2_head > "$LOG" 2>&1
+          code=$?
+          set -e
+          echo "exit=$code" | tee -a "$LOG"
+
+      # ===================================================================
+      # 实验 8：用官方 Go 构建并单跑同一份 asan2_fail
+      #
+      # 源文件仍然是 HEAD 的 testdata，保证程序完全一致；
+      # 唯一的变量是“哪套 Go 编译器/运行时”。
+      #
+      # 判读：
+      #   HEAD 挂、官方正常 -> 当前分支的 Go 侧回归
+      #   HEAD 挂、官方也挂 -> 与 fork 改动无关，是官方 Go 与这台机器
+      #                        libasan 的交互问题
+      # ===================================================================
+      - name: "实验 8: 官方 Go 构建并单跑同一份 asan2_fail"
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          OFF=/tmp/go-official
+          SRC="$GITHUB_WORKSPACE/src/cmd/cgo/internal/testsanitizers/testdata/asan2_fail.go"
+          CGO_ENABLED=1 GOROOT="$OFF" GORISCV64=rva20u64 \
+          CGO_CFLAGS='-fsanitize=address -g' CGO_LDFLAGS='-fsanitize=address' \
+            "$OFF/bin/go" build -asan -o /tmp/asan2_official "$SRC"
+
+          LOG="$GITHUB_WORKSPACE/asan-logs/04-asan2_official.log"
+          set +e
+          timeout -s KILL 120 /tmp/asan2_official > "$LOG" 2>&1
+          code=$?
+          set -e
+          echo "exit=$code" | tee -a "$LOG"
+
+      # ===================================================================
+      # 实验 9：汇总关键结果
+      # ===================================================================
+      - name: "实验 9: 汇总结果"
+        if: always()
+        run: |
+          set -x
+          shopt -s nullglob
+          for f in "$GITHUB_WORKSPACE"/asan-logs/*.log; do
+            echo "========== $f =========="
+            grep -E 'exit=|ERROR: AddressSanitizer|SUMMARY: AddressSanitizer|heap-buffer-overflow|heap-use-after-free|use-after-poison|=== RUN|--- PASS|--- FAIL|--- SKIP|panic:' "$f" | tail -30 || true
+          done
+
+      # ===================================================================
+      # 实验 10：上传日志（无论成功失败都上传）
+      # ===================================================================
+      - name: "实验 10: 上传日志"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asan-logs-milkv-pioneer
+          path: asan-logs/
+          if-no-files-found: ignore
