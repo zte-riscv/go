@@ -12,13 +12,36 @@ import (
 	"fmt"
 	"internal/platform"
 	"internal/testenv"
+	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 )
 
+// skipASANOnRiscv64 skips TestASAN when GOTEST_SKIP_ASAN is set on riscv64.
+//
+// On some riscv64 machines (4 cores, Linux 5.10) libasan can fail while
+// printing a report: another thread adds or removes a VMA while libasan reads
+// /proc/self/maps, the parser walks off the expected line format, and
+// CHECK_EQ(*data_.current++, '-') in sanitizer_procmaps_linux.cpp aborts.
+// CheckFailed then calls CheckUnwind, which re-enters Symbolizer::SymbolizePC
+// and deadlocks on the non-reentrant symbolizer mutex, so the process never
+// exits and the test hangs until the package timeout.
+//
+// This reproduces with an official Go toolchain too, so it is not a problem
+// in this tree. CI sets GOTEST_SKIP_ASAN=1 on the affected machines.
+func skipASANOnRiscv64(t *testing.T) {
+	t.Helper()
+	if runtime.GOARCH == "riscv64" && os.Getenv("GOTEST_SKIP_ASAN") != "" {
+		t.Skip("skipping ASAN test on riscv64: libasan /proc/self/maps CHECK followed by a self-deadlock")
+	}
+}
+
 func TestASAN(t *testing.T) {
 	config := mustHaveASAN(t)
+
+	skipASANOnRiscv64(t)
 
 	t.Parallel()
 	mustRun(t, config.goCmd("build", "std"))
