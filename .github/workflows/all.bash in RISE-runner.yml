@@ -607,6 +607,136 @@ jobs:
           run_repro both 2 2 10
 
       # ===================================================================
+      # 实验 16：Go 侧控制变量 —— 重新定位触发条件
+      #
+      # 背景：纯 C 的 churn 复现（实验 12-15）35 次全部正常，说明
+      # "别的线程并发增删 VMA"本身并不是充分条件。差异只剩 Go 运行时
+      # 这一侧，以及本机的 libasan 版本。
+      #
+      # 本机 libasan 是 GCC 8.4（libasan.so.8）。GCC 8 的
+      # ReadFileToBuffer 与新版实现完全不同：
+      #   - 每次 read 只请求一页（4KB）。对 ~22KB 的 /proc/self/maps，
+      #     一次符号化要跨 9 次 read() 拼接，每次 read() 之间 seq_file
+      #     的 mmap 读锁会释放。
+      #   - 任何一次 read() 失败时，它 unmap 掉缓冲区却不清空 *buff，
+      #     而 GCC 8 的 ReadProcMaps 也不检查返回值（GCC 9 才加上
+      #     失败清理）。于是 data_ 指向已释放的内存、len 仍 > 0，
+      #     Next() 会去解析这块内存 —— 这正好能解释 CHECK 失败时
+      #     读到 0xd3/0xe0 这类不可能出现在 maps 文本里的二进制字节。
+      #
+      # 因此要区分两种可能：
+      #   A) Go 运行时发出的信号打断了 libasan 的 read() -> EINTR
+      #   B) 与信号无关，另有原因让 read() 出错
+      #
+      # 对照组：
+      #   baseline  默认参数，预期仍能复现 hang
+      #   noasync   GODEBUG=asyncpreemptoff=1，关闭 SIGURG 异步抢占
+      #   gomax1    GOMAXPROCS=1，把 Go 侧线程数压到最少
+      # ===================================================================
+      - name: "实验 16: Go 侧控制变量（异步抢占 / 线程数）"
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          LOGDIR="$GITHUB_WORKSPACE/asan-logs"
+
+          cd "$GITHUB_WORKSPACE/src"
+          GOROOT="$GITHUB_WORKSPACE" GORISCV64=rva20u64 CGO_ENABLED=1 \
+          CGO_CFLAGS='-fsanitize=address -g' CGO_LDFLAGS='-fsanitize=address' \
+            "$GITHUB_WORKSPACE/bin/go" build -asan -o /tmp/asan2_head \
+            cmd/cgo/internal/testsanitizers/testdata/asan2_fail.go
+
+          # 记录环境事实：页大小决定 GCC 8 每次 read 请求多少字节，
+          # libasan 版本决定走哪一套读取实现。
+          {
+            echo "nproc=$(nproc)"
+            echo "PAGE_SIZE=$(getconf PAGE_SIZE)"
+            gcc --version | head -1
+            ldd /tmp/asan2_head | grep -i asan || true
+          } | tee "$LOGDIR/07-env.log"
+
+          cat > /tmp/asan2-lib.sh <<'EOF'
+          run_asan2() {
+            local tag="$1" runs="$2"; shift 2
+            local log="$GITHUB_WORKSPACE/asan-logs/08-asan2-${tag}.log"
+            local ok=0 hang=0 chk=0 other=0 i code
+            : > "$log"
+            for i in $(seq 1 "$runs"); do
+              set +e
+              env "$@" timeout -s KILL 20 /tmp/asan2_head > /tmp/asan2-run.out 2>&1
+              code=$?
+              set -e
+              grep -q 'CHECK failed' /tmp/asan2-run.out && chk=$((chk + 1))
+              if [ "$code" -eq 137 ] || [ "$code" -eq 124 ]; then
+                hang=$((hang + 1))
+              elif [ "$code" -eq 1 ] && grep -q 'SUMMARY: AddressSanitizer' /tmp/asan2-run.out; then
+                ok=$((ok + 1))
+              else
+                other=$((other + 1))
+              fi
+              {
+                echo "--- run ${i} exit=${code} ---"
+                tail -6 /tmp/asan2-run.out
+              } >> "$log"
+            done
+            local line="tag=${tag} runs=${runs} ok=${ok} hang=${hang} check_failed=${chk} other=${other} env=[$*]"
+            echo "$line" | tee -a "$log"
+            echo "$line" >> "$GITHUB_WORKSPACE/asan-logs/09-asan2-summary.log"
+          }
+          EOF
+
+          source /tmp/asan2-lib.sh
+          run_asan2 baseline 10
+          run_asan2 noasync  10 GODEBUG=asyncpreemptoff=1
+          run_asan2 gomax1   10 GOMAXPROCS=1
+
+      # ===================================================================
+      # 实验 17：strace 观察 libasan 读 /proc/self/maps 的系统调用
+      #
+      # 目的：确认一次符号化到底发起了几次 read()、每次返回多少字节，
+      # 以及出问题的那次是否存在 read() = -1 EINTR。
+      # libasan 用的是直接 ecall，LD_PRELOAD 拦不到，但 strace 走的
+      # ptrace 可以。注意 strace 会改变时序，结论只作旁证。
+      # ===================================================================
+      - name: "实验 17: strace 观察 read(/proc/self/maps)"
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          LOGDIR="$GITHUB_WORKSPACE/asan-logs"
+          if [ ! -x /tmp/asan2_head ]; then
+            echo "asan2_head missing (实验 16 构建失败); skip" | tee "$LOGDIR/10-strace.log"
+            exit 0
+          fi
+          if ! command -v strace >/dev/null 2>&1; then
+            echo "strace not installed; skip" | tee "$LOGDIR/10-strace.log"
+            exit 0
+          fi
+          : > "$LOGDIR/10-strace.log"
+          for i in 1 2 3 4 5 6; do
+            set +e
+            strace -f -e trace=openat,open,read,close -o /tmp/asan2.strace \
+              timeout -s KILL 20 /tmp/asan2_head > /tmp/asan2-strace.out 2>&1
+            code=$?
+            set -e
+            {
+              echo "===== run $i exit=$code ====="
+              if grep -q 'CHECK failed' /tmp/asan2-strace.out; then
+                echo "check_failed=yes"
+              fi
+              # 只保留 maps 相关的段落：从 open("/proc/self/maps") 起，
+              # 到该 fd 被 close 为止的 read 序列。
+              awk -v want=0 '
+                /open.*"\/proc\/self\/maps"/ { want=1; print "----- maps open -----" }
+                want { print }
+                want && /close\(/ { want=0; print "----- maps close -----" }
+              ' /tmp/asan2.strace | tail -60
+            } >> "$LOGDIR/10-strace.log"
+            if grep -q 'CHECK failed' /tmp/asan2-strace.out; then
+              echo "reproduced on run $i" | tee -a "$LOGDIR/10-strace.log"
+              break
+            fi
+          done
+
+      # ===================================================================
       # 实验 9：汇总关键结果
       # ===================================================================
       - name: "实验 9: 汇总结果"

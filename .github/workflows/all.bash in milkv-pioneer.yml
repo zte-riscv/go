@@ -547,6 +547,117 @@ jobs:
           run_repro both 2 2 5
 
       # ===================================================================
+      # 实验 16：Go 侧控制变量（本板作为对照）
+      #
+      # 与 RISE 上的实验 16 完全相同，只是次数减半。要点：
+      #   - 本机 libasan 是 GCC 8.4（libasan.so.8），它的
+      #     ReadFileToBuffer 每次 read 只请求一页，且 read 失败时
+      #     不清理指针；GCC 9 才加上失败清理。
+      #   - 因此除了"VMA 并发变化"，还要排除 Go 运行时信号打断
+      #     read() 这一条路径。
+      #
+      # 对照组：
+      #   baseline  默认
+      #   noasync   GODEBUG=asyncpreemptoff=1
+      #   gomax1    GOMAXPROCS=1
+      # ===================================================================
+      - name: "实验 16: Go 侧控制变量（异步抢占 / 线程数）"
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          LOGDIR="$GITHUB_WORKSPACE/asan-logs"
+
+          cd "$GITHUB_WORKSPACE/src"
+          GOROOT="$GITHUB_WORKSPACE" GORISCV64=rva20u64 CGO_ENABLED=1 \
+          CGO_CFLAGS='-fsanitize=address -g' CGO_LDFLAGS='-fsanitize=address' \
+            "$GITHUB_WORKSPACE/bin/go" build -asan -o /tmp/asan2_head \
+            cmd/cgo/internal/testsanitizers/testdata/asan2_fail.go
+
+          {
+            echo "nproc=$(nproc)"
+            echo "PAGE_SIZE=$(getconf PAGE_SIZE)"
+            gcc --version | head -1
+            ldd /tmp/asan2_head | grep -i asan || true
+          } | tee "$LOGDIR/07-env.log"
+
+          cat > /tmp/asan2-lib.sh <<'EOF'
+          run_asan2() {
+            local tag="$1" runs="$2"; shift 2
+            local log="$GITHUB_WORKSPACE/asan-logs/08-asan2-${tag}.log"
+            local ok=0 hang=0 chk=0 other=0 i code
+            : > "$log"
+            for i in $(seq 1 "$runs"); do
+              set +e
+              env "$@" timeout -s KILL 20 /tmp/asan2_head > /tmp/asan2-run.out 2>&1
+              code=$?
+              set -e
+              grep -q 'CHECK failed' /tmp/asan2-run.out && chk=$((chk + 1))
+              if [ "$code" -eq 137 ] || [ "$code" -eq 124 ]; then
+                hang=$((hang + 1))
+              elif [ "$code" -eq 1 ] && grep -q 'SUMMARY: AddressSanitizer' /tmp/asan2-run.out; then
+                ok=$((ok + 1))
+              else
+                other=$((other + 1))
+              fi
+              {
+                echo "--- run ${i} exit=${code} ---"
+                tail -6 /tmp/asan2-run.out
+              } >> "$log"
+            done
+            local line="tag=${tag} runs=${runs} ok=${ok} hang=${hang} check_failed=${chk} other=${other} env=[$*]"
+            echo "$line" | tee -a "$log"
+            echo "$line" >> "$GITHUB_WORKSPACE/asan-logs/09-asan2-summary.log"
+          }
+          EOF
+
+          source /tmp/asan2-lib.sh
+          run_asan2 baseline 5
+          run_asan2 noasync  5 GODEBUG=asyncpreemptoff=1
+          run_asan2 gomax1   5 GOMAXPROCS=1
+
+      # ===================================================================
+      # 实验 17：strace 观察 read(/proc/self/maps)
+      #
+      # 与 RISE 上一致；本板预期复现不出来，日志用于对照 read 序列。
+      # ===================================================================
+      - name: "实验 17: strace 观察 read(/proc/self/maps)"
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          LOGDIR="$GITHUB_WORKSPACE/asan-logs"
+          if [ ! -x /tmp/asan2_head ]; then
+            echo "asan2_head missing (实验 16 构建失败); skip" | tee "$LOGDIR/10-strace.log"
+            exit 0
+          fi
+          if ! command -v strace >/dev/null 2>&1; then
+            echo "strace not installed; skip" | tee "$LOGDIR/10-strace.log"
+            exit 0
+          fi
+          : > "$LOGDIR/10-strace.log"
+          for i in 1 2 3; do
+            set +e
+            strace -f -e trace=openat,open,read,close -o /tmp/asan2.strace \
+              timeout -s KILL 20 /tmp/asan2_head > /tmp/asan2-strace.out 2>&1
+            code=$?
+            set -e
+            {
+              echo "===== run $i exit=$code ====="
+              if grep -q 'CHECK failed' /tmp/asan2-strace.out; then
+                echo "check_failed=yes"
+              fi
+              awk -v want=0 '
+                /open.*"\/proc\/self\/maps"/ { want=1; print "----- maps open -----" }
+                want { print }
+                want && /close\(/ { want=0; print "----- maps close -----" }
+              ' /tmp/asan2.strace | tail -60
+            } >> "$LOGDIR/10-strace.log"
+            if grep -q 'CHECK failed' /tmp/asan2-strace.out; then
+              echo "reproduced on run $i" | tee -a "$LOGDIR/10-strace.log"
+              break
+            fi
+          done
+
+      # ===================================================================
       # 实验 9：汇总关键结果
       # ===================================================================
       - name: "实验 9: 汇总结果"
