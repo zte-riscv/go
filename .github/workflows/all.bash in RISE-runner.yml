@@ -640,10 +640,51 @@ jobs:
           LOGDIR="$GITHUB_WORKSPACE/asan-logs"
 
           cd "$GITHUB_WORKSPACE/src"
-          GOROOT="$GITHUB_WORKSPACE" GORISCV64=rva20u64 CGO_ENABLED=1 \
+
+          # 取构建用的 Go：优先本仓库刚编译出来的 bin/go；实验 5-8 被
+          # 注释掉之后它并不存在，这时退回 runner 上预装的 go。两者都能
+          # 复现（此前的实验 8 已确认官方 Go 同样会挂），对定位 libasan
+          # 的问题没有影响。
+          if [ -x "$GITHUB_WORKSPACE/bin/go" ]; then
+            GO_BIN="$GITHUB_WORKSPACE/bin/go"
+            export GOROOT="$GITHUB_WORKSPACE"
+          elif command -v go >/dev/null 2>&1; then
+            GO_BIN="$(command -v go)"
+          else
+            # RISE runner 上既没有本仓库编译出的 bin/go，也没有系统 go。
+            # 退回官方 riscv64 发行包作为构建工具。实验 8 已经确认过：
+            # 官方 Go 构建出来的 asan2_fail 同样会触发本问题，因此用它
+            # 不影响这一轮的判断（要测的是 libasan 读取路径 + 环境变量）。
+            OFF=/tmp/go-official
+            if [ ! -x "$OFF/bin/go" ]; then
+              rm -rf "$OFF" /tmp/go /tmp/go.tar.gz
+              got=0
+              for V in go1.26.4 go1.25.5 go1.25.0; do
+                if curl -fsSL --max-time 300 \
+                     "https://go.dev/dl/${V}.linux-riscv64.tar.gz" \
+                     -o /tmp/go.tar.gz; then
+                  echo "downloaded official ${V}" >&2
+                  got=1
+                  break
+                fi
+              done
+              if [ "$got" -ne 1 ]; then
+                echo "download official go failed; skip 实验 16" \
+                  | tee "$LOGDIR/07-env.log"
+                exit 0
+              fi
+              tar -C /tmp -xzf /tmp/go.tar.gz
+              rm -rf "$OFF"
+              mv /tmp/go "$OFF"
+            fi
+            GO_BIN="$OFF/bin/go"
+            export GOROOT="$OFF"
+          fi
+
+          export GORISCV64=rva20u64 CGO_ENABLED=1
           CGO_CFLAGS='-fsanitize=address -g' CGO_LDFLAGS='-fsanitize=address' \
-            "$GITHUB_WORKSPACE/bin/go" build -asan -o /tmp/asan2_head \
-            cmd/cgo/internal/testsanitizers/testdata/asan2_fail.go
+            "$GO_BIN" build -asan -o /tmp/asan2_head \
+            "$GITHUB_WORKSPACE/src/cmd/cgo/internal/testsanitizers/testdata/asan2_fail.go"
 
           # 记录环境事实：页大小决定 GCC 8 每次 read 请求多少字节，
           # libasan 版本决定走哪一套读取实现。
