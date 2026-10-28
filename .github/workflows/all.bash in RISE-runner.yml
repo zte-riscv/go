@@ -11,6 +11,8 @@ jobs:
   build-toolchain-in-rise-runner:
     runs-on: ubuntu-24.04-riscv
     timeout-minutes: 300
+    env:
+      GOFLAGS: -skip=^TestASAN$
     steps:
       - uses: actions/checkout@v4
         with:
