@@ -12,19 +12,7 @@ jobs:
     runs-on: ubuntu-24.04-riscv
     timeout-minutes: 300
     env:
-      # 跳过 TestASAN。
-      #
-      # 这台 runner（riscv64 / 4 核 / Linux 5.10）上 libasan 在打印报告时
-      # 会挂死：它一边解析 /proc/self/maps 一边被别的线程改动 VMA，
-      # 解析器走到 CHECK_EQ(*data_.current++, '-')
-      # （sanitizer_procmaps_linux.cpp:42）失败；随后 CheckFailed ->
-      # CheckUnwind -> SymbolizePC 再次抢同一把不可重入的 symbolizer 锁，
-      # 自死锁，进程永远不退出，最后被包超时杀掉。
-      #
-      # 用官方 Go 工具链同样能复现，不是本仓库的问题，所以这里直接跳过。
-      # 开关由 src/cmd/cgo/internal/testsanitizers/asan_test.go 里的
-      # skipASANOnRiscv64 读取，只在 GOARCH=riscv64 时生效。
-      GOTEST_SKIP_ASAN: "1"
+      GOFLAGS: -skip=^TestASAN$
     steps:
       - uses: actions/checkout@v4
         with:
