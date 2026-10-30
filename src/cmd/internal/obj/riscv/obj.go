@@ -801,6 +801,12 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 					jmp.As = AJALR
 					jmp.From = p.From
 					jmp.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
+					// The Spadj applies after the whole instruction
+					// sequence, so move it to the second instruction.
+					// Otherwise pctospadj would record the adjustment
+					// from the JALR onwards, before the jump is done.
+					jmp.Spadj = p.Spadj
+					p.Spadj = 0
 
 					p.As = AAUIPC
 					p.Mark = (p.Mark &^ NEED_JAL_RELOC) | NEED_CALL_RELOC
@@ -821,6 +827,10 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 					jmp.As = AJALR
 					jmp.From = p.From
 					jmp.To = obj.Addr{Type: obj.TYPE_REG, Reg: REG_TMP}
+					// See the comment above: the Spadj must apply after
+					// both instructions of the sequence.
+					jmp.Spadj = p.Spadj
+					p.Spadj = 0
 
 					// p.From is not generally valid, however will be
 					// fixed up in the next loop.
