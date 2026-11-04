@@ -2540,7 +2540,13 @@
 //		Valid values are power8 (default), power9, power10.
 //	GORISCV64
 //		For GOARCH=riscv64, the RISC-V user-mode application profile for which
-//		to compile. Valid values are rva20u64 (default), rva22u64, rva23u64.
+//		to compile, optionally followed by a comma-separated list of extension
+//		names. The profile must be one of rva20u64 (default), rva22u64,
+//		rva23u64. For example, GORISCV64=rva23u64,zacas selects the rva23u64
+//		profile and enables the Zacas extension as well. Supported extensions
+//		are zacas (atomic compare-and-swap), zabha (8- and 16-bit atomic memory
+//		operations), and misaligned_fast (misaligned memory accesses are
+//		efficient on the target). Extension names are case-insensitive.
 //		See https://github.com/riscv/riscv-profiles/blob/main/src/profiles.adoc
 //		and https://github.com/riscv/riscv-profiles/blob/main/src/rva23-profile.adoc
 //	GOWASM
