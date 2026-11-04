@@ -171,14 +171,17 @@ func xinit() {
 	}
 	goppc64 = b
 
-	b = os.Getenv("GORISCV64")
+	// Keep this parsing in sync with buildcfg.ParseGORISCV64: cmd/dist
+	// cannot import internal/buildcfg (it bootstraps it), so the whitespace
+	// trimming is duplicated here.
+	b = strings.TrimSpace(os.Getenv("GORISCV64"))
 	if b == "" {
 		b = "rva20u64"
 	}
 	goriscv64 = b
 	// get the profile part of the string
 	if idx := strings.Index(goriscv64, ","); idx >= 0 {
-		goriscv64 = goriscv64[:idx]
+		goriscv64 = strings.TrimSpace(goriscv64[:idx])
 	}
 
 	b = os.Getenv("GOFIPS140")
