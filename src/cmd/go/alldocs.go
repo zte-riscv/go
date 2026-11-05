@@ -2545,8 +2545,16 @@
 //		rva23u64. For example, GORISCV64=rva23u64,zacas selects the rva23u64
 //		profile and enables the Zacas extension as well. Supported extensions
 //		are zacas (atomic compare-and-swap), zabha (8- and 16-bit atomic memory
-//		operations), and misaligned_fast (misaligned memory accesses are
-//		efficient on the target). Extension names are case-insensitive.
+//		operations), and misaligned_fast (the target handles misaligned memory
+//		accesses efficiently). misaligned_fast is not a RISC-V extension name;
+//		it is a hint that misaligned scalar loads and stores are cheap on the
+//		target. Only enable it when this is known to be true, for example when
+//		riscv_hwprobe reports RISCV_HWPROBE_MISALIGNED_SCALAR_FAST for
+//		RISCV_HWPROBE_KEY_MISALIGNED_SCALAR_PERF, or when the platform
+//		documentation says so. Otherwise misaligned accesses may trap and be
+//		emulated by the kernel, making the program slower, or may not be
+//		supported at all, causing a SIGBUS. Extension names are
+//		case-insensitive.
 //		See https://github.com/riscv/riscv-profiles/blob/main/src/profiles.adoc
 //		and https://github.com/riscv/riscv-profiles/blob/main/src/rva23-profile.adoc
 //	GOWASM
