@@ -313,62 +313,62 @@ func goppc64() int {
 	return int(DefaultGOPPC64[len("power")] - '0')
 }
 
-// ParseGORISCV64 parses GORISCV64 value and returns the profile and extensions.
-// Format: "rva23u64" or "rva23u64,zacas,zabha"
-// Returns: (profile, extensions map, error)
-func ParseGORISCV64(v string) (string, map[string]bool, error) {
-	extensions := make(map[string]bool)
+// Goriscv64Config is the result of parsing a GORISCV64 value.
+type Goriscv64Config struct {
+	Profile string              // e.g. "rva23u64"
+	Level   int                 // 20, 22 or 23
+	Exts    Goriscv64Extensions // optional extensions
+}
 
-	// Split by comma
+// ParseGORISCV64 validates and parses a GORISCV64 value of the form
+// "rva23u64" or "rva23u64,zacas,zabha".
+//
+// The profile must be one of the rva20u64, rva22u64 and rva23u64 profiles,
+// and every extension must be one of the supported extensions. All
+// validation happens here so that callers cannot disagree about whether a
+// value is valid.
+func ParseGORISCV64(v string) (Goriscv64Config, error) {
+	var cfg Goriscv64Config
+
 	parts := strings.Split(v, ",")
 	profile := strings.TrimSpace(parts[0])
-
-	// Validate profile - must start with rva
-	if !strings.HasPrefix(profile, "rva") {
-		return profile, nil, fmt.Errorf("invalid GORISCV64 profile: must start with rva (got %q)", profile)
+	switch profile {
+	case "rva20u64":
+		cfg.Level = 20
+	case "rva22u64":
+		cfg.Level = 22
+	case "rva23u64":
+		cfg.Level = 23
+	default:
+		return Goriscv64Config{}, fmt.Errorf("invalid GORISCV64 profile: must be rva20u64, rva22u64, rva23u64 (got %q)", profile)
 	}
+	cfg.Profile = profile
 
-	// Extract extensions from remaining parts
-	for i := 1; i < len(parts); i++ {
-		ext := strings.TrimSpace(parts[i])
+	for _, part := range parts[1:] {
+		ext := strings.ToLower(strings.TrimSpace(part))
 		if ext == "" {
 			continue
 		}
-		// Convert to lowercase for internal storage (case-insensitive matching)
-		extLower := strings.ToLower(ext)
-		if !isValidRiscv64Ext(extLower) {
-			return profile, nil, fmt.Errorf("invalid GORISCV64 extension: must be one of %s (got %q)", allowedRiscv64OptList(), ext)
+		if !cfg.Exts.enable(ext) {
+			return Goriscv64Config{}, fmt.Errorf("invalid GORISCV64 extension: must be one of %s (got %q)", allowedRiscv64OptList(), part)
 		}
-		extensions[extLower] = true
 	}
 
-	return profile, extensions, nil
+	return cfg, nil
 }
 
 func goriscv64() int {
-	v := envOr("GORISCV64", DefaultGORISCV64)
-
-	// Extract profile and extensions
-	profile, _, err := ParseGORISCV64(v)
-	if err != nil {
-		Error = err
+	cfg, err := ParseGORISCV64(envOr("GORISCV64", DefaultGORISCV64))
+	if err == nil {
+		return cfg.Level
 	}
-
-	// Process profile (existing logic)
-	switch profile {
-	case "rva20u64":
-		return 20
-	case "rva22u64":
-		return 22
-	case "rva23u64":
-		return 23
-	}
-	Error = fmt.Errorf("invalid GORISCV64: must be rva20u64, rva22u64, rva23u64")
-	v2 := DefaultGORISCV64[len("rva"):]
-	i := strings.IndexFunc(v2, func(r rune) bool {
+	Error = err
+	// Fall back to the default profile level. Check will exit the program.
+	v := DefaultGORISCV64[len("rva"):]
+	i := strings.IndexFunc(v, func(r rune) bool {
 		return r < '0' || r > '9'
 	})
-	year, _ := strconv.Atoi(v2[:i])
+	year, _ := strconv.Atoi(v[:i])
 	return year
 }
 

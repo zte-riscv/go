@@ -6,7 +6,6 @@ package buildcfg
 
 import (
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -80,27 +79,94 @@ func TestConfigFlags(t *testing.T) {
 	}
 }
 
-func TestParseGORISCV64Valid(t *testing.T) {
-	profile, ext, err := ParseGORISCV64("rva23u64,zacas,zabha")
-	if err != nil {
-		t.Fatalf("ParseGORISCV64 returned error: %v", err)
+func TestParseGORISCV64(t *testing.T) {
+	tests := []struct {
+		in      string
+		profile string
+		level   int
+		exts    Goriscv64Extensions
+	}{
+		{"rva20u64", "rva20u64", 20, Goriscv64Extensions{}},
+		{"rva22u64", "rva22u64", 22, Goriscv64Extensions{}},
+		{"rva23u64", "rva23u64", 23, Goriscv64Extensions{}},
+		{"rva23u64,zacas", "rva23u64", 23, Goriscv64Extensions{Zacas: true}},
+		{"rva23u64,zacas,zabha", "rva23u64", 23, Goriscv64Extensions{Zacas: true, Zabha: true}},
+		{"rva23u64,misaligned_fast", "rva23u64", 23, Goriscv64Extensions{MisalignedFast: true}},
+		{"rva23u64,ZACAS,ZABHA", "rva23u64", 23, Goriscv64Extensions{Zacas: true, Zabha: true}},
+		{"rva23u64, ZaCaS , zAbHa ", "rva23u64", 23, Goriscv64Extensions{Zacas: true, Zabha: true}},
+		{"rva23u64,", "rva23u64", 23, Goriscv64Extensions{}},
 	}
-	if profile != "rva23u64" {
-		t.Fatalf("profile = %q, want %q", profile, "rva23u64")
-	}
-	want := map[string]bool{Riscv64ExtZacas: true, Riscv64ExtZabha: true}
-	if !reflect.DeepEqual(ext, want) {
-		t.Fatalf("extensions = %#v, want %#v", ext, want)
+	for _, tt := range tests {
+		got, err := ParseGORISCV64(tt.in)
+		if err != nil {
+			t.Errorf("ParseGORISCV64(%q) returned error: %v", tt.in, err)
+			continue
+		}
+		if got.Profile != tt.profile || got.Level != tt.level || got.Exts != tt.exts {
+			t.Errorf("ParseGORISCV64(%q) = %#v, want profile %q, level %d, exts %#v",
+				tt.in, got, tt.profile, tt.level, tt.exts)
+		}
 	}
 }
 
-func TestParseGORISCV64InvalidExtension(t *testing.T) {
-	_, _, err := ParseGORISCV64("rva23u64,foo")
-	if err == nil {
-		t.Fatalf("expected error for invalid extension")
+func TestParseGORISCV64Invalid(t *testing.T) {
+	// An empty string is rejected by the parser itself, though envOr treats
+	// an empty GORISCV64 as unset and substitutes DefaultGORISCV64.
+	if _, err := ParseGORISCV64(""); err == nil {
+		t.Errorf("ParseGORISCV64(%q) = nil error, want error", "")
 	}
-	if !strings.Contains(err.Error(), "invalid GORISCV64 extension") {
-		t.Fatalf("unexpected error: %v", err)
+
+	// Profiles outside the supported rva20/rva22/rva23 whitelist must be
+	// rejected by the parser itself, not by a later goriscv64 switch.
+	invalidProfiles := []string{
+		"rva",
+		"rva19u64",
+		"rva21u64",
+		"rva24u64",
+		"rva99u64",
+		"rva2xu64",
+		"rvb23u64",
+		// Both the profile and the extension are invalid; the profile error
+		// is reported first.
+		"rva19u64,foo",
+	}
+	for _, in := range invalidProfiles {
+		if _, err := ParseGORISCV64(in); err == nil {
+			t.Errorf("ParseGORISCV64(%q) = nil error, want error", in)
+		}
+	}
+
+	// Invalid extensions, alone and combined with a valid or invalid profile.
+	invalidExtensions := []string{
+		"rva23u64,foo",
+		"rva23u64,zacas,foo",
+	}
+	for _, in := range invalidExtensions {
+		_, err := ParseGORISCV64(in)
+		if err == nil {
+			t.Errorf("ParseGORISCV64(%q) = nil error, want error", in)
+			continue
+		}
+		if !strings.Contains(err.Error(), "invalid GORISCV64 extension") {
+			t.Errorf("ParseGORISCV64(%q) error = %v, want extension error", in, err)
+		}
+	}
+
+	// A bad profile must be reported as an error by both entry points,
+	// rather than being silently accepted by goriscv64Extensions.
+	for _, in := range append(invalidProfiles, invalidExtensions...) {
+		Error = nil
+		t.Setenv("GORISCV64", in)
+		if _ = goriscv64(); Error == nil {
+			t.Errorf("goriscv64() with GORISCV64=%q: Error = nil, want error", in)
+		}
+		Error = nil
+		if ext := goriscv64Extensions(); ext != (Goriscv64Extensions{}) {
+			t.Errorf("goriscv64Extensions() with GORISCV64=%q = %#v, want zero value", in, ext)
+		}
+		if Error == nil {
+			t.Errorf("goriscv64Extensions() with GORISCV64=%q: Error = nil, want error", in)
+		}
 	}
 }
 
@@ -132,56 +198,6 @@ func TestGoriscv64ExtensionsInvalid(t *testing.T) {
 	want := Goriscv64Extensions{Zacas: false, Zabha: false}
 	if ext != want {
 		t.Fatalf("extensions = %#v, want %#v on invalid extension", ext, want)
-	}
-}
-
-func TestGoriscv64ExtensionsCaseInsensitive(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  map[string]bool
-	}{
-		{
-			name:  "all lowercase",
-			input: "rva23u64,zacas,zabha",
-			want:  map[string]bool{Riscv64ExtZacas: true, Riscv64ExtZabha: true},
-		},
-		{
-			name:  "all uppercase",
-			input: "rva23u64,ZACAS,ZABHA",
-			want:  map[string]bool{Riscv64ExtZacas: true, Riscv64ExtZabha: true},
-		},
-		{
-			name:  "mixed case",
-			input: "rva23u64,ZaCaS,zAbHa",
-			want:  map[string]bool{Riscv64ExtZacas: true, Riscv64ExtZabha: true},
-		},
-		{
-			name:  "first uppercase",
-			input: "rva23u64,Zacas,Zabha",
-			want:  map[string]bool{Riscv64ExtZacas: true, Riscv64ExtZabha: true},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			profile, ext, err := ParseGORISCV64(tt.input)
-			if err != nil {
-				t.Fatalf("ParseGORISCV64 returned error: %v", err)
-			}
-			if profile != "rva23u64" {
-				t.Fatalf("profile = %q, want %q", profile, "rva23u64")
-			}
-			if !reflect.DeepEqual(ext, tt.want) {
-				t.Fatalf("extensions = %#v, want %#v", ext, tt.want)
-			}
-			// Verify all keys are lowercase
-			for k := range ext {
-				if k != strings.ToLower(k) {
-					t.Errorf("extension key %q is not lowercase", k)
-				}
-			}
-		})
 	}
 }
 

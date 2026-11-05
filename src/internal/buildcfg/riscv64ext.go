@@ -48,6 +48,18 @@ func (g Goriscv64Extensions) Has(ext string) bool {
 	return false
 }
 
+// enable activates the named extension and reports whether name is a
+// supported extension.
+func (g *Goriscv64Extensions) enable(ext string) bool {
+	for _, info := range riscv64ExtRegistry {
+		if info.name == ext {
+			*info.accessor(g) = true
+			return true
+		}
+	}
+	return false
+}
+
 // String returns a comma-separated list of enabled extensions.
 func (g Goriscv64Extensions) String() string {
 	var flags []string
@@ -70,16 +82,6 @@ func (g Goriscv64Extensions) EnabledExtensions() []string {
 	return exts
 }
 
-// isValidRiscv64Ext checks if the given extension name is a valid RISC-V 64-bit extension.
-func isValidRiscv64Ext(ext string) bool {
-	for _, info := range riscv64ExtRegistry {
-		if info.name == ext {
-			return true
-		}
-	}
-	return false
-}
-
 // allowedRiscv64OptList returns a comma-separated list of all supported extension names.
 func allowedRiscv64OptList() string {
 	names := make([]string, len(riscv64ExtRegistry))
@@ -91,23 +93,12 @@ func allowedRiscv64OptList() string {
 
 // goriscv64Extensions extracts extensions from GORISCV64 environment variable.
 // Format: GORISCV64="rva23u64,zacas,zabha" -> returns struct with Zacas and Zabha set to true.
-// returns zero struct if there is an error
+// Returns zero struct if there is an error.
 func goriscv64Extensions() Goriscv64Extensions {
-	v := envOr("GORISCV64", DefaultGORISCV64)
-	_, extensions, err := ParseGORISCV64(v)
+	cfg, err := ParseGORISCV64(envOr("GORISCV64", DefaultGORISCV64))
 	if err != nil {
 		Error = err
 		return Goriscv64Extensions{}
 	}
-
-	var ext Goriscv64Extensions
-	for extName, enabled := range extensions {
-		for _, info := range riscv64ExtRegistry {
-			if info.name == extName {
-				*info.accessor(&ext) = enabled
-				break
-			}
-		}
-	}
-	return ext
+	return cfg.Exts
 }

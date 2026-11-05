@@ -1,0 +1,30 @@
+# GORISCV64 optional extensions must be forwarded to the assembler as
+# GORISCV64EXT_* defines, in addition to the profile define.
+
+env GOOS=linux
+env GOARCH=riscv64
+env GORISCV64=rva23u64,zacas,misaligned_fast
+go build -x .
+stderr '-D GORISCV64_rva23u64'
+stderr '-D GORISCV64EXT_zacas'
+stderr '-D GORISCV64EXT_misaligned_fast'
+
+# Extensions are matched case-insensitively and emitted in lower case.
+env GORISCV64=rva22u64,ZaBhA
+go build -x .
+stderr '-D GORISCV64_rva22u64'
+stderr '-D GORISCV64EXT_zabha'
+
+-- go.mod --
+module m
+
+-- p.go --
+package p
+
+func F()
+
+-- p_riscv64.s --
+#include "textflag.h"
+
+TEXT ·F(SB), NOSPLIT, $0-0
+	RET
