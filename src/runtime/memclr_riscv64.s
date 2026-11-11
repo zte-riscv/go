@@ -32,6 +32,17 @@ TEXT runtime·memclrNoHeapPointers<ABIInternal>(SB),NOSPLIT,$0-16
 	// Use scalar if 8 byte aligned and <= 64 bytes.
 	SUB	$64, X11, X6
 	BLEZ	X6, aligned
+
+	// Clear whole pointers with 64-bit elements.
+	AND	$7, X11, X5
+	BEQZ	X5, vector64_start
+#endif
+
+#ifdef EnableSmallSizeMemVector
+	// Aligned whole-pointer clears use 64-bit elements regardless of size.
+	OR	X10, X11, X5
+	AND	$7, X5
+	BEQZ	X5, vector64_start
 #endif
 
 	PCALIGN	$16
@@ -85,6 +96,27 @@ vector_loop:
 	ADD     	X5, X10
 	SUB	        X5, X11
 	BNEZ	X11, vector_loop
+	RET
+
+vector64_start:
+	// X11 counts words here.
+	SRLI	$3, X11, X11
+
+	VSETVLI	X0, E64, M8, TA, MA, X5
+	VMVVI	$0, V8
+	VSETVLI	X11, E64, M8, TA, MA, X5
+	SLLI	$3, X5, X6
+
+	// Store whole groups from the front, then the shorter tail group.
+	PCALIGN	$16
+vector64_loop:
+	VSE64V	V8, (X10)
+	ADD	X6, X10
+	SUB	X5, X11
+	BGEU	X11, X5, vector64_loop
+	BEQZ	X11, done
+	VSETVLI	X11, E64, M8, TA, MA, X5
+	VSE64V	V8, (X10)
 	RET
 
 #ifndef hasV
