@@ -454,5 +454,7 @@ TEXT errors(SB),$0
 	VRORVV V1, V2, V4, V3			// ERROR "invalid vector mask register"
 	VRORVX X10, V2, V4, V3			// ERROR "invalid vector mask register"
 	VRORVI $16, V2, V4, V3			// ERROR "invalid vector mask register"
+	AMOCASQ	X6, (X7), X9			// ERROR "AMOCASQ requires even-numbered registers for rd and rs2"
+	AMOCASQ	X7, (X6), X8			// ERROR "AMOCASQ requires even-numbered registers for rd and rs2"
 
 	RET
