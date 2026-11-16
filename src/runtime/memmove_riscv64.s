@@ -40,9 +40,21 @@ TEXT runtime·memmove<ABIInternal>(SB),NOSPLIT|NOFRAME,$0-24
 	// Use scalar if destination and source are 8 byte aligned and n <= 64 bytes.
 	SUB	$64, X12, X6
 	BLEZ	X6, f_loop_check
+
+	// Copy whole pointers with 64-bit elements so a concurrent GC never
+	// observes a partially updated pointer.
+	AND	$7, X12, X5
+	BEQZ	X5, f_vector64_start
 #endif
 
 #ifdef EnableSmallSizeMemVector
+	// Same for the small-size variant: aligned whole-pointer copies use
+	// 64-bit elements regardless of size.
+	OR	X10, X11, X5
+	OR	X12, X5
+	AND	$7, X5
+	BEQZ	X5, f_vector64_start
+
 	PCALIGN	$16
 f_vector_dispatch:
 	MOV		$16, X6
@@ -93,6 +105,29 @@ f_vector_loop:
 	ADD	X5, X11
 	SUB	X5, X12
 	BNEZ	X12, f_vector_loop
+	RET
+
+f_vector64_start:
+	// Copy whole pointers with 64-bit elements. X12 counts words here.
+	SRLI	$3, X12, X12
+
+	VSETVLI	X12, E64, M8, TA, MA, X5
+	SLLI	$3, X5, X6
+
+	// Load a whole group before storing it, so an overlapping destination
+	// inside this group cannot clobber the source before it is read.
+	PCALIGN	$16
+f_vector64_loop:
+	VLE64V	(X11), V8
+	VSE64V	V8, (X10)
+	ADD	X6, X10
+	ADD	X6, X11
+	SUB	X5, X12
+	BGEU	X12, X5, f_vector64_loop
+	BEQZ	X12, done
+	VSETVLI	X12, E64, M8, TA, MA, X5
+	VLE64V	(X11), V8
+	VSE64V	V8, (X10)
 	RET
 
 #ifndef hasV
@@ -267,8 +302,20 @@ backward:
 	BNEZ	X5, b_vector_loop
 
 	// Use scalar if destination and source are 8 byte aligned and n <= 64 bytes.
-	SUB	$32, X12, X6
+	SUB	$64, X12, X6
 	BLEZ	X6, b_loop_check
+
+	// Copy whole pointers with 64-bit elements. X10/X11 are end pointers.
+	AND	$7, X12, X5
+	BEQZ	X5, b_vector64_start
+#endif
+
+#ifdef EnableSmallSizeMemVector
+	// Aligned whole-pointer copies use 64-bit elements regardless of size.
+	OR	X10, X11, X5
+	OR	X12, X5
+	AND	$7, X5
+	BEQZ	X5, b_vector64_start
 #endif
 
 #ifdef EnableSmallSizeMemVector
@@ -328,6 +375,32 @@ b_vector_loop:
 	VSE8V	V8, (X10)
 	SUB	X5, X12
 	BNEZ	X12, b_vector_loop
+	RET
+
+b_vector64_start:
+	// X10/X11 point one past the end; X12 counts bytes here.
+	SRLI	$3, X12, X12
+
+	VSETVLI	X12, E64, M8, TA, MA, X5
+	SLLI	$3, X5, X6
+
+	// Copy full groups from the end, then the shorter head group. Loading
+	// a whole group before storing it keeps an overlapping source intact.
+	PCALIGN	$16
+b_vector64_loop:
+	SUB	X6, X10
+	SUB	X6, X11
+	VLE64V	(X11), V8
+	VSE64V	V8, (X10)
+	SUB	X5, X12
+	BGEU	X12, X5, b_vector64_loop
+	BEQZ	X12, done
+	VSETVLI	X12, E64, M8, TA, MA, X5
+	SLLI	$3, X5, X6
+	SUB	X6, X10
+	SUB	X6, X11
+	VLE64V	(X11), V8
+	VSE64V	V8, (X10)
 	RET
 
 #ifndef hasV
