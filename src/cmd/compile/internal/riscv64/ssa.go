@@ -632,6 +632,15 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.To.Reg = v.Reg0()
 
 	case ssa.OpRISCV64LoweredAtomicStore8:
+		if buildcfg.GORISCV64EXT.Zabha {
+			p := s.Prog(riscv.AAMOSWAPB)
+			p.From.Type = obj.TYPE_REG
+			p.From.Reg = v.Args[1].Reg()
+			p.To.Type = obj.TYPE_MEM
+			p.To.Reg = v.Args[0].Reg()
+			p.RegTo2 = riscv.REG_ZERO
+			break
+		}
 		s.Prog(riscv.AFENCE)
 		p := s.Prog(riscv.AMOVB)
 		p.From.Type = obj.TYPE_REG
