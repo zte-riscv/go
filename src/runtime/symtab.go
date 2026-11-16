@@ -945,11 +945,19 @@ func findfunc(pc uintptr) funcInfo {
 	idx := ffb.idx + uint32(ffb.subbuckets[i])
 
 	// Find the ftab entry.
-	for datap.ftab[idx+1].entryoff <= pcOff {
+	//
+	// Hoist the slice header and the widening of pcOff out of the loop by
+	// hand: the compiler has no general loop-invariant code motion, and on
+	// architectures where widening to a pointer-sized integer is not free
+	// (e.g. riscv64, where zero-extension costs an instruction pair) that
+	// work lands in the loop body.
+	ftab := datap.ftab
+	pcOffU := uintptr(pcOff)
+	for uintptr(ftab[idx+1].entryoff) <= pcOffU {
 		idx++
 	}
 
-	funcoff := datap.ftab[idx].funcoff
+	funcoff := ftab[idx].funcoff
 	return funcInfo{(*_func)(unsafe.Pointer(&datap.pclntable[funcoff])), datap}
 }
 
@@ -1074,12 +1082,18 @@ func pcvalue(f funcInfo, off uint32, targetpc uintptr, strict bool) (int32, uint
 	}
 	datap := f.datap
 	p := datap.pctab[off:]
-	pc := f.entry()
+	// step needs to know whether we are at the first entry, which it uses
+	// to tell a leading zero value delta from the terminating zero byte.
+	// That is just "pc == entry" on the first iteration, so hoist the call
+	// to f.entry() (and thus textAddr) out of the loop instead of
+	// re-evaluating it on every step.
+	entry := f.entry()
+	pc := entry
 	prevpc := pc
 	val := int32(-1)
 	for {
 		var ok bool
-		p, ok = step(p, &pc, &val, pc == f.entry())
+		p, ok = step(p, &pc, &val, pc == entry)
 		if !ok {
 			break
 		}
@@ -1128,11 +1142,11 @@ func pcvalue(f funcInfo, off uint32, targetpc uintptr, strict bool) (int32, uint
 	print("runtime: invalid pc-encoded table f=", funcname(f), " pc=", hex(pc), " targetpc=", hex(targetpc), " tab=", p, "\n")
 
 	p = datap.pctab[off:]
-	pc = f.entry()
+	pc = entry
 	val = -1
 	for {
 		var ok bool
-		p, ok = step(p, &pc, &val, pc == f.entry())
+		p, ok = step(p, &pc, &val, pc == entry)
 		if !ok {
 			break
 		}
