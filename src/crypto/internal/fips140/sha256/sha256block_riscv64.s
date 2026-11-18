@@ -53,13 +53,13 @@
 	MOVBU	((index*4)+0)(X29), X5; \
 	MOVBU	((index*4)+1)(X29), X6; \
 	MOVBU	((index*4)+2)(X29), X7; \
-	MOVBU	((index*4)+3)(X29), X8; \
+	MOVBU	((index*4)+3)(X29), X22; \
 	SLL	$24, X5; \
 	SLL	$16, X6; \
 	OR	X5, X6, X5; \
 	SLL	$8, X7; \
 	OR	X5, X7, X5; \
-	OR	X5, X8, X5; \
+	OR	X5, X22, X5; \
 	MOVW	X5, (index*4)(X19)
 
 // Wt = SIGMA1(Wt-2) + Wt-7 + SIGMA0(Wt-15) + Wt-16; for 16 <= t <= 63
@@ -71,16 +71,16 @@
 	MOVWU	(((index-7)&0xf)*4)(X19), X9; \
 	MOVWU	(((index-16)&0xf)*4)(X19), X21; \
 	RORW	$17, X5, X7; \
-	RORW	$19, X5, X8; \
+	RORW	$19, X5, X22; \
 	SRL	$10, X5; \
 	XOR	X7, X5; \
-	XOR	X8, X5; \
+	XOR	X22, X5; \
 	ADD	X9, X5; \
 	RORW	$7, X6, X7; \
-	RORW	$18, X6, X8; \
+	RORW	$18, X6, X22; \
 	SRL	$3, X6; \
 	XOR	X7, X6; \
-	XOR	X8, X6; \
+	XOR	X22, X6; \
 	ADD	X6, X5; \
 	ADD	X21, X5; \
 	MOVW	X5, ((index&0xf)*4)(X19)
@@ -92,15 +92,15 @@
 //     Ch(x, y, z) = (x AND y) XOR (NOT x AND z)
 //                 = ((y XOR z) AND x) XOR z
 #define SHA256T1(index, e, f, g, h) \
-	MOVWU	(index*4)(X18), X8; \
+	MOVWU	(index*4)(X18), X22; \
 	ADD	X5, h; \
 	RORW	$6, e, X6; \
-	ADD	X8, h; \
+	ADD	X22, h; \
 	RORW	$11, e, X7; \
-	RORW	$25, e, X8; \
+	RORW	$25, e, X22; \
 	XOR	X7, X6; \
 	XOR	f, g, X5; \
-	XOR	X8, X6; \
+	XOR	X22, X6; \
 	AND	e, X5; \
 	ADD	X6, h; \
 	XOR	g, X5; \
@@ -114,12 +114,12 @@
 #define SHA256T2(a, b, c) \
 	RORW	$2, a, X6; \
 	RORW	$13, a, X7; \
-	RORW	$22, a, X8; \
+	RORW	$22, a, X22; \
 	XOR	X7, X6; \
 	XOR	b, c, X9; \
 	AND	b, c, X7; \
 	AND	a, X9; \
-	XOR	X8, X6; \
+	XOR	X22, X6; \
 	XOR	X7, X9; \
 	ADD	X9, X6
 
@@ -235,11 +235,11 @@ loop:
 	MOVWU	(0*4)(X20), X5
 	MOVWU	(1*4)(X20), X6
 	MOVWU	(2*4)(X20), X7
-	MOVWU	(3*4)(X20), X8
+	MOVWU	(3*4)(X20), X22
 	ADD	X5, X10		// H0 = a + H0
 	ADD	X6, X11		// H1 = b + H1
 	ADD	X7, X12		// H2 = c + H2
-	ADD	X8, X13		// H3 = d + H3
+	ADD	X22, X13		// H3 = d + H3
 	MOVW	X10, (0*4)(X20)
 	MOVW	X11, (1*4)(X20)
 	MOVW	X12, (2*4)(X20)
@@ -247,11 +247,11 @@ loop:
 	MOVWU	(4*4)(X20), X5
 	MOVWU	(5*4)(X20), X6
 	MOVWU	(6*4)(X20), X7
-	MOVWU	(7*4)(X20), X8
+	MOVWU	(7*4)(X20), X22
 	ADD	X5, X14		// H4 = e + H4
 	ADD	X6, X15		// H5 = f + H5
 	ADD	X7, X16		// H6 = g + H6
-	ADD	X8, X17		// H7 = h + H7
+	ADD	X22, X17		// H7 = h + H7
 	MOVW	X14, (4*4)(X20)
 	MOVW	X15, (5*4)(X20)
 	MOVW	X16, (6*4)(X20)
@@ -648,11 +648,12 @@ blockloop:
 	// Scalar load to avoid index ambiguity (corrected offsets)
 	// Layout in scratch: 0:f,4:e,8:b,12:a,16:h,20:g,24:d,28:c
 	// Use indexed gather to reorder scratch {f,e,b,a,h,g,d,c} -> {a,b,c,d,e,f,g,h}
-	MOV  $index_final<>(SB), X8
-	VLE32V	(X8), V31
+	// Note: Use X9 instead of X8 to avoid clobbering the frame pointer (S0/X8).
+	MOV  $index_final<>(SB), X9
+	VLE32V	(X9), V31
 	VLUXEI32V (X6), V31, V3	// V3 = {a,b,c,d}
-	MOV  $index_final<>+16(SB), X8
-	VLE32V	(X8), V31
+	MOV  $index_final<>+16(SB), X9
+	VLE32V	(X9), V31
 	VLUXEI32V (X6), V31, V4	// V4 = {e,f,g,h}
 
     VADDVV		V1, V3, V1
