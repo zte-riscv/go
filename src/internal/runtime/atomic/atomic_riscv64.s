@@ -128,9 +128,13 @@ TEXT ·Store(SB), NOSPLIT, $0-12
 TEXT ·Store8(SB), NOSPLIT, $0-9
 	MOV	ptr+0(FP), A0
 	MOVBU	val+8(FP), A1
+#ifdef GORISCV64EXT_zabha
+	AMOSWAPB A1, (A0), ZERO
+#else
 	FENCE
 	MOVB	A1, (A0)
 	FENCE
+#endif
 	RET
 
 // func Store64(ptr *uint64, val uint64)
