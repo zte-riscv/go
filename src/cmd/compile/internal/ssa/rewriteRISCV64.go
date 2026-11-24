@@ -4192,6 +4192,27 @@ func rewriteValueRISCV64_OpRISCV64FMOVDstore(v *Value) bool {
 		v.AddArg3(base, val, mem)
 		return true
 	}
+	// match: (FMOVDstore [off] {sym} ptr (FMOVDconst [x]) mem)
+	// cond: math.Float64bits(x) == 0
+	// result: (MOVDstorezero [off] {sym} ptr mem)
+	for {
+		off := auxIntToInt32(v.AuxInt)
+		sym := auxToSym(v.Aux)
+		ptr := v_0
+		if v_1.Op != OpRISCV64FMOVDconst {
+			break
+		}
+		x := auxIntToFloat64(v_1.AuxInt)
+		mem := v_2
+		if !(math.Float64bits(x) == 0) {
+			break
+		}
+		v.reset(OpRISCV64MOVDstorezero)
+		v.AuxInt = int32ToAuxInt(off)
+		v.Aux = symToAux(sym)
+		v.AddArg2(ptr, mem)
+		return true
+	}
 	return false
 }
 func rewriteValueRISCV64_OpRISCV64FMOVWload(v *Value) bool {
@@ -4312,6 +4333,27 @@ func rewriteValueRISCV64_OpRISCV64FMOVWstore(v *Value) bool {
 		v.AuxInt = int32ToAuxInt(off1 + int32(off2))
 		v.Aux = symToAux(sym)
 		v.AddArg3(base, val, mem)
+		return true
+	}
+	// match: (FMOVWstore [off] {sym} ptr (FMOVFconst [x]) mem)
+	// cond: math.Float32bits(x) == 0
+	// result: (MOVWstorezero [off] {sym} ptr mem)
+	for {
+		off := auxIntToInt32(v.AuxInt)
+		sym := auxToSym(v.Aux)
+		ptr := v_0
+		if v_1.Op != OpRISCV64FMOVFconst {
+			break
+		}
+		x := auxIntToFloat32(v_1.AuxInt)
+		mem := v_2
+		if !(math.Float32bits(x) == 0) {
+			break
+		}
+		v.reset(OpRISCV64MOVWstorezero)
+		v.AuxInt = int32ToAuxInt(off)
+		v.Aux = symToAux(sym)
+		v.AddArg2(ptr, mem)
 		return true
 	}
 	return false

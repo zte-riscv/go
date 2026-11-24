@@ -1030,3 +1030,6 @@
 (MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-3 => (NEGW (SH1ADD <x.Type> x x))
 (MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-5 => (NEGW (SH2ADD <x.Type> x x))
 (MULW x (MOVDconst [c])) && buildcfg.GORISCV64 >= 22 && int32(c)==-9 => (NEGW (SH3ADD <x.Type> x x))
+
+(FMOVWstore [off] {sym} ptr (FMOVFconst [x]) mem) && math.Float32bits(x) == 0 => (MOVWstorezero [off] {sym} ptr mem)
+(FMOVDstore [off] {sym} ptr (FMOVDconst [x]) mem) && math.Float64bits(x) == 0 => (MOVDstorezero [off] {sym} ptr mem)
