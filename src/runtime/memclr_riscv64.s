@@ -10,6 +10,7 @@
 
 // void runtime·memclrNoHeapPointers(void*, uintptr)
 TEXT runtime·memclrNoHeapPointers<ABIInternal>(SB),NOSPLIT,$0-16
+	BEQZ	X11, done
 	// X10 = ptr
 	// X11 = n
 
@@ -32,6 +33,17 @@ TEXT runtime·memclrNoHeapPointers<ABIInternal>(SB),NOSPLIT,$0-16
 	// Use scalar if 8 byte aligned and <= 64 bytes.
 	SUB	$64, X11, X6
 	BLEZ	X6, aligned
+
+	// Clear whole pointers with 64-bit elements.
+	AND	$7, X11, X5
+	BEQZ	X5, vector64_start
+#endif
+
+#ifdef EnableSmallSizeMemVector
+	// Aligned whole-pointer clears use 64-bit elements regardless of size.
+	OR	X10, X11, X5
+	AND	$7, X5
+	BEQZ	X5, vector64_start
 #endif
 
 	PCALIGN	$16
@@ -85,6 +97,64 @@ vector_loop:
 	ADD     	X5, X10
 	SUB	        X5, X11
 	BNEZ	X11, vector_loop
+	RET
+
+vector64_start:
+	// X11 counts words here.
+	SRLI	$3, X11, X11
+
+	VSETVLI	X0, E64, M8, TA, MA, X5
+	VMVVI	$0, V8
+
+#ifdef EnableSmallSizeMemVector
+	// Pick the smallest LMUL that covers the whole clear with one group.
+	// X6 is the number of words a single register (M1) holds.
+	MOV	$2, X6
+#ifdef VLen_256
+	SLLI	$1, X6
+#endif
+#ifdef VLen_512
+	SLLI	$2, X6
+#endif
+	BGEU	X6, X11, vector64_single
+	SLLI	$2, X6
+	BGTU	X11, X6, vector64_loop_start
+	SRLI	$1, X6
+	BGTU	X11, X6, vector64_quarter
+
+	PCALIGN	$16
+vector64_double:
+	VSETVLI	X11, E64, M2, TA, MA, X5
+	VSE64V	V8, (X10)
+	RET
+
+	PCALIGN	$16
+vector64_single:
+	VSETVLI	X11, E64, M1, TA, MA, X5
+	VSE64V	V8, (X10)
+	RET
+
+	PCALIGN	$16
+vector64_quarter:
+	VSETVLI	X11, E64, M4, TA, MA, X5
+	VSE64V	V8, (X10)
+	RET
+#endif
+
+vector64_loop_start:
+	VSETVLI	X11, E64, M8, TA, MA, X5
+	SLLI	$3, X5, X6
+
+	// Store whole groups from the front, then the shorter tail group.
+	PCALIGN	$16
+vector64_loop:
+	VSE64V	V8, (X10)
+	ADD	X6, X10
+	SUB	X5, X11
+	BGEU	X11, X5, vector64_loop
+	BEQZ	X11, done
+	VSETVLI	X11, E64, M8, TA, MA, X5
+	VSE64V	V8, (X10)
 	RET
 
 #ifndef hasV
