@@ -10,6 +10,7 @@
 
 // void runtime·memclrNoHeapPointers(void*, uintptr)
 TEXT runtime·memclrNoHeapPointers<ABIInternal>(SB),NOSPLIT,$0-16
+	BEQZ	X11, done
 	// X10 = ptr
 	// X11 = n
 
