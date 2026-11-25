@@ -111,6 +111,45 @@ f_vector64_start:
 	// Copy whole pointers with 64-bit elements. X12 counts words here.
 	SRLI	$3, X12, X12
 
+#ifdef EnableSmallSizeMemVector
+	// Pick the smallest LMUL that covers the whole copy with one group.
+	// X6 is the number of words a single register (M1) holds.
+	MOV	$2, X6
+#ifdef VLen_256
+	SLLI	$1, X6
+#endif
+#ifdef VLen_512
+	SLLI	$2, X6
+#endif
+	BGEU	X6, X12, f_vector64_single
+	SLLI	$2, X6
+	BGTU	X12, X6, f_vector64_loop_start
+	SRLI	$1, X6
+	BGTU	X12, X6, f_vector64_quarter
+
+	PCALIGN	$16
+f_vector64_double:
+	VSETVLI	X12, E64, M2, TA, MA, X5
+	VLE64V	(X11), V8
+	VSE64V	V8, (X10)
+	RET
+
+	PCALIGN	$16
+f_vector64_single:
+	VSETVLI	X12, E64, M1, TA, MA, X5
+	VLE64V	(X11), V8
+	VSE64V	V8, (X10)
+	RET
+
+	PCALIGN	$16
+f_vector64_quarter:
+	VSETVLI	X12, E64, M4, TA, MA, X5
+	VLE64V	(X11), V8
+	VSE64V	V8, (X10)
+	RET
+#endif
+
+f_vector64_loop_start:
 	VSETVLI	X12, E64, M8, TA, MA, X5
 	SLLI	$3, X5, X6
 
@@ -381,6 +420,54 @@ b_vector64_start:
 	// X10/X11 point one past the end; X12 counts bytes here.
 	SRLI	$3, X12, X12
 
+#ifdef EnableSmallSizeMemVector
+	// Pick the smallest LMUL that covers the whole copy with one group.
+	// X6 is the number of words a single register (M1) holds.
+	MOV	$2, X6
+#ifdef VLen_256
+	SLLI	$1, X6
+#endif
+#ifdef VLen_512
+	SLLI	$2, X6
+#endif
+	BGEU	X6, X12, b_vector64_single
+	SLLI	$2, X6
+	BGTU	X12, X6, b_vector64_loop_start
+	SRLI	$1, X6
+	BGTU	X12, X6, b_vector64_quarter
+
+	PCALIGN	$16
+b_vector64_double:
+	VSETVLI	X12, E64, M2, TA, MA, X5
+	SLLI	$3, X5, X6
+	SUB	X6, X10
+	SUB	X6, X11
+	VLE64V	(X11), V8
+	VSE64V	V8, (X10)
+	RET
+
+	PCALIGN	$16
+b_vector64_single:
+	VSETVLI	X12, E64, M1, TA, MA, X5
+	SLLI	$3, X5, X6
+	SUB	X6, X10
+	SUB	X6, X11
+	VLE64V	(X11), V8
+	VSE64V	V8, (X10)
+	RET
+
+	PCALIGN	$16
+b_vector64_quarter:
+	VSETVLI	X12, E64, M4, TA, MA, X5
+	SLLI	$3, X5, X6
+	SUB	X6, X10
+	SUB	X6, X11
+	VLE64V	(X11), V8
+	VSE64V	V8, (X10)
+	RET
+#endif
+
+b_vector64_loop_start:
 	VSETVLI	X12, E64, M8, TA, MA, X5
 	SLLI	$3, X5, X6
 
