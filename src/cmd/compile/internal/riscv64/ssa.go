@@ -612,13 +612,58 @@ func ssaGenValue(s *ssagen.State, v *ssa.Value) {
 		p.To.Sym = ir.Syms.PanicBounds
 
 	case ssa.OpRISCV64LoweredAtomicLoad8:
-		s.Prog(riscv.AFENCE)
-		p := s.Prog(riscv.AMOVBU)
-		p.From.Type = obj.TYPE_MEM
-		p.From.Reg = v.Args[0].Reg()
+		// RISC-V has no byte-granularity acquire load (Zaamo/Zalrsc only
+		// provide .w/.d), so load the byte as part of its naturally
+		// aligned word with LRW, which is an acquire load, and extract
+		// the byte. This avoids the two full fences that a plain byte
+		// load would otherwise need.
+		//
+		//	ANDI $-4, ptr, TMP   // address of the containing aligned word
+		//	ANDI $3, ptr, res    // byte offset within the word; ptr is dead
+		//	SLLI $3, res, res    // bit offset
+		//	LRW  (TMP), TMP      // lr.w.aq; sign-extends the word to 64 bits
+		//	SRL  res, TMP, res   // move the byte to the low bits
+		//	ANDI $0xff, res, res // extract the byte, zero-extended
+		//
+		// An aligned word never crosses a page boundary, so the load
+		// cannot fault where the original byte load would not.
+		ptr := v.Args[0].Reg()
+		res := v.Reg0()
+		p := s.Prog(riscv.AANDI)
+		p.From.Type = obj.TYPE_CONST
+		p.From.Offset = -4
+		p.Reg = ptr
 		p.To.Type = obj.TYPE_REG
-		p.To.Reg = v.Reg0()
-		s.Prog(riscv.AFENCE)
+		p.To.Reg = riscv.REG_TMP
+		p = s.Prog(riscv.AANDI)
+		p.From.Type = obj.TYPE_CONST
+		p.From.Offset = 3
+		p.Reg = ptr
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = res
+		p = s.Prog(riscv.ASLLI)
+		p.From.Type = obj.TYPE_CONST
+		p.From.Offset = 3
+		p.Reg = res
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = res
+		p = s.Prog(riscv.ALRW)
+		p.From.Type = obj.TYPE_MEM
+		p.From.Reg = riscv.REG_TMP
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = riscv.REG_TMP
+		p = s.Prog(riscv.ASRL)
+		p.From.Type = obj.TYPE_REG
+		p.From.Reg = res
+		p.Reg = riscv.REG_TMP
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = res
+		p = s.Prog(riscv.AANDI)
+		p.From.Type = obj.TYPE_CONST
+		p.From.Offset = 0xff
+		p.Reg = res
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = res
 
 	case ssa.OpRISCV64LoweredAtomicLoad32, ssa.OpRISCV64LoweredAtomicLoad64:
 		as := riscv.ALRW
