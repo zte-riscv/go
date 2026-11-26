@@ -128,4 +128,8 @@ type Flags struct {
 
 	// RuntimeSecret enables the runtime/secret package.
 	RuntimeSecret bool
+
+	// TinySize sets the tiny allocator block size to 32 (instead of 16),
+	// allowing more small allocations to be combined into a single block.
+	TinySize bool
 }

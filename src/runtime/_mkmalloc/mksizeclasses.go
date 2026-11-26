@@ -46,6 +46,8 @@ func generateSizeClasses(classes []class) []byte {
 	fmt.Fprintln(&b, "//go:generate go -C ../../../runtime/_mkmalloc run mksizeclasses.go")
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "package gc")
+	fmt.Fprintln(&b)
+	fmt.Fprintln(&b, "import \"internal/goexperiment\"")
 
 	printComment(&b, classes)
 
@@ -283,8 +285,11 @@ func printClasses(w io.Writer, classes []class) {
 	fmt.Fprintf(w, "PageShift = %d\n", pageShift)
 	fmt.Fprintf(w, "MaxObjsPerSpan = %d\n", maxObjsPerSpan(classes))
 	fmt.Fprintf(w, "MaxSizeClassNPages = %d\n", maxNPages(classes))
-	fmt.Fprintf(w, "TinySize = %d\n", tinySize)
-	fmt.Fprintf(w, "TinySizeClass = %d\n", sizeToSizeClass(tinySize))
+	// The tiny allocator block size is 16, or 32 with the tinysize
+	// experiment enabled (goexperiment.TinySizeInt). The size class is
+	// the corresponding one: 2 (16 bytes) or 4 (32 bytes).
+	fmt.Fprintf(w, "TinySize = %d * (1 + goexperiment.TinySizeInt)\n", tinySize)
+	fmt.Fprintf(w, "TinySizeClass = %d * (1 + goexperiment.TinySizeInt)\n", sizeToSizeClass(tinySize))
 	fmt.Fprintln(w, ")")
 
 	fmt.Fprint(w, "var SizeClassToSize = [NumSizeClasses]uint16 {")

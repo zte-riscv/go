@@ -9,6 +9,7 @@
 package main
 
 import (
+	"internal/goexperiment"
 	"runtime"
 	"time"
 )
@@ -32,7 +33,7 @@ func main() {
 	runtime.GC()
 	count := 0
 	done := make([]bool, N)
-	timeout := time.After(5*time.Second)
+	timeout := time.After(5 * time.Second)
 	for {
 		select {
 		case <-timeout:
@@ -52,11 +53,12 @@ func main() {
 			}
 			done[x] = true
 			count++
-			if count > N/10*9 {
+			if count > N/10*(9-goexperiment.TinySizeInt) {
 				// Some of the finalizers may not be executed,
 				// if the outermost allocations are combined with something persistent.
-				// Currently 4 int32's are combined into a 16-byte block,
-				// ensure that most of them are finalized.
+				// Currently 4 or 8 int32's are combined into a tiny block,
+				// depending on the TinySize experiment. Ensure that most
+				// of them are finalized.
 				return
 			}
 		}

@@ -11,6 +11,7 @@
 package main
 
 import (
+	"internal/goexperiment"
 	"runtime"
 	"time"
 	"unsafe"
@@ -19,12 +20,12 @@ import (
 func main() {
 	runtime.MemProfileRate = 1
 	// Allocate 1M 4-byte objects and set a finalizer for every third object.
-	// Assuming that tiny block size is 16, some objects get finalizers setup
-	// only for middle bytes. The finalizer resurrects that object.
+	// Some objects get finalizers setup only for middle bytes of the
+	// runtime tiny block. The finalizer resurrects that object.
 	// As the result, all allocated memory must stay alive.
 	const (
 		N             = 1 << 20
-		tinyBlockSize = 16 // runtime._TinySize
+		tinyBlockSize = 16 * (1 + goexperiment.TinySizeInt) // runtime._TinySize
 	)
 	hold := make([]*int32, 0, N)
 	for i := 0; i < N; i++ {

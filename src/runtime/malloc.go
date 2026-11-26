@@ -1279,8 +1279,16 @@ func mallocgcTiny(size uintptr, typ *_type) (unsafe.Pointer, uintptr) {
 		v, span, checkGCTrigger = c.nextFree(tinySpanClass)
 	}
 	x := unsafe.Pointer(v)
-	(*[2]uint64)(x)[0] = 0 // Always zero
-	(*[2]uint64)(x)[1] = 0
+	// Always zero the whole tiny block.
+	if goexperiment.TinySize {
+		(*[4]uint64)(x)[0] = 0
+		(*[4]uint64)(x)[1] = 0
+		(*[4]uint64)(x)[2] = 0
+		(*[4]uint64)(x)[3] = 0
+	} else {
+		(*[2]uint64)(x)[0] = 0
+		(*[2]uint64)(x)[1] = 0
+	}
 	// See if we need to replace the existing tiny block with the new one
 	// based on amount of remaining free space.
 	if !raceenabled && (size < c.tinyoffset || c.tiny == 0) {

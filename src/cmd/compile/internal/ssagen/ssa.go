@@ -818,7 +818,10 @@ func (s *state) specializedMallocSym(size int64, hasPointers bool) *obj.LSym {
 	if hasPointers {
 		return ir.Syms.MallocGCSmallScanNoHeader[sizeClass]
 	}
-	if size < gc.TinySize {
+	// The specialized tiny functions are only generated for a fixed range
+	// of sizes. Guard against exceeding that range when the tinysize
+	// experiment enlarges gc.TinySize beyond the generated range.
+	if size < gc.TinySize && size < int64(len(ir.Syms.MallocGCTiny)) {
 		return ir.Syms.MallocGCTiny[size]
 	}
 	return ir.Syms.MallocGCSmallNoScan[sizeClass]
