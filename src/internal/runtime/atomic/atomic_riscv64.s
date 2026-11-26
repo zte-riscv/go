@@ -104,10 +104,13 @@ TEXT ·Load(SB),NOSPLIT|NOFRAME,$0-12
 // func Load8(ptr *uint8) uint8
 TEXT ·Load8(SB),NOSPLIT|NOFRAME,$0-9
 	MOV	ptr+0(FP), A0
-	FENCE
-	MOVBU	(A0), A1
-	FENCE
-	MOVB	A1, ret+8(FP)
+	AND	$-4, A0, A2	// A2 = address of the aligned word containing the byte
+	AND	$3, A0, A1	// A1 = byte offset within the word
+	SLL	$3, A1		// A1 = shift amount in bits
+	LRW	(A2), A2	// A2 = atomic load of the word (lr.w.aq)
+	SRL	A1, A2		// move the byte down to bits [7:0]
+	AND	$255, A2	// zero-extend it
+	MOVB	A2, ret+8(FP)
 	RET
 
 // func Load64(ptr *uint64) uint64
